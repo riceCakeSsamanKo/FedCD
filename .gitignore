@@ -1,3 +1,4 @@
 /results
 /system/models
 *__pycache__*
+/dataset/Cifar10

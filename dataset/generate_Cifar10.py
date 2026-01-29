@@ -74,5 +74,7 @@ if __name__ == "__main__":
     niid = True if sys.argv[1] == "noniid" else False
     balance = True if sys.argv[2] == "balance" else False
     partition = sys.argv[3] if sys.argv[3] != "-" else None
+    if len(sys.argv) > 4:
+        num_clients = int(sys.argv[4])
 
     generate_dataset(dir_path, num_clients, niid, balance, partition)

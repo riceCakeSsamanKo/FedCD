@@ -80,7 +80,7 @@ class Client(object):
     def test_metrics(self):
         testloaderfull = self.load_test_data()
         # self.model = self.load_model('model')
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.eval()
 
         test_acc = 0
@@ -109,8 +109,9 @@ class Client(object):
                     lb = lb[:, :2]
                 y_true.append(lb)
 
-        # self.model.cpu()
-        # self.save_model(self.model, 'model')
+        self.model.to("cpu")
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
 
         y_prob = np.concatenate(y_prob, axis=0)
         y_true = np.concatenate(y_true, axis=0)
@@ -122,7 +123,7 @@ class Client(object):
     def train_metrics(self):
         trainloader = self.load_train_data()
         # self.model = self.load_model('model')
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.eval()
 
         train_num = 0
@@ -139,8 +140,9 @@ class Client(object):
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
 
-        # self.model.cpu()
-        # self.save_model(self.model, 'model')
+        self.model.to("cpu")
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
 
         return losses, train_num
 

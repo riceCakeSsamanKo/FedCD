@@ -4,6 +4,9 @@ import torch
 import argparse
 import os
 import time
+import json
+import subprocess
+import json
 import warnings
 import numpy as np
 import torchvision
@@ -190,6 +193,10 @@ def run(args):
             raise NotImplementedError
 
         print(args.model)
+
+        # FedCD: keep base model on CPU to avoid GPU OOM
+        if args.algorithm == "FedCD" and args.device == "cuda":
+            args.model = args.model.to("cpu")
 
         # select algorithm
         if args.algorithm == "FedCD":
@@ -426,6 +433,13 @@ if __name__ == "__main__":
                         help="Random ratio of clients per round")
     parser.add_argument('-nc', "--num_clients", type=int, default=20,
                         help="Total number of clients")
+    # FedCD
+    parser.add_argument('--num_clusters', type=int, default=1)
+    parser.add_argument('--cluster_period', type=int, default=1)
+    parser.add_argument('--global_period', type=int, default=1)
+    parser.add_argument('--cluster_sample_size', type=int, default=512)
+    parser.add_argument('--fedcd_nc_weight', type=float, default=0.0)
+    parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,
@@ -513,6 +527,23 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
+
+    # Auto-generate dataset if client files are missing
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    dataset_root = os.path.join(repo_root, "dataset", args.dataset)
+    train_file = os.path.join(dataset_root, "train", f"{args.num_clients - 1}.npz")
+    test_file = os.path.join(dataset_root, "test", f"{args.num_clients - 1}.npz")
+    if args.dataset == "Cifar10" and (not os.path.exists(train_file) or not os.path.exists(test_file)):
+        print(f"\n[Info] Generating {args.dataset} with num_clients={args.num_clients} ...\n")
+        generate_cmd = [
+            "python",
+            os.path.join(repo_root, "dataset", "generate_Cifar10.py"),
+            "noniid",
+            "-",
+            "dir",
+            str(args.num_clients),
+        ]
+        subprocess.run(generate_cmd, check=True)
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device_id
 
