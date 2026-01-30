@@ -1,7 +1,12 @@
 import copy
+import time
+import subprocess
+import shutil
+import os
 import torch
 import torch.nn as nn
 import numpy as np
+from flcore.trainmodel.models import SmallFExt
 from flcore.clients.clientfedcd import clientFedCD
 from flcore.servers.serverbase import Server
 from utils.data_utils import read_client_data 
@@ -26,12 +31,150 @@ class FedCD(Server):
         # FedCD clustering config
         self.num_clusters = max(1, int(getattr(args, "num_clusters", 1)))
         self.cluster_period = max(1, int(getattr(args, "cluster_period", 1)))
+        self.pm_period = max(1, int(getattr(args, "pm_period", 1)))
         self.global_period = max(1, int(getattr(args, "global_period", 1)))
         self.cluster_sample_size = int(getattr(args, "cluster_sample_size", 512))
         self.cluster_map = {c.id: (c.id % self.num_clusters) for c in self.clients}
+        self.log_usage = bool(getattr(args, "log_usage", False))
+        self.log_usage_every = max(1, int(getattr(args, "log_usage_every", 1)))
+        self.log_usage_path = str(getattr(args, "log_usage_path", "logs/usage.csv"))
+        self._usage_header_written = False
+        self.f_ext = self._build_f_ext(args)
+        self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
+        self.gm_head, self.gm_final = self._split_classifier(self.global_model)
+        self.gm_adapter = self._build_adapter(self.gm_head, self.gm_final)
+        pm_model = getattr(args, "pm_model", None)
+        if pm_model is not None:
+            self.pm_head, self.pm_final = self._split_classifier(pm_model)
+            self.pm_adapter = self._build_adapter(self.pm_head, self.pm_final)
+        else:
+            self.pm_head = None
+            self.pm_final = None
+            self.pm_adapter = None
+
+    def _build_f_ext(self, args):
+        in_channels = 1 if "MNIST" in args.dataset else 3
+        fext_dim = int(getattr(args, "fext_dim", 512))
+        model_name = str(getattr(args, "fext_model", "SmallFExt"))
+        if model_name != "SmallFExt":
+            raise NotImplementedError(f"Unknown fext_model: {model_name}")
+        f_ext = SmallFExt(in_channels=in_channels, out_dim=fext_dim)
+        for param in f_ext.parameters():
+            param.requires_grad = False
+        f_ext.eval()
+        return f_ext
+
+    def _split_classifier(self, model):
+        if hasattr(model, "classifier") and isinstance(model.classifier, nn.Module):
+            if isinstance(model.classifier, nn.Sequential) and len(model.classifier) > 1:
+                head = nn.Sequential(*list(model.classifier.children())[:-1])
+                final = list(model.classifier.children())[-1]
+                return head, final
+            return nn.Identity(), model.classifier
+        if hasattr(model, "fc") and isinstance(model.fc, nn.Module):
+            return nn.Identity(), model.fc
+        return nn.Identity(), nn.Identity()
+
+    @staticmethod
+    def _first_linear_in_features(module):
+        for layer in module.modules():
+            if isinstance(layer, nn.Linear):
+                return layer.in_features
+        return None
+
+    def _build_adapter(self, head, final):
+        f_ext_dim = self.f_ext_dim
+        pm_in_dim = self._first_linear_in_features(head)
+        if pm_in_dim is None:
+            pm_in_dim = self._first_linear_in_features(final)
+        if f_ext_dim is None or pm_in_dim is None:
+            return None
+        if f_ext_dim == pm_in_dim:
+            return None
+        return nn.Linear(f_ext_dim, pm_in_dim)
+
+    def _read_gpu_util(self):
+        smi = shutil.which("nvidia-smi")
+        if not smi:
+            return None
+        cmd = [
+            smi,
+            "--query-gpu=utilization.gpu,memory.used,memory.total",
+            "--format=csv,noheader,nounits",
+        ]
+        try:
+            out = subprocess.check_output(cmd, encoding="utf-8").strip()
+        except Exception:
+            return None
+        if not out:
+            return None
+        first_line = out.splitlines()[0]
+        parts = [p.strip() for p in first_line.split(",")]
+        if len(parts) != 3:
+            return None
+        util, mem_used, mem_total = parts
+        return util, mem_used, mem_total
+
+    def _log_usage(self, round_idx, stage, wall_start, cpu_start):
+        wall_delta = time.time() - wall_start
+        cpu_delta = time.process_time() - cpu_start
+        cpu_pct = (cpu_delta / wall_delta * 100.0) if wall_delta > 0 else 0.0
+
+        gpu_util = None
+        gpu_mem = None
+        if self.device == "cuda":
+            util_info = self._read_gpu_util()
+            if util_info:
+                gpu_util = f"{util_info[0]}%"
+                gpu_mem = f"{util_info[1]}/{util_info[2]} MB"
+            alloc = torch.cuda.memory_allocated() / (1024 ** 2)
+            reserved = torch.cuda.memory_reserved() / (1024 ** 2)
+            if gpu_mem is None:
+                gpu_mem = f"{alloc:.0f}/{reserved:.0f} MB"
+            else:
+                gpu_mem = f"{gpu_mem}, torch={alloc:.0f}/{reserved:.0f} MB"
+
+        msg = (
+            f"[Usage] Round {round_idx} | {stage} | "
+            f"wall={wall_delta:.2f}s cpu={cpu_pct:.1f}% "
+            + (f"gpu={gpu_util} mem={gpu_mem}" if self.device == "cuda" else "gpu=cpu")
+        )
+        print(msg)
+        self._append_usage_csv(round_idx, stage, wall_delta, cpu_pct, gpu_util, gpu_mem)
+
+    def _append_usage_csv(self, round_idx, stage, wall_delta, cpu_pct, gpu_util, gpu_mem):
+        path = self.log_usage_path
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        header = "round,stage,wall_s,cpu_pct,gpu_util,gpu_mem\n"
+        line = f"{round_idx},{stage},{wall_delta:.4f},{cpu_pct:.2f},{gpu_util or ''},{gpu_mem or ''}\n"
+        if not self._usage_header_written:
+            need_header = not os.path.exists(path)
+            with open(path, "a", encoding="utf-8") as f:
+                if need_header:
+                    f.write(header)
+                f.write(line)
+            self._usage_header_written = True
+        else:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line)
+
+    def send_models(self):
+        assert (len(self.clients) > 0)
+        gm_state = {k: v.detach().cpu() for k, v in self.global_model.state_dict().items()}
+        gm_adapter_state = None
+        if self.gm_adapter is not None:
+            gm_adapter_state = {k: v.detach().cpu() for k, v in self.gm_adapter.state_dict().items()}
+        payload = {"gm_state": gm_state, "gm_adapter": gm_adapter_state}
+        for client in self.clients:
+            start_time = time.time()
+            client.set_parameters(payload)
+            client.send_time_cost['num_rounds'] += 1
+            client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
 
     def train(self):
         for i in range(self.global_rounds + 1):
+            wall_start = time.time()
+            cpu_start = time.process_time()
             self.selected_clients = self.select_clients()
             print(f"\n[FedCD] Round {i}: training {len(self.selected_clients)} clients")
             
@@ -39,6 +182,8 @@ class FedCD(Server):
             for client in self.selected_clients:
                 client.train()
             print(f"[FedCD] Round {i}: local training done")
+            if self.log_usage and i % self.log_usage_every == 0:
+                self._log_usage(i, "post_local", wall_start, cpu_start)
 
             # 2. PM 수집 (Receive PMs)
             received_pms = []
@@ -56,9 +201,11 @@ class FedCD(Server):
 
             # 3. 클러스터 내 PM 집계 및 배포
             cluster_pms = self.aggregate_cluster_pms(received_pms)
-            if i % self.cluster_period == 0 and cluster_pms:
+            if i % self.pm_period == 0 and cluster_pms:
                 self.send_cluster_pms(cluster_pms)
                 print(f"[FedCD] Round {i}: sent cluster PMs")
+                if self.log_usage and i % self.log_usage_every == 0:
+                    self._log_usage(i, "post_pm", wall_start, cpu_start)
 
             # 4. 서버 측 앙상블 증류 (Server-side Ensemble Distillation)
             if i % self.global_period == 0 and cluster_pms:
@@ -70,6 +217,8 @@ class FedCD(Server):
                 if getattr(self.args, "fedcd_warmup_epochs", 0) > 0:
                     for client in self.selected_clients:
                         client.warmup_classifier()
+                if self.log_usage and i % self.log_usage_every == 0:
+                    self._log_usage(i, "post_gm", wall_start, cpu_start)
             
             if i % self.eval_gap == 0:
                 print(f"\n------------- Round number: {i} -------------")
@@ -131,47 +280,103 @@ class FedCD(Server):
 
     def aggregate_and_distill(self, received_pm_states):
         print("Server: Distilling Knowledge from PM Ensemble to GM...")
-        
-        # GM (Student) 학습 준비
-        self.global_model.to(self.device)
-        self.global_model.train()
-        optimizer = torch.optim.SGD(self.global_model.parameters(), lr=0.01)
-        kl_loss = nn.KLDivLoss(reduction='batchmean')
 
-        # Proxy Data로 증류 (예: 1 Epoch)
-        # Use a single teacher model on GPU to avoid OOM
-        teacher = copy.deepcopy(self.global_model).to(self.device)
-        teacher.eval()
-        for x, _ in self.proxy_data_loader:
-            x = x.to(self.device)
-            
-            # Teacher Ensemble Logits (sequential to save memory)
-            with torch.no_grad():
-                ensemble_logits = None
-                for state in received_pm_states:
-                    teacher.load_state_dict(state, strict=True)
-                    logits = teacher(x)
-                    if ensemble_logits is None:
-                        ensemble_logits = logits
-                    else:
-                        ensemble_logits = ensemble_logits + logits
-                ensemble_logits = ensemble_logits / len(received_pm_states)
-                target_prob = torch.softmax(ensemble_logits, dim=1)
-            
-            # Student (GM) Logits
-            student_logits = self.global_model(x)
-            student_log_prob = torch.log_softmax(student_logits, dim=1)
-            
-            loss = kl_loss(student_log_prob, target_prob)
-            
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        def _distill_once(device):
+            # GM (Student) 학습 준비 (f_ext는 frozen)
+            self.global_model.to(device)
+            self.f_ext.to(device)
+            self.gm_head.to(device)
+            self.gm_final.to(device)
+            self.f_ext.eval()
+            self.gm_head.train()
+            self.gm_final.train()
+            if self.gm_adapter is not None:
+                self.gm_adapter.to(device)
+            if self.pm_head is not None:
+                self.pm_head.to(device)
+            if self.pm_final is not None:
+                self.pm_final.to(device)
+            if self.pm_adapter is not None:
+                self.pm_adapter.to(device)
+            gm_params = list(self.gm_head.parameters()) + list(self.gm_final.parameters())
+            if self.gm_adapter is not None:
+                gm_params += list(self.gm_adapter.parameters())
+            optimizer = torch.optim.SGD(gm_params, lr=0.01)
+            kl_loss = nn.KLDivLoss(reduction='batchmean')
+            use_amp = device == "cuda" and bool(getattr(self.args, "amp", False))
+            scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
-        # Move back to CPU to reduce GPU memory pressure
-        teacher.to("cpu")
-        self.global_model.to("cpu")
-        torch.cuda.empty_cache()
+            # Proxy Data로 증류 (예: 1 Epoch)
+            for x, _ in self.proxy_data_loader:
+                x = x.to(device, non_blocking=(device == "cuda"))
+
+                with torch.no_grad():
+                    z = self.f_ext(x)
+                    if z.dim() > 2:
+                        z = torch.flatten(z, 1)
+                    z_gm = self.gm_adapter(z) if self.gm_adapter is not None else z
+
+                # Teacher Ensemble Logits (sequential to save memory)
+                with torch.no_grad():
+                    ensemble_logits = None
+                    for state in received_pm_states:
+                        head_state = {k.replace("head.", ""): v.to(device) for k, v in state.items() if k.startswith("head.")}
+                        final_state = {k.replace("final.", ""): v.to(device) for k, v in state.items() if k.startswith("final.")}
+                        adapter_state = {k.replace("adapter.", ""): v.to(device) for k, v in state.items() if k.startswith("adapter.")}
+
+                        if self.pm_head is not None and head_state:
+                            self.pm_head.load_state_dict(head_state, strict=True)
+                        if self.pm_final is not None and final_state:
+                            self.pm_final.load_state_dict(final_state, strict=True)
+                        if self.pm_adapter is not None and adapter_state:
+                            self.pm_adapter.load_state_dict(adapter_state, strict=True)
+
+                        z_pm = self.pm_adapter(z) if self.pm_adapter is not None else z
+                        with torch.cuda.amp.autocast(enabled=use_amp):
+                            logits = self.pm_final(self.pm_head(z_pm))
+                        if ensemble_logits is None:
+                            ensemble_logits = logits
+                        else:
+                            ensemble_logits = ensemble_logits + logits
+                    ensemble_logits = ensemble_logits / len(received_pm_states)
+                    target_prob = torch.softmax(ensemble_logits, dim=1)
+                
+                # Student (GM) Logits
+                with torch.cuda.amp.autocast(enabled=use_amp):
+                    student_logits = self.gm_final(self.gm_head(z_gm))
+                    student_log_prob = torch.log_softmax(student_logits, dim=1)
+                    loss = kl_loss(student_log_prob, target_prob)
+                
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+
+            # Move back to CPU to reduce GPU memory pressure
+            self.global_model.to("cpu")
+            self.f_ext.to("cpu")
+            self.gm_head.to("cpu")
+            self.gm_final.to("cpu")
+            if self.gm_adapter is not None:
+                self.gm_adapter.to("cpu")
+            if self.pm_head is not None:
+                self.pm_head.to("cpu")
+            if self.pm_final is not None:
+                self.pm_final.to("cpu")
+            if self.pm_adapter is not None:
+                self.pm_adapter.to("cpu")
+            if device == "cuda":
+                torch.cuda.empty_cache()
+
+        try:
+            _distill_once(self.device)
+        except RuntimeError as err:
+            if self.device == "cuda" and "out of memory" in str(err).lower():
+                print("[Warn] OOM during server distillation. Falling back to CPU.")
+                torch.cuda.empty_cache()
+                _distill_once("cpu")
+                return
+            raise
             
     def load_proxy_data(self):
         # 원래는 별도의 공용 데이터셋을 로드해야 하지만, 
@@ -182,4 +387,15 @@ class FedCD(Server):
         # 임시: 첫 번째 클라이언트의 테스트 데이터를 Proxy로 사용
         # (실제 연구에선 이렇게 하면 안 되지만 코드 검증용으로는 OK)
         test_data = read_client_data(self.args.dataset, 0, is_train=False)
-        return torch.utils.data.DataLoader(test_data, batch_size=32, shuffle=True)
+        num_workers = int(getattr(self.args, "num_workers", 0))
+        pin_memory = bool(getattr(self.args, "pin_memory", False)) and self.device == "cuda"
+        loader_kwargs = {
+            "batch_size": 32,
+            "shuffle": True,
+            "num_workers": num_workers,
+            "pin_memory": pin_memory,
+        }
+        if num_workers > 0:
+            loader_kwargs["persistent_workers"] = True
+            loader_kwargs["prefetch_factor"] = int(getattr(self.args, "prefetch_factor", 2))
+        return torch.utils.data.DataLoader(test_data, **loader_kwargs)

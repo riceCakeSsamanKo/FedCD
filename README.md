@@ -1,3 +1,48 @@
+# 빠른 시작 (FedCD)
+## 데이터셋 생성 (Cifar10 예시)
+- `dataset` 폴더에서 실행해야 `dataset/Cifar10`에 저장됩니다.
+- Non-IID + 클라이언트당 2클래스(패턴 분할):
+  - `cd dataset`
+  - `python generate_Cifar10.py noniid - pat 50`
+- Dirichlet 분할(클래스 수 제한 없음):
+  - `cd dataset`
+  - `python generate_Cifar10.py noniid - dir 50`
+
+## FedCD 학습 실행
+```
+python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 20 --num_clusters 5 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 8 --pin_memory True --prefetch_factor 4 --amp True --tf32 True --gpu_batch_mult 4 --gpu_batch_max 256
+```
+
+## 주요 argument 설명 (기본값 포함)
+- `-data` : 데이터셋 이름 (default: `Cifar10`)
+- `-m` : 모델 아키텍처 (default: `VGG16`, FedCD 외 알고리즘용)
+- `-algo` : 알고리즘 이름 (default: `FedCD`)
+- `-gr` : 글로벌 라운드 수 (default: `100`)
+- `-nc` : 클라이언트 수 (default: `10`)
+- `-lbs` : 배치 크기 (default: `10`)
+- `-lr` : 로컬 학습률 (default: `0.005`)
+- `-ls` : 로컬 에포크 수 (default: `1`)
+- `-dev` : 학습 디바이스 (`cpu` 또는 `cuda`) (default: `cuda`)
+- `-nw` : DataLoader 워커 수 (default: `0`)
+- `--pin_memory` : pinned memory 사용 여부 (default: `True`)
+- `--prefetch_factor` : 워커당 prefetch 배치 수 (default: `2`)
+- `--gpu_batch_mult` : GPU에서 배치 확대 배수 (default: `1`)
+- `--gpu_batch_max` : GPU 배치 최대치 (0이면 제한 없음) (default: `0`)
+- `--amp` : mixed precision 사용 여부 (default: `True`)
+- `--tf32` : TF32 사용 여부 (default: `True`)
+- `--log_usage` : 라운드별 CPU/GPU 사용 로그 (default: `False`)
+- `--log_usage_every` : N 라운드마다 로그 (default: `1`)
+- `--log_usage_path` : 로그 CSV 저장 경로 (default: `logs/usage.csv`)
+- `--num_clusters` : FedCD 클러스터 개수 (default: `5`)
+- `--cluster_period` : 클러스터링 주기 (글로벌 라운드 기준) (default: `2`)
+- `--pm_period` : 클러스터 PM 통합/배포 주기 (글로벌 라운드 기준) (default: `1`)
+- `--global_period` : GM 증류/브로드캐스트 주기 (글로벌 라운드 기준) (default: `4`)
+- `--cluster_sample_size` : 클러스터링에 사용할 샘플 수 (default: `512`)
+- `--gm_model` : GM 모델 이름 (default: `VGG16`)
+- `--pm_model` : PM 모델 이름 (default: `VGG8`)
+- `--fext_model` : 고정 feature extractor 모델 (default: `SmallFExt`)
+- `--fext_dim` : f_ext 출력 차원 (default: `512`)
+
 # <img src="docs/imgs/logo-green.png" alt="icon" height="24" style="vertical-align:sub;"/> PFLlib: Personalized Federated Learning Library and Benchmark
 
 🎯*We built a beginner-friendly federated learning (FL) library and benchmark: **master FL in 2 hours—run it on your PC!** [Contribute](#easy-to-extend) your algorithms, datasets, and metrics to grow the FL community.*

@@ -30,6 +30,12 @@ class Client(object):
         self.learning_rate = args.local_learning_rate
         self.local_epochs = args.local_epochs
         self.few_shot = args.few_shot
+        self.num_workers = int(getattr(args, "num_workers", 0))
+        self.pin_memory = bool(getattr(args, "pin_memory", False))
+        self.prefetch_factor = int(getattr(args, "prefetch_factor", 2))
+        self.gpu_batch_mult = int(getattr(args, "gpu_batch_mult", 1))
+        self.gpu_batch_max = int(getattr(args, "gpu_batch_max", 0))
+        self.use_amp = bool(getattr(args, "amp", False))
 
         # check BatchNorm
         self.has_BatchNorm = False
@@ -56,13 +62,33 @@ class Client(object):
         if batch_size == None:
             batch_size = self.batch_size
         train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
-        return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
+        loader_kwargs = {
+            "batch_size": batch_size,
+            "drop_last": True,
+            "shuffle": True,
+            "num_workers": self.num_workers,
+            "pin_memory": self.pin_memory and self.device == "cuda",
+        }
+        if self.num_workers > 0:
+            loader_kwargs["persistent_workers"] = True
+            loader_kwargs["prefetch_factor"] = self.prefetch_factor
+        return DataLoader(train_data, **loader_kwargs)
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
         test_data = read_client_data(self.dataset, self.id, is_train=False, few_shot=self.few_shot)
-        return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
+        loader_kwargs = {
+            "batch_size": batch_size,
+            "drop_last": False,
+            "shuffle": True,
+            "num_workers": self.num_workers,
+            "pin_memory": self.pin_memory and self.device == "cuda",
+        }
+        if self.num_workers > 0:
+            loader_kwargs["persistent_workers"] = True
+            loader_kwargs["prefetch_factor"] = self.prefetch_factor
+        return DataLoader(test_data, **loader_kwargs)
         
     def set_parameters(self, model):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):

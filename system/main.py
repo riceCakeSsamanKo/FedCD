@@ -83,120 +83,108 @@ def run(args):
     reporter = MemReporter()
     model_str = args.model
 
+    def build_model(model_name):
+        if model_name == "MLR": # convex
+            if "MNIST" in args.dataset:
+                return Mclr_Logistic(1*28*28, num_classes=args.num_classes).to(args.device)
+            if "Cifar10" in args.dataset:
+                return Mclr_Logistic(3*32*32, num_classes=args.num_classes).to(args.device)
+            return Mclr_Logistic(60, num_classes=args.num_classes).to(args.device)
+
+        if model_name == "CNN": # non-convex
+            if "MNIST" in args.dataset:
+                return FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
+            if "Cifar10" in args.dataset:
+                return FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=1600).to(args.device)
+            if "Omniglot" in args.dataset:
+                return FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=33856).to(args.device)
+            if "Digit5" in args.dataset:
+                return Digit5CNN().to(args.device)
+            return FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=10816).to(args.device)
+
+        if model_name == "DNN": # non-convex
+            if "MNIST" in args.dataset:
+                return DNN(1*28*28, 100, num_classes=args.num_classes).to(args.device)
+            if "Cifar10" in args.dataset:
+                return DNN(3*32*32, 100, num_classes=args.num_classes).to(args.device)
+            return DNN(60, 20, num_classes=args.num_classes).to(args.device)
+        
+        if model_name == "ResNet18":
+            return torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes).to(args.device)
+        
+        if model_name == "ResNet10":
+            return resnet10(num_classes=args.num_classes).to(args.device)
+        
+        if model_name == "ResNet34":
+            return torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes).to(args.device)
+
+        if model_name == "VGG16":
+            return torchvision.models.vgg16(pretrained=False, num_classes=args.num_classes).to(args.device)
+
+        if model_name == "VGG8":
+            return VGG8(num_classes=args.num_classes).to(args.device)
+
+        if model_name == "AlexNet":
+            return alexnet(pretrained=False, num_classes=args.num_classes).to(args.device)
+        
+        if model_name == "GoogleNet":
+            return torchvision.models.googlenet(pretrained=False, aux_logits=False, num_classes=args.num_classes).to(args.device)
+
+        if model_name == "MobileNet":
+            return mobilenet_v2(pretrained=False, num_classes=args.num_classes).to(args.device)
+            
+        if model_name == "LSTM":
+            return LSTMNet(hidden_dim=args.feature_dim, vocab_size=args.vocab_size, num_classes=args.num_classes).to(args.device)
+
+        if model_name == "BiLSTM":
+            return BiLSTM_TextClassification(input_size=args.vocab_size, hidden_size=args.feature_dim, 
+                                             output_size=args.num_classes, num_layers=1, 
+                                             embedding_dropout=0, lstm_dropout=0, attention_dropout=0, 
+                                             embedding_length=args.feature_dim).to(args.device)
+
+        if model_name == "fastText":
+            return fastText(hidden_dim=args.feature_dim, vocab_size=args.vocab_size, num_classes=args.num_classes).to(args.device)
+
+        if model_name == "TextCNN":
+            return TextCNN(hidden_dim=args.feature_dim, max_len=args.max_len, vocab_size=args.vocab_size, 
+                           num_classes=args.num_classes).to(args.device)
+
+        if model_name == "Transformer":
+            return TransformerModel(ntoken=args.vocab_size, d_model=args.feature_dim, nhead=8, nlayers=2, 
+                                    num_classes=args.num_classes, max_len=args.max_len).to(args.device)
+        
+        if model_name == "AmazonMLP":
+            return AmazonMLP().to(args.device)
+
+        if model_name == "HARCNN":
+            if args.dataset == 'HAR':
+                return HARCNN(9, dim_hidden=1664, num_classes=args.num_classes, conv_kernel_size=(1, 9), 
+                              pool_kernel_size=(1, 2)).to(args.device)
+            if args.dataset == 'PAMAP2':
+                return HARCNN(9, dim_hidden=3712, num_classes=args.num_classes, conv_kernel_size=(1, 9), 
+                              pool_kernel_size=(1, 2)).to(args.device)
+
+        raise NotImplementedError
+
     for i in range(args.prev, args.times):
         print(f"\n============= Running time: {i}th =============")
         print("Creating server and clients ...")
         start = time.time()
 
         # Generate args.model
-        if model_str == "MLR": # convex
-            if "MNIST" in args.dataset:
-                args.model = Mclr_Logistic(1*28*28, num_classes=args.num_classes).to(args.device)
-            elif "Cifar10" in args.dataset:
-                args.model = Mclr_Logistic(3*32*32, num_classes=args.num_classes).to(args.device)
-            else:
-                args.model = Mclr_Logistic(60, num_classes=args.num_classes).to(args.device)
-
-        elif model_str == "CNN": # non-convex
-            if "MNIST" in args.dataset:
-                args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
-            elif "Cifar10" in args.dataset:
-                args.model = FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=1600).to(args.device)
-            elif "Omniglot" in args.dataset:
-                args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=33856).to(args.device)
-                # args.model = CifarNet(num_classes=args.num_classes).to(args.device)
-            elif "Digit5" in args.dataset:
-                args.model = Digit5CNN().to(args.device)
-            else:
-                args.model = FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=10816).to(args.device)
-
-        elif model_str == "DNN": # non-convex
-            if "MNIST" in args.dataset:
-                args.model = DNN(1*28*28, 100, num_classes=args.num_classes).to(args.device)
-            elif "Cifar10" in args.dataset:
-                args.model = DNN(3*32*32, 100, num_classes=args.num_classes).to(args.device)
-            else:
-                args.model = DNN(60, 20, num_classes=args.num_classes).to(args.device)
-        
-        elif model_str == "ResNet18":
-            args.model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes).to(args.device)
-            
-            # args.model = torchvision.models.resnet18(pretrained=True).to(args.device)
-            # feature_dim = list(args.model.fc.parameters())[0].shape[1]
-            # args.model.fc = nn.Linear(feature_dim, args.num_classes).to(args.device)
-            
-            # args.model = resnet18(num_classes=args.num_classes, has_bn=True, bn_block_num=4).to(args.device)
-        
-        elif model_str == "ResNet10":
-            args.model = resnet10(num_classes=args.num_classes).to(args.device)
-        
-        elif model_str == "ResNet34":
-            args.model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes).to(args.device)
-
-        elif model_str == "VGG16":
-            args.model = torchvision.models.vgg16(pretrained=False, num_classes=args.num_classes).to(args.device)
-
-        elif model_str == "AlexNet":
-            args.model = alexnet(pretrained=False, num_classes=args.num_classes).to(args.device)
-            
-            # args.model = alexnet(pretrained=True).to(args.device)
-            # feature_dim = list(args.model.fc.parameters())[0].shape[1]
-            # args.model.fc = nn.Linear(feature_dim, args.num_classes).to(args.device)
-            
-        elif model_str == "GoogleNet":
-            args.model = torchvision.models.googlenet(pretrained=False, aux_logits=False, 
-                                                      num_classes=args.num_classes).to(args.device)
-            
-            # args.model = torchvision.models.googlenet(pretrained=True, aux_logits=False).to(args.device)
-            # feature_dim = list(args.model.fc.parameters())[0].shape[1]
-            # args.model.fc = nn.Linear(feature_dim, args.num_classes).to(args.device)
-
-        elif model_str == "MobileNet":
-            args.model = mobilenet_v2(pretrained=False, num_classes=args.num_classes).to(args.device)
-            
-            # args.model = mobilenet_v2(pretrained=True).to(args.device)
-            # feature_dim = list(args.model.fc.parameters())[0].shape[1]
-            # args.model.fc = nn.Linear(feature_dim, args.num_classes).to(args.device)
-            
-        elif model_str == "LSTM":
-            args.model = LSTMNet(hidden_dim=args.feature_dim, vocab_size=args.vocab_size, num_classes=args.num_classes).to(args.device)
-
-        elif model_str == "BiLSTM":
-            args.model = BiLSTM_TextClassification(input_size=args.vocab_size, hidden_size=args.feature_dim, 
-                                                   output_size=args.num_classes, num_layers=1, 
-                                                   embedding_dropout=0, lstm_dropout=0, attention_dropout=0, 
-                                                   embedding_length=args.feature_dim).to(args.device)
-
-        elif model_str == "fastText":
-            args.model = fastText(hidden_dim=args.feature_dim, vocab_size=args.vocab_size, num_classes=args.num_classes).to(args.device)
-
-        elif model_str == "TextCNN":
-            args.model = TextCNN(hidden_dim=args.feature_dim, max_len=args.max_len, vocab_size=args.vocab_size, 
-                                 num_classes=args.num_classes).to(args.device)
-
-        elif model_str == "Transformer":
-            args.model = TransformerModel(ntoken=args.vocab_size, d_model=args.feature_dim, nhead=8, nlayers=2, 
-                                          num_classes=args.num_classes, max_len=args.max_len).to(args.device)
-        
-        elif model_str == "AmazonMLP":
-            args.model = AmazonMLP().to(args.device)
-
-        elif model_str == "HARCNN":
-            if args.dataset == 'HAR':
-                args.model = HARCNN(9, dim_hidden=1664, num_classes=args.num_classes, conv_kernel_size=(1, 9), 
-                                    pool_kernel_size=(1, 2)).to(args.device)
-            elif args.dataset == 'PAMAP2':
-                args.model = HARCNN(9, dim_hidden=3712, num_classes=args.num_classes, conv_kernel_size=(1, 9), 
-                                    pool_kernel_size=(1, 2)).to(args.device)
-
-        else:
-            raise NotImplementedError
+        args.model = build_model(model_str)
+        if args.algorithm == "FedCD":
+            pm_name = getattr(args, "pm_model_name", None)
+            if pm_name:
+                args.pm_model = build_model(pm_name)
 
         print(args.model)
 
         # FedCD: keep base model on CPU to avoid GPU OOM
         if args.algorithm == "FedCD" and args.device == "cuda":
             args.model = args.model.to("cpu")
+            if getattr(args, "pm_model", None) is not None:
+                args.pm_model = args.pm_model.to("cpu")
 
         # select algorithm
         if args.algorithm == "FedCD":
@@ -408,38 +396,68 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     # general
-    parser.add_argument('-go', "--goal", type=str, default="test", 
+    parser.add_argument('-go', "--goal", type=str, default="train", 
                         help="The goal for this experiment")
     parser.add_argument('-dev', "--device", type=str, default="cuda",
                         choices=["cpu", "cuda"])
     parser.add_argument('-did', "--device_id", type=str, default="0")
-    parser.add_argument('-data', "--dataset", type=str, default="MNIST")
+    parser.add_argument('-data', "--dataset", type=str, default="Cifar10")
     parser.add_argument('-ncl', "--num_classes", type=int, default=10)
-    parser.add_argument('-m', "--model", type=str, default="CNN")
+    parser.add_argument('-m', "--model", type=str, default="VGG16")
     parser.add_argument('-lbs', "--batch_size", type=int, default=10)
+    parser.add_argument('-nw', "--num_workers", type=int, default=0,
+                        help="DataLoader workers; >0 can increase GPU utilization")
+    parser.add_argument('--pin_memory', type=bool, default=True,
+                        help="Pin host memory for faster GPU transfer")
+    parser.add_argument('--prefetch_factor', type=int, default=2,
+                        help="DataLoader prefetch factor (num_workers>0)")
+    parser.add_argument('--gpu_batch_mult', type=int, default=1,
+                        help="Multiply batch size on GPU (FedCD safe scaling)")
+    parser.add_argument('--gpu_batch_max', type=int, default=0,
+                        help="Max GPU batch size (0 = no cap)")
+    parser.add_argument('--amp', type=bool, default=True,
+                        help="Use mixed precision on CUDA for speed")
+    parser.add_argument('--tf32', type=bool, default=True,
+                        help="Enable TF32 on CUDA for speed")
+    parser.add_argument('--log_usage', type=bool, default=False,
+                        help="Log CPU/GPU usage each round")
+    parser.add_argument('--log_usage_every', type=int, default=1,
+                        help="Log usage every N rounds")
+    parser.add_argument('--log_usage_path', type=str, default="logs/usage.csv",
+                        help="Usage log CSV path")
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=2000)
+    parser.add_argument('-gr', "--global_rounds", type=int, default=100)
     parser.add_argument('-tc', "--top_cnt", type=int, default=100, 
                         help="For auto_break")
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedCD")
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
-    parser.add_argument('-nc', "--num_clients", type=int, default=20,
+    parser.add_argument('-nc', "--num_clients", type=int, default=10,
                         help="Total number of clients")
     # FedCD
-    parser.add_argument('--num_clusters', type=int, default=1)
-    parser.add_argument('--cluster_period', type=int, default=1)
-    parser.add_argument('--global_period', type=int, default=1)
+    parser.add_argument('--num_clusters', type=int, default=5)
+    parser.add_argument('--cluster_period', type=int, default=2)
+    parser.add_argument('--pm_period', type=int, default=1,
+                        help="PM aggregation/broadcast period (global rounds)")
+    parser.add_argument('--global_period', type=int, default=4)
     parser.add_argument('--cluster_sample_size', type=int, default=512)
     parser.add_argument('--fedcd_nc_weight', type=float, default=0.0)
     parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
+    parser.add_argument('--gm_model', type=str, default="VGG16",
+                        help="FedCD GM model name")
+    parser.add_argument('--pm_model', type=str, default="VGG8",
+                        help="FedCD PM model name")
+    parser.add_argument('--fext_model', type=str, default="SmallFExt",
+                        help="FedCD feature extractor model name")
+    parser.add_argument('--fext_dim', type=int, default=512,
+                        help="FedCD feature extractor output dimension")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,
@@ -527,6 +545,9 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
+    if args.algorithm == "FedCD":
+        args.pm_model_name = args.pm_model
+        args.model = args.gm_model
 
     # Auto-generate dataset if client files are missing
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -550,6 +571,14 @@ if __name__ == "__main__":
     if args.device == "cuda" and not torch.cuda.is_available():
         print("\ncuda is not avaiable.\n")
         args.device = "cpu"
+    elif args.device == "cuda":
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = bool(getattr(args, "tf32", True))
+        torch.backends.cudnn.allow_tf32 = bool(getattr(args, "tf32", True))
+        try:
+            torch.set_float32_matmul_precision("high")
+        except Exception:
+            pass
 
     print("=" * 50)
     for arg in vars(args):
