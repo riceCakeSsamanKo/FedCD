@@ -32,6 +32,7 @@ class PMWrapper(nn.Module):
 class clientFedCD(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
+        self.args = args
 
         # 1. 모델 분리 (GM: Teacher/Frozen, PM: Student/Trainable)
         # PFLlib은 self.model에 전체 모델을 로드해줍니다.
@@ -251,19 +252,21 @@ class clientFedCD(Client):
                     scaler.update()
 
             # Move back to CPU after training to free GPU memory
-            self.f_ext.to("cpu")
-            self.gm.to("cpu")
-            self.pm.to("cpu")
-            self.pm_head.to("cpu")
-            self.pm_final.to("cpu")
-            self.combiner.to("cpu")
-            if self.gm_adapter is not None:
-                self.gm_adapter.to("cpu")
-            if self.pm_adapter is not None:
-                self.pm_adapter.to("cpu")
-            self.model.to("cpu")
-            if device == "cuda":
-                torch.cuda.empty_cache()
+            # [수정] avoid_oom이 True일 때만 CPU로 내림. (속도 향상)
+            if self.args.avoid_oom:
+                self.f_ext.to("cpu")
+                self.gm.to("cpu")
+                self.pm.to("cpu")
+                self.pm_head.to("cpu")
+                self.pm_final.to("cpu")
+                self.combiner.to("cpu")
+                if self.gm_adapter is not None:
+                    self.gm_adapter.to("cpu")
+                if self.pm_adapter is not None:
+                    self.pm_adapter.to("cpu")
+                self.model.to("cpu")
+                if device == "cuda":
+                    torch.cuda.empty_cache()
 
         batch_size = self.batch_size
         if self.device == "cuda":
@@ -271,12 +274,22 @@ class clientFedCD(Client):
                 batch_size = batch_size * self.gpu_batch_mult
             if self.gpu_batch_max > 0:
                 batch_size = min(batch_size, self.gpu_batch_max)
+        
+        # [Fix] 배치 크기가 데이터 샘플 수보다 크면 학습이 스킵되는 문제 방지 (drop_last=True 때문)
+        if batch_size > self.train_samples:
+            batch_size = self.train_samples
+
         try:
             _train_once(self.device, batch_size)
         except RuntimeError as err:
             if self.device == "cuda" and self._is_oom(err):
                 print("[Warn] OOM during FedCD client training. Reducing batch size / fallback to CPU.")
                 torch.cuda.empty_cache()
+                # OOM 발생 시 강제로 CPU로 내리고 정리
+                self.f_ext.to("cpu")
+                self.gm.to("cpu")
+                self.pm.to("cpu")
+                self.model.to("cpu")
                 reduced = max(1, batch_size // 2)
                 if reduced < batch_size:
                     try:
@@ -342,19 +355,21 @@ class clientFedCD(Client):
                     scaler.update()
 
             # Clean up
-            self.f_ext.to("cpu")
-            self.gm_head.to("cpu")
-            self.gm_final.to("cpu")
-            self.pm_head.to("cpu")
-            self.pm_final.to("cpu")
-            self.combiner.to("cpu")
-            if self.gm_adapter is not None:
-                self.gm_adapter.to("cpu")
-            if self.pm_adapter is not None:
-                self.pm_adapter.to("cpu")
-            self.model.to("cpu")
-            if device == "cuda":
-                torch.cuda.empty_cache()
+            # [수정] avoid_oom이 True일 때만 CPU로 내림.
+            if self.args.avoid_oom:
+                self.f_ext.to("cpu")
+                self.gm_head.to("cpu")
+                self.gm_final.to("cpu")
+                self.pm_head.to("cpu")
+                self.pm_final.to("cpu")
+                self.combiner.to("cpu")
+                if self.gm_adapter is not None:
+                    self.gm_adapter.to("cpu")
+                if self.pm_adapter is not None:
+                    self.pm_adapter.to("cpu")
+                self.model.to("cpu")
+                if device == "cuda":
+                    torch.cuda.empty_cache()
 
         batch_size = self.batch_size
         if self.device == "cuda":
@@ -368,6 +383,12 @@ class clientFedCD(Client):
             if self.device == "cuda" and self._is_oom(err):
                 print("[Warn] OOM during warmup. Falling back to CPU for this client.")
                 torch.cuda.empty_cache()
+                # OOM 시 강제 정리
+                self.f_ext.to("cpu")
+                self.gm_head.to("cpu")
+                self.gm_final.to("cpu")
+                self.pm_head.to("cpu")
+                self.model.to("cpu")
                 _warmup_once("cpu", max(1, batch_size // 2))
                 return
             raise

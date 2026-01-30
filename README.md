@@ -19,7 +19,7 @@ python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VG
 - `-algo` : 알고리즘 이름 (default: `FedCD`)
 - `-gr` : 글로벌 라운드 수 (default: `100`)
 - `-nc` : 클라이언트 수 (default: `10`)
-- `-lbs` : 배치 크기 (default: `10`)
+- `-lbs` : 배치 크기 (default: `128`)
 - `-lr` : 로컬 학습률 (default: `0.005`)
 - `-ls` : 로컬 에포크 수 (default: `1`)
 - `-dev` : 학습 디바이스 (`cpu` 또는 `cuda`) (default: `cuda`)

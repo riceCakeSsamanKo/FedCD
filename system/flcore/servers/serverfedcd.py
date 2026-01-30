@@ -6,6 +6,7 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
+from tqdm import tqdm
 from flcore.trainmodel.models import SmallFExt
 from flcore.clients.clientfedcd import clientFedCD
 from flcore.servers.serverbase import Server
@@ -176,20 +177,19 @@ class FedCD(Server):
             wall_start = time.time()
             cpu_start = time.process_time()
             self.selected_clients = self.select_clients()
-            print(f"\n[FedCD] Round {i}: training {len(self.selected_clients)} clients")
             
             # 1. 로컬 학습 수행 (Local Training)
-            for client in self.selected_clients:
+            print(f"\n[FedCD] Round {i}: training {len(self.selected_clients)} clients")
+            for client in tqdm(self.selected_clients, desc=f"Round {i} Local Training", leave=False):
                 client.train()
-            print(f"[FedCD] Round {i}: local training done")
+            
             if self.log_usage and i % self.log_usage_every == 0:
                 self._log_usage(i, "post_local", wall_start, cpu_start)
 
             # 2. PM 수집 (Receive PMs)
             received_pms = []
-            for client in self.selected_clients:
+            for client in tqdm(self.selected_clients, desc=f"Round {i} Collecting PMs", leave=False):
                 received_pms.append((client.id, client.upload_parameters()))
-            print(f"[FedCD] Round {i}: received {len(received_pms)} PMs")
 
             # 2.5 클러스터링 갱신
             if i % self.cluster_period == 0:
@@ -203,7 +203,7 @@ class FedCD(Server):
             cluster_pms = self.aggregate_cluster_pms(received_pms)
             if i % self.pm_period == 0 and cluster_pms:
                 self.send_cluster_pms(cluster_pms)
-                print(f"[FedCD] Round {i}: sent cluster PMs")
+                print(f"[FedCD] Round {i}: PM aggregation and cluster update done")
                 if self.log_usage and i % self.log_usage_every == 0:
                     self._log_usage(i, "post_pm", wall_start, cpu_start)
 
@@ -212,10 +212,10 @@ class FedCD(Server):
                 self.aggregate_and_distill(list(cluster_pms.values()))
                 # 업데이트된 GM을 모든 클라이언트에게 배포 (Downlink)
                 self.send_models()
-                print(f"[FedCD] Round {i}: distillation + GM broadcast done")
+                print(f"[FedCD] Round {i}: Server-side distillation and GM update done")
                 # Warm-up classifier after GM update
                 if getattr(self.args, "fedcd_warmup_epochs", 0) > 0:
-                    for client in self.selected_clients:
+                    for client in tqdm(self.selected_clients, desc=f"Round {i} Classifier Warm-up", leave=False):
                         client.warmup_classifier()
                 if self.log_usage and i % self.log_usage_every == 0:
                     self._log_usage(i, "post_gm", wall_start, cpu_start)
@@ -307,7 +307,7 @@ class FedCD(Server):
             scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
             # Proxy Data로 증류 (예: 1 Epoch)
-            for x, _ in self.proxy_data_loader:
+            for x, _ in tqdm(self.proxy_data_loader, desc="Ensemble Distillation", leave=False):
                 x = x.to(device, non_blocking=(device == "cuda"))
 
                 with torch.no_grad():
@@ -365,7 +365,7 @@ class FedCD(Server):
                 self.pm_final.to("cpu")
             if self.pm_adapter is not None:
                 self.pm_adapter.to("cpu")
-            if device == "cuda":
+            if device == "cuda" and self.args.avoid_oom:
                 torch.cuda.empty_cache()
 
         try:

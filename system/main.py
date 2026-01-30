@@ -404,14 +404,14 @@ if __name__ == "__main__":
     parser.add_argument('-data', "--dataset", type=str, default="Cifar10")
     parser.add_argument('-ncl', "--num_classes", type=int, default=10)
     parser.add_argument('-m', "--model", type=str, default="VGG16")
-    parser.add_argument('-lbs', "--batch_size", type=int, default=10)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=128)
     parser.add_argument('-nw', "--num_workers", type=int, default=0,
                         help="DataLoader workers; >0 can increase GPU utilization")
     parser.add_argument('--pin_memory', type=bool, default=True,
                         help="Pin host memory for faster GPU transfer")
     parser.add_argument('--prefetch_factor', type=int, default=2,
                         help="DataLoader prefetch factor (num_workers>0)")
-    parser.add_argument('--gpu_batch_mult', type=int, default=1,
+    parser.add_argument('--gpu_batch_mult', type=int, default=16,
                         help="Multiply batch size on GPU (FedCD safe scaling)")
     parser.add_argument('--gpu_batch_max', type=int, default=0,
                         help="Max GPU batch size (0 = no cap)")

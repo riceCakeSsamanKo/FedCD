@@ -5,6 +5,7 @@ import h5py
 import copy
 import time
 import random
+from tqdm import tqdm
 from utils.data_utils import read_client_data
 from utils.dlg import DLG
 
@@ -199,7 +200,7 @@ class Server(object):
         num_samples = []
         tot_correct = []
         tot_auc = []
-        for c in self.clients:
+        for c in tqdm(self.clients, desc="Testing Clients", leave=False):
             ct, ns, auc = c.test_metrics()
             tot_correct.append(ct*1.0)
             tot_auc.append(auc*ns)
@@ -215,7 +216,7 @@ class Server(object):
         
         num_samples = []
         losses = []
-        for c in self.clients:
+        for c in tqdm(self.clients, desc="Training Metrics", leave=False):
             cl, ns = c.train_metrics()
             num_samples.append(ns)
             losses.append(cl*1.0)
@@ -335,7 +336,7 @@ class Server(object):
 
     # fine-tuning on new clients
     def fine_tuning_new_clients(self):
-        for client in self.new_clients:
+        for client in tqdm(self.new_clients, desc="Fine-tuning New Clients", leave=False):
             client.set_parameters(self.global_model)
             opt = torch.optim.SGD(client.model.parameters(), lr=self.learning_rate)
             CEloss = torch.nn.CrossEntropyLoss()
@@ -359,7 +360,7 @@ class Server(object):
         num_samples = []
         tot_correct = []
         tot_auc = []
-        for c in self.new_clients:
+        for c in tqdm(self.new_clients, desc="Testing New Clients", leave=False):
             ct, ns, auc = c.test_metrics()
             tot_correct.append(ct*1.0)
             tot_auc.append(auc*ns)
