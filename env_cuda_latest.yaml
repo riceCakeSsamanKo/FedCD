@@ -16,11 +16,12 @@ dependencies:
   - seaborn
   - matplotlib
   - click
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.8
   - pip:  # manually install with mirror URLs if a timeout occurs
-    - torch==2.0.1
-    - torchaudio
     - torchtext
-    - torchvision
     - calmsize
     - memory-profiler
     - portalocker
