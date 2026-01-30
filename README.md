@@ -10,7 +10,7 @@
 
 ## FedCD 학습 실행
 ```
-python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 20 --num_clusters 5 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 8 --pin_memory True --prefetch_factor 4 --amp True --tf32 True --gpu_batch_mult 4 --gpu_batch_max 256 --avoid_oom False
+python .\system\main.py -data Cifar10 -algo FedCD --fext_model VGG16 --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 20 --num_clusters 5 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 0 --pin_memory True --prefetch_factor 2 --amp True --tf32 True --gpu_batch_mult 1 --gpu_batch_max 0 --log_usage True -oom False --local_epochs 1
 ```
 
 ## 주요 argument 설명 (기본값 포함)

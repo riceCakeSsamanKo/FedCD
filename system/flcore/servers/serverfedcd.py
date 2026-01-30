@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
+import torchvision
 from flcore.trainmodel.models import SmallFExt
 from flcore.clients.clientfedcd import clientFedCD
 from flcore.servers.serverbase import Server
@@ -39,7 +40,9 @@ class FedCD(Server):
         self.log_usage = bool(getattr(args, "log_usage", False))
         self.log_usage_every = max(1, int(getattr(args, "log_usage_every", 1)))
         self.log_usage_path = str(getattr(args, "log_usage_path", "logs/usage.csv"))
+        self.log_cluster_path = "logs/cluster_acc.csv"
         self._usage_header_written = False
+        self._cluster_header_written = False
         self.f_ext = self._build_f_ext(args)
         self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
         self.gm_head, self.gm_final = self._split_classifier(self.global_model)
@@ -54,12 +57,19 @@ class FedCD(Server):
             self.pm_adapter = None
 
     def _build_f_ext(self, args):
-        in_channels = 1 if "MNIST" in args.dataset else 3
-        fext_dim = int(getattr(args, "fext_dim", 512))
         model_name = str(getattr(args, "fext_model", "SmallFExt"))
-        if model_name != "SmallFExt":
+        if model_name == "VGG16":
+            # Load Pretrained VGG16 features
+            base_model = torchvision.models.vgg16(pretrained=True)
+            f_ext = nn.Sequential(base_model.features, base_model.avgpool, nn.Flatten())
+            f_ext.out_dim = 512 * 7 * 7 # VGG16 final feature map size
+        elif model_name == "SmallFExt":
+            in_channels = 1 if "MNIST" in args.dataset else 3
+            fext_dim = int(getattr(args, "fext_dim", 512))
+            f_ext = SmallFExt(in_channels=in_channels, out_dim=fext_dim)
+        else:
             raise NotImplementedError(f"Unknown fext_model: {model_name}")
-        f_ext = SmallFExt(in_channels=in_channels, out_dim=fext_dim)
+            
         for param in f_ext.parameters():
             param.requires_grad = False
         f_ext.eval()
@@ -116,7 +126,7 @@ class FedCD(Server):
         util, mem_used, mem_total = parts
         return util, mem_used, mem_total
 
-    def _log_usage(self, round_idx, stage, wall_start, cpu_start):
+    def _log_usage(self, round_idx, stage, wall_start, cpu_start, test_acc=None, train_loss=None):
         wall_delta = time.time() - wall_start
         cpu_delta = time.process_time() - cpu_start
         cpu_pct = (cpu_delta / wall_delta * 100.0) if wall_delta > 0 else 0.0
@@ -135,19 +145,26 @@ class FedCD(Server):
             else:
                 gpu_mem = f"{gpu_mem}, torch={alloc:.0f}/{reserved:.0f} MB"
 
+        acc_str = f"acc={test_acc:.4f}" if test_acc is not None else ""
+        loss_str = f"loss={train_loss:.4f}" if train_loss is not None else ""
         msg = (
             f"[Usage] Round {round_idx} | {stage} | "
             f"wall={wall_delta:.2f}s cpu={cpu_pct:.1f}% "
-            + (f"gpu={gpu_util} mem={gpu_mem}" if self.device == "cuda" else "gpu=cpu")
+            + (f"gpu={gpu_util} mem={gpu_mem} " if self.device == "cuda" else "gpu=cpu ")
+            + f"{acc_str} {loss_str}"
         )
-        print(msg)
-        self._append_usage_csv(round_idx, stage, wall_delta, cpu_pct, gpu_util, gpu_mem)
+        # print(msg) # 메모리 사용량 출력 안하도록
+        self._append_usage_csv(round_idx, stage, wall_delta, cpu_pct, gpu_util, gpu_mem, test_acc, train_loss)
 
-    def _append_usage_csv(self, round_idx, stage, wall_delta, cpu_pct, gpu_util, gpu_mem):
+    def _append_usage_csv(self, round_idx, stage, wall_delta, cpu_pct, gpu_util, gpu_mem, test_acc, train_loss):
         path = self.log_usage_path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        header = "round,stage,wall_s,cpu_pct,gpu_util,gpu_mem\n"
-        line = f"{round_idx},{stage},{wall_delta:.4f},{cpu_pct:.2f},{gpu_util or ''},{gpu_mem or ''}\n"
+        header = "round,stage,wall_s,cpu_pct,gpu_util,gpu_mem,test_acc,train_loss\n"
+        
+        t_acc = f"{test_acc:.4f}" if test_acc is not None else ""
+        t_loss = f"{train_loss:.4f}" if train_loss is not None else ""
+        line = f"{round_idx},{stage},{wall_delta:.4f},{cpu_pct:.2f},{gpu_util or ''},{gpu_mem or ''},{t_acc},{t_loss}\n"
+        
         if not self._usage_header_written:
             need_header = not os.path.exists(path)
             with open(path, "a", encoding="utf-8") as f:
@@ -155,6 +172,23 @@ class FedCD(Server):
                     f.write(header)
                 f.write(line)
             self._usage_header_written = True
+        else:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line)
+
+    def _log_cluster_acc(self, round_idx, cluster_id, accuracy, samples):
+        path = self.log_cluster_path
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        header = "round,cluster_id,accuracy,samples\n"
+        line = f"{round_idx},{cluster_id},{accuracy:.4f},{samples}\n"
+        
+        if not self._cluster_header_written:
+            need_header = not os.path.exists(path)
+            with open(path, "a", encoding="utf-8") as f:
+                if need_header:
+                    f.write(header)
+                f.write(line)
+            self._cluster_header_written = True
         else:
             with open(path, "a", encoding="utf-8") as f:
                 f.write(line)
@@ -191,13 +225,21 @@ class FedCD(Server):
             for client in tqdm(self.selected_clients, desc=f"Round {i} Collecting PMs", leave=False):
                 received_pms.append((client.id, client.upload_parameters()))
 
-            # 2.5 클러스터링 갱신
+            # 2.5 클러스터링 갱신 및 상세 로깅
             if i % self.cluster_period == 0:
                 self.cluster_map = self.cluster_clients_by_distribution()
-                cluster_counts = {}
-                for cid in self.cluster_map.values():
-                    cluster_counts[cid] = cluster_counts.get(cid, 0) + 1
-                print(f"[FedCD] Round {i}: cluster sizes = {cluster_counts}")
+                
+                # 상세 클러스터링 현황 로깅
+                cluster_groups = {}
+                for cid, clust_id in self.cluster_map.items():
+                    if clust_id not in cluster_groups:
+                        cluster_groups[clust_id] = []
+                    cluster_groups[clust_id].append(cid)
+                
+                print(f"\n[FedCD] Round {i}: Clustering Result:")
+                for c_id in sorted(cluster_groups.keys()):
+                    clients_in_cluster = sorted(cluster_groups[c_id])
+                    print(f"  Cluster {c_id} ({len(clients_in_cluster)} clients): {clients_in_cluster}")
 
             # 3. 클러스터 내 PM 집계 및 배포
             cluster_pms = self.aggregate_cluster_pms(received_pms)
@@ -222,7 +264,58 @@ class FedCD(Server):
             
             if i % self.eval_gap == 0:
                 print(f"\n------------- Round number: {i} -------------")
-                self.evaluate()
+                # 평가 실행 및 클러스터별 정확도 로깅
+                self.evaluate_with_clusters(i, wall_start, cpu_start)
+
+    # 기존 evaluate 함수 대신 클러스터 정보 포함하여 평가
+    def evaluate_with_clusters(self, round_idx, wall_start, cpu_start):
+        stats = self.test_metrics()
+        stats_train = self.train_metrics()
+        # stats: ids, num_samples, tot_correct, tot_auc
+        ids, num_samples, tot_correct, tot_auc = stats
+        # stats_train: ids, num_samples, losses
+        _, num_samples_train, losses = stats_train
+        
+        # 전체 평균 정확도 및 손실 계산
+        total_samples = sum(num_samples)
+        total_samples_train = sum(num_samples_train)
+        
+        avg_acc = sum(tot_correct) / total_samples if total_samples > 0 else 0.0
+        avg_auc = sum(tot_auc) / total_samples if total_samples > 0 else 0.0
+        avg_loss = sum(losses) / total_samples_train if total_samples_train > 0 else 0.0
+            
+        print(f"Server: Overall Averaged Test Accuracy: {avg_acc:.4f}")
+        print(f"Server: Overall Averaged Test AUC: {avg_auc:.4f}")
+        print(f"Server: Overall Averaged Train Loss: {avg_loss:.4f}")
+
+        # PFLlib 내부 변수에 저장 (h5 파일 저장용)
+        self.rs_test_acc.append(avg_acc)
+        self.rs_test_auc.append(avg_auc)
+        self.rs_train_loss.append(avg_loss)
+
+        # CSV 로그에 기록
+        if self.log_usage:
+            self._log_usage(round_idx, "evaluation", wall_start, cpu_start, test_acc=avg_acc, train_loss=avg_loss)
+
+        # 클러스터별 정확도 계산 및 출력, 로깅
+        cluster_stats = {}
+        for i, cid in enumerate(ids):
+            c_id = self.cluster_map.get(cid, -1) # -1 if not clustered yet
+            if c_id not in cluster_stats:
+                cluster_stats[c_id] = {"correct": 0, "samples": 0}
+            cluster_stats[c_id]["correct"] += tot_correct[i]
+            cluster_stats[c_id]["samples"] += num_samples[i]
+            
+        print("Server: Cluster-wise Accuracy Detail:")
+        for c_id in sorted(cluster_stats.keys()):
+            s = cluster_stats[c_id]
+            if s["samples"] > 0:
+                c_acc = s["correct"] / s["samples"]
+                print(f"  Cluster {c_id}: {c_acc:.4f} (samples: {s['samples']})")
+                if self.log_usage:
+                    self._log_cluster_acc(round_idx, c_id, c_acc, s["samples"])
+            else:
+                print(f"  Cluster {c_id}: N/A (no samples)")
 
     def aggregate_cluster_pms(self, received_pms):
         # Streamed aggregation to avoid holding all PMs in memory

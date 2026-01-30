@@ -411,7 +411,7 @@ if __name__ == "__main__":
                         help="Pin host memory for faster GPU transfer")
     parser.add_argument('--prefetch_factor', type=int, default=2,
                         help="DataLoader prefetch factor (num_workers>0)")
-    parser.add_argument('--gpu_batch_mult', type=int, default=16,
+    parser.add_argument('--gpu_batch_mult', type=int, default=1,
                         help="Multiply batch size on GPU (FedCD safe scaling)")
     parser.add_argument('--gpu_batch_max', type=int, default=0,
                         help="Max GPU batch size (0 = no cap)")
@@ -454,7 +454,7 @@ if __name__ == "__main__":
                         help="FedCD GM model name")
     parser.add_argument('--pm_model', type=str, default="VGG8",
                         help="FedCD PM model name")
-    parser.add_argument('--fext_model', type=str, default="SmallFExt",
+    parser.add_argument('--fext_model', type=str, default="VGG16",
                         help="FedCD feature extractor model name")
     parser.add_argument('--fext_dim', type=int, default=512,
                         help="FedCD feature extractor output dimension")

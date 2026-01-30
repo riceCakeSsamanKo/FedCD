@@ -2,6 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 from flcore.clients.clientbase import Client
 from flcore.trainmodel.models import SmallFExt
 
@@ -99,12 +100,19 @@ class clientFedCD(Client):
         return f_ext
 
     def _build_f_ext(self, args):
-        in_channels = 1 if "MNIST" in args.dataset else 3
-        fext_dim = int(getattr(args, "fext_dim", 512))
         model_name = str(getattr(args, "fext_model", "SmallFExt"))
-        if model_name != "SmallFExt":
+        if model_name == "VGG16":
+            # Load Pretrained VGG16 features
+            base_model = torchvision.models.vgg16(pretrained=True)
+            f_ext = nn.Sequential(base_model.features, base_model.avgpool, nn.Flatten())
+            f_ext.out_dim = 512 * 7 * 7 # VGG16 final feature map size
+        elif model_name == "SmallFExt":
+            in_channels = 1 if "MNIST" in args.dataset else 3
+            fext_dim = int(getattr(args, "fext_dim", 512))
+            f_ext = SmallFExt(in_channels=in_channels, out_dim=fext_dim)
+        else:
             raise NotImplementedError(f"Unknown fext_model: {model_name}")
-        f_ext = SmallFExt(in_channels=in_channels, out_dim=fext_dim)
+            
         for param in f_ext.parameters():
             param.requires_grad = False
         f_ext.eval()
