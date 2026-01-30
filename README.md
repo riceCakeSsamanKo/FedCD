@@ -10,7 +10,7 @@
 
 ## FedCD 학습 실행
 ```
-python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 20 --num_clusters 5 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 8 --pin_memory True --prefetch_factor 4 --amp True --tf32 True --gpu_batch_mult 4 --gpu_batch_max 256
+python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 20 --num_clusters 5 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 8 --pin_memory True --prefetch_factor 4 --amp True --tf32 True --gpu_batch_mult 4 --gpu_batch_max 256 --avoid_oom False
 ```
 
 ## 주요 argument 설명 (기본값 포함)
@@ -42,6 +42,7 @@ python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VG
 - `--pm_model` : PM 모델 이름 (default: `VGG8`)
 - `--fext_model` : 고정 feature extractor 모델 (default: `SmallFExt`)
 - `--fext_dim` : f_ext 출력 차원 (default: `512`)
+- `--avoid_oom` : OOM 방지 (default: `True`)
 
 # <img src="docs/imgs/logo-green.png" alt="icon" height="24" style="vertical-align:sub;"/> PFLlib: Personalized Federated Learning Library and Benchmark
 

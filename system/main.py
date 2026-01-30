@@ -181,7 +181,7 @@ def run(args):
         print(args.model)
 
         # FedCD: keep base model on CPU to avoid GPU OOM
-        if args.algorithm == "FedCD" and args.device == "cuda":
+        if args.algorithm == "FedCD" and args.device == "cuda" and args.avoid_oom == True:
             args.model = args.model.to("cpu")
             if getattr(args, "pm_model", None) is not None:
                 args.pm_model = args.pm_model.to("cpu")
@@ -476,6 +476,7 @@ if __name__ == "__main__":
                         help="Set this for text tasks. 80 for Shakespeare. 32000 for AG_News and SogouNews.")
     parser.add_argument('-ml', "--max_len", type=int, default=200)
     parser.add_argument('-fs', "--few_shot", type=int, default=0)
+    parser.add_argument('-oom', "--avoid_oom", type=bool, default=True)
     # practical
     parser.add_argument('-cdr', "--client_drop_rate", type=float, default=0.0,
                         help="Rate for clients that train but drop out")
