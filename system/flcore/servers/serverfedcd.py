@@ -40,7 +40,8 @@ class FedCD(Server):
         self.log_usage = bool(getattr(args, "log_usage", False))
         self.log_usage_every = max(1, int(getattr(args, "log_usage_every", 1)))
         self.log_usage_path = str(getattr(args, "log_usage_path", "logs/usage.csv"))
-        self.log_cluster_path = "logs/cluster_acc.csv"
+        # Set cluster_acc.csv in the same directory as usage.csv
+        self.log_cluster_path = os.path.join(os.path.dirname(self.log_usage_path), "cluster_acc.csv")
         self._usage_header_written = False
         self._cluster_header_written = False
         self.f_ext = self._build_f_ext(args)
@@ -128,42 +129,31 @@ class FedCD(Server):
 
     def _log_usage(self, round_idx, stage, wall_start, cpu_start, test_acc=None, train_loss=None):
         wall_delta = time.time() - wall_start
-        cpu_delta = time.process_time() - cpu_start
-        cpu_pct = (cpu_delta / wall_delta * 100.0) if wall_delta > 0 else 0.0
-
-        gpu_util = None
-        gpu_mem = None
-        if self.device == "cuda":
-            util_info = self._read_gpu_util()
-            if util_info:
-                gpu_util = f"{util_info[0]}%"
-                gpu_mem = f"{util_info[1]}/{util_info[2]} MB"
-            alloc = torch.cuda.memory_allocated() / (1024 ** 2)
-            reserved = torch.cuda.memory_reserved() / (1024 ** 2)
-            if gpu_mem is None:
-                gpu_mem = f"{alloc:.0f}/{reserved:.0f} MB"
-            else:
-                gpu_mem = f"{gpu_mem}, torch={alloc:.0f}/{reserved:.0f} MB"
+        # cpu_delta = time.process_time() - cpu_start
+        # cpu_pct = (cpu_delta / wall_delta * 100.0) if wall_delta > 0 else 0.0
 
         acc_str = f"acc={test_acc:.4f}" if test_acc is not None else ""
         loss_str = f"loss={train_loss:.4f}" if train_loss is not None else ""
         msg = (
-            f"[Usage] Round {round_idx} | {stage} | "
-            f"wall={wall_delta:.2f}s cpu={cpu_pct:.1f}% "
-            + (f"gpu={gpu_util} mem={gpu_mem} " if self.device == "cuda" else "gpu=cpu ")
+            f"[FedCD] Round {round_idx} | {stage} | "
+            f"wall={wall_delta:.2f}s "
             + f"{acc_str} {loss_str}"
         )
-        # print(msg) # 메모리 사용량 출력 안하도록
-        self._append_usage_csv(round_idx, stage, wall_delta, cpu_pct, gpu_util, gpu_mem, test_acc, train_loss)
+        # print(msg)
+        self._append_usage_csv(round_idx, test_acc, train_loss)
 
-    def _append_usage_csv(self, round_idx, stage, wall_delta, cpu_pct, gpu_util, gpu_mem, test_acc, train_loss):
+    def _append_usage_csv(self, round_idx, test_acc, train_loss):
         path = self.log_usage_path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        header = "round,stage,wall_s,cpu_pct,gpu_util,gpu_mem,test_acc,train_loss\n"
+        header = "round,test_acc,train_loss\n"
         
+        # Only log rows that have metrics (evaluation stage)
+        if test_acc is None and train_loss is None:
+            return
+
         t_acc = f"{test_acc:.4f}" if test_acc is not None else ""
         t_loss = f"{train_loss:.4f}" if train_loss is not None else ""
-        line = f"{round_idx},{stage},{wall_delta:.4f},{cpu_pct:.2f},{gpu_util or ''},{gpu_mem or ''},{t_acc},{t_loss}\n"
+        line = f"{round_idx},{t_acc},{t_loss}\n"
         
         if not self._usage_header_written:
             need_header = not os.path.exists(path)

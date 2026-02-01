@@ -2,3 +2,4 @@
 /system/models
 *__pycache__*
 /dataset/Cifar10
+/logs

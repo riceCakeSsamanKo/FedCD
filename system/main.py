@@ -76,6 +76,15 @@ logger.setLevel(logging.ERROR)
 warnings.simplefilter("ignore")
 torch.manual_seed(0)
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def run(args):
 
@@ -407,7 +416,7 @@ if __name__ == "__main__":
     parser.add_argument('-lbs', "--batch_size", type=int, default=128)
     parser.add_argument('-nw', "--num_workers", type=int, default=0,
                         help="DataLoader workers; >0 can increase GPU utilization")
-    parser.add_argument('--pin_memory', type=bool, default=True,
+    parser.add_argument('--pin_memory', type=str2bool, default=True,
                         help="Pin host memory for faster GPU transfer")
     parser.add_argument('--prefetch_factor', type=int, default=2,
                         help="DataLoader prefetch factor (num_workers>0)")
@@ -415,11 +424,11 @@ if __name__ == "__main__":
                         help="Multiply batch size on GPU (FedCD safe scaling)")
     parser.add_argument('--gpu_batch_max', type=int, default=0,
                         help="Max GPU batch size (0 = no cap)")
-    parser.add_argument('--amp', type=bool, default=True,
+    parser.add_argument('--amp', type=str2bool, default=True,
                         help="Use mixed precision on CUDA for speed")
-    parser.add_argument('--tf32', type=bool, default=True,
+    parser.add_argument('--tf32', type=str2bool, default=True,
                         help="Enable TF32 on CUDA for speed")
-    parser.add_argument('--log_usage', type=bool, default=False,
+    parser.add_argument('--log_usage', type=str2bool, default=False,
                         help="Log CPU/GPU usage each round")
     parser.add_argument('--log_usage_every', type=int, default=1,
                         help="Log usage every N rounds")
@@ -427,7 +436,7 @@ if __name__ == "__main__":
                         help="Usage log CSV path")
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,
                         help="Local learning rate")
-    parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
+    parser.add_argument('-ld', "--learning_rate_decay", type=str2bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
     parser.add_argument('-gr', "--global_rounds", type=int, default=100)
     parser.add_argument('-tc', "--top_cnt", type=int, default=100, 
@@ -437,7 +446,7 @@ if __name__ == "__main__":
     parser.add_argument('-algo', "--algorithm", type=str, default="FedCD")
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
-    parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
+    parser.add_argument('-rjr', "--random_join_ratio", type=str2bool, default=False,
                         help="Random ratio of clients per round")
     parser.add_argument('-nc', "--num_clients", type=int, default=10,
                         help="Total number of clients")
@@ -465,8 +474,8 @@ if __name__ == "__main__":
     parser.add_argument('-eg', "--eval_gap", type=int, default=1,
                         help="Rounds gap for evaluation")
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
-    parser.add_argument('-ab', "--auto_break", type=bool, default=False)
-    parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)
+    parser.add_argument('-ab', "--auto_break", type=str2bool, default=False)
+    parser.add_argument('-dlg', "--dlg_eval", type=str2bool, default=False)
     parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
     parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=2)
     parser.add_argument('-nnc', "--num_new_clients", type=int, default=0)
@@ -476,7 +485,7 @@ if __name__ == "__main__":
                         help="Set this for text tasks. 80 for Shakespeare. 32000 for AG_News and SogouNews.")
     parser.add_argument('-ml', "--max_len", type=int, default=200)
     parser.add_argument('-fs', "--few_shot", type=int, default=0)
-    parser.add_argument('-oom', "--avoid_oom", type=bool, default=True)
+    parser.add_argument('-oom', "--avoid_oom", type=str2bool, default=True)
     # practical
     parser.add_argument('-cdr', "--client_drop_rate", type=float, default=0.0,
                         help="Rate for clients that train but drop out")
@@ -484,7 +493,7 @@ if __name__ == "__main__":
                         help="The rate for slow clients when training locally")
     parser.add_argument('-ssr', "--send_slow_rate", type=float, default=0.0,
                         help="The rate for slow clients when sending global model")
-    parser.add_argument('-ts', "--time_select", type=bool, default=False,
+    parser.add_argument('-ts', "--time_select", type=str2bool, default=False,
                         help="Whether to group and select clients at each round according to time cost")
     parser.add_argument('-tth', "--time_threthold", type=float, default=10000,
                         help="The threthold for droping slow clients")
@@ -523,7 +532,7 @@ if __name__ == "__main__":
     parser.add_argument('-glr', "--generator_learning_rate", type=float, default=0.005)
     parser.add_argument('-hd', "--hidden_dim", type=int, default=512)
     parser.add_argument('-se', "--server_epochs", type=int, default=1000)
-    parser.add_argument('-lf', "--localize_feature_extractor", type=bool, default=False)
+    parser.add_argument('-lf', "--localize_feature_extractor", type=str2bool, default=False)
     # SCAFFOLD / FedGH
     parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
     # FedALA
@@ -549,6 +558,20 @@ if __name__ == "__main__":
     if args.algorithm == "FedCD":
         args.pm_model_name = args.pm_model
         args.model = args.gm_model
+
+    # [New] Experiment Logging Setup
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    exp_dir = os.path.join("logs", f"exp_{timestamp}_{args.algorithm}")
+    if not os.path.exists(exp_dir):
+        os.makedirs(exp_dir)
+    
+    # Update log paths FIRST
+    args.log_usage_path = os.path.join(exp_dir, "acc.csv")
+    print(f"\n[Info] Experiment logs will be saved to: {exp_dir}\n")
+
+    # Save arguments AFTER updating paths
+    with open(os.path.join(exp_dir, "config.json"), "w") as f:
+        json.dump(vars(args), f, indent=4)
 
     # Auto-generate dataset if client files are missing
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

@@ -170,13 +170,19 @@ class Server(object):
         
     def save_results(self):
         algo = self.dataset + "_" + self.algorithm
-        result_path = "../results/"
+        
+        # [Fix] Save h5 results in the experiment log directory
+        if hasattr(self.args, "log_usage_path") and self.args.log_usage_path:
+            result_path = os.path.dirname(self.args.log_usage_path)
+        else:
+            result_path = "../results/"
+            
         if not os.path.exists(result_path):
             os.makedirs(result_path)
 
         if (len(self.rs_test_acc)):
             algo = algo + "_" + self.goal + "_" + str(self.times)
-            file_path = result_path + "{}.h5".format(algo)
+            file_path = os.path.join(result_path, "{}.h5".format(algo))
             print("File path: " + file_path)
 
             with h5py.File(file_path, 'w') as hf:
