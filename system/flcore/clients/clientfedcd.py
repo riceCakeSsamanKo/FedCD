@@ -76,6 +76,16 @@ class clientFedCD(Client):
             pm_params += list(self.pm_adapter.parameters())
         self.optimizer = torch.optim.SGD(pm_params, lr=self.learning_rate)
 
+        # [Info] Print Model Stats for Client 0
+        if self.id == 0:
+            total_params = sum(p.numel() for p in self.model.parameters())
+            trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+            total_size_bytes = sum(p.numel() * p.element_size() for p in self.model.parameters())
+            print(f"\n[Client 0] Model Parameter Stats:")
+            print(f"  Total Parameters: {total_params:,}")
+            print(f"  Trainable Parameters: {trainable_params:,}")
+            print(f"  Estimated Model Size: {total_size_bytes / (1024**2):.2f} MB")
+
     def _to_device(self, tensor, device):
         if self.pin_memory and device == "cuda":
             return tensor.to(device, non_blocking=True)

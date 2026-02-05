@@ -4,13 +4,14 @@
 - Non-IID + 클라이언트당 2클래스(패턴 분할):
   - `cd dataset`
   - `python generate_Cifar10.py noniid - pat 50`
+  - `python generate_Cifar10.py noniid balance pat 50`
 - Dirichlet 분할(클래스 수 제한 없음):
   - `cd dataset`
   - `python generate_Cifar10.py noniid - dir 50`
 
 ## FedCD 학습 실행
 ```
-python .\system\main.py -data Cifar10 -algo FedCD --fext_model VGG16 --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 --num_clusters 10 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 0 --pin_memory True --prefetch_factor 2 --amp True --tf32 True --gpu_batch_mult 1 --gpu_batch_max 0 --log_usage True -oom False --local_epochs 1
+python .\system\main.py -data Cifar10 -algo FedCD --fext_model VGG16 --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 --num_clusters 10 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 0 --pin_memory True --prefetch_factor 2 --amp True --tf32 True --gpu_batch_mult 1 --gpu_batch_max 0 --log_usage True --avoid_oom True --local_epochs 1
 ```
 
 ## 주요 argument 설명 (기본값 포함)

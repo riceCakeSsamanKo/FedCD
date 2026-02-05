@@ -39,7 +39,7 @@ class FedCD(Server):
         self.cluster_map = {c.id: (c.id % self.num_clusters) for c in self.clients}
         self.log_usage = bool(getattr(args, "log_usage", False))
         self.log_usage_every = max(1, int(getattr(args, "log_usage_every", 1)))
-        self.log_usage_path = str(getattr(args, "log_usage_path", "logs/usage.csv"))
+        self.log_usage_path = str(getattr(args, "log_usage_path", "logs/result.csv"))
         # Set cluster_acc.csv in the same directory as usage.csv
         self.log_cluster_path = os.path.join(os.path.dirname(self.log_usage_path), "cluster_acc.csv")
         self._usage_header_written = False
@@ -127,7 +127,7 @@ class FedCD(Server):
         util, mem_used, mem_total = parts
         return util, mem_used, mem_total
 
-    def _log_usage(self, round_idx, stage, wall_start, cpu_start, test_acc=None, train_loss=None):
+    def _log_usage(self, round_idx, stage, wall_start, cpu_start, test_acc=None, train_loss=None, uplink=0, downlink=0):
         wall_delta = time.time() - wall_start
         # cpu_delta = time.process_time() - cpu_start
         # cpu_pct = (cpu_delta / wall_delta * 100.0) if wall_delta > 0 else 0.0
@@ -140,12 +140,12 @@ class FedCD(Server):
             + f"{acc_str} {loss_str}"
         )
         # print(msg)
-        self._append_usage_csv(round_idx, test_acc, train_loss)
+        self._append_usage_csv(round_idx, test_acc, train_loss, uplink, downlink)
 
-    def _append_usage_csv(self, round_idx, test_acc, train_loss):
+    def _append_usage_csv(self, round_idx, test_acc, train_loss, uplink, downlink):
         path = self.log_usage_path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        header = "round,test_acc,train_loss\n"
+        header = "round,test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n"
         
         # Only log rows that have metrics (evaluation stage)
         if test_acc is None and train_loss is None:
@@ -153,7 +153,10 @@ class FedCD(Server):
 
         t_acc = f"{test_acc:.4f}" if test_acc is not None else ""
         t_loss = f"{train_loss:.4f}" if train_loss is not None else ""
-        line = f"{round_idx},{t_acc},{t_loss}\n"
+        uplink_mb = uplink / (1024**2)
+        downlink_mb = downlink / (1024**2)
+        total_mb = uplink_mb + downlink_mb
+        line = f"{round_idx},{t_acc},{t_loss},{uplink_mb:.4f},{downlink_mb:.4f},{total_mb:.4f}\n"
         
         if not self._usage_header_written:
             need_header = not os.path.exists(path)
@@ -190,11 +193,25 @@ class FedCD(Server):
         if self.gm_adapter is not None:
             gm_adapter_state = {k: v.detach().cpu() for k, v in self.gm_adapter.state_dict().items()}
         payload = {"gm_state": gm_state, "gm_adapter": gm_adapter_state}
+        
+        # [Info] Calculate and print Broadcast GM Size
+        total_bytes = 0
+        if payload["gm_state"]:
+             total_bytes += sum(v.numel() * v.element_size() for v in payload["gm_state"].values())
+        if payload["gm_adapter"]:
+             total_bytes += sum(v.numel() * v.element_size() for v in payload["gm_adapter"].values())
+        
+        print(f"[FedCD] Broadcast GM Size: {total_bytes / (1024**2):.2f} MB per client")
+        
+        broadcast_bytes = total_bytes * len(self.clients)
+
         for client in self.clients:
             start_time = time.time()
             client.set_parameters(payload)
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+            
+        return broadcast_bytes
 
     def train(self):
         for i in range(self.global_rounds + 1):
@@ -202,6 +219,10 @@ class FedCD(Server):
             cpu_start = time.process_time()
             self.selected_clients = self.select_clients()
             
+            # Init communication cost for this round
+            round_uplink = 0
+            round_downlink = 0
+
             # 1. 로컬 학습 수행 (Local Training)
             print(f"\n[FedCD] Round {i}: training {len(self.selected_clients)} clients")
             for client in tqdm(self.selected_clients, desc=f"Round {i} Local Training", leave=False):
@@ -212,8 +233,17 @@ class FedCD(Server):
 
             # 2. PM 수집 (Receive PMs)
             received_pms = []
+            total_uplink_bytes = 0
             for client in tqdm(self.selected_clients, desc=f"Round {i} Collecting PMs", leave=False):
-                received_pms.append((client.id, client.upload_parameters()))
+                pm_state = client.upload_parameters()
+                received_pms.append((client.id, pm_state))
+                total_uplink_bytes += sum(v.numel() * v.element_size() for v in pm_state.values())
+            
+            round_uplink += total_uplink_bytes
+
+            if len(self.selected_clients) > 0:
+                avg_uplink = total_uplink_bytes / len(self.selected_clients)
+                print(f"[FedCD] Round {i} Total Uplink Size: {total_uplink_bytes / (1024**2):.2f} MB (Avg: {avg_uplink / (1024**2):.2f} MB/client)")
 
             # 2.5 클러스터링 갱신 및 상세 로깅
             if i % self.cluster_period == 0:
@@ -234,7 +264,8 @@ class FedCD(Server):
             # 3. 클러스터 내 PM 집계 및 배포
             cluster_pms = self.aggregate_cluster_pms(received_pms)
             if i % self.pm_period == 0 and cluster_pms:
-                self.send_cluster_pms(cluster_pms)
+                downlink_bytes = self.send_cluster_pms(cluster_pms)
+                round_downlink += downlink_bytes
                 print(f"[FedCD] Round {i}: PM aggregation and cluster update done")
                 if self.log_usage and i % self.log_usage_every == 0:
                     self._log_usage(i, "post_pm", wall_start, cpu_start)
@@ -243,7 +274,8 @@ class FedCD(Server):
             if i % self.global_period == 0 and cluster_pms:
                 self.aggregate_and_distill(list(cluster_pms.values()))
                 # 업데이트된 GM을 모든 클라이언트에게 배포 (Downlink)
-                self.send_models()
+                downlink_bytes = self.send_models()
+                round_downlink += downlink_bytes
                 print(f"[FedCD] Round {i}: Server-side distillation and GM update done")
                 # Warm-up classifier after GM update
                 if getattr(self.args, "fedcd_warmup_epochs", 0) > 0:
@@ -255,10 +287,13 @@ class FedCD(Server):
             if i % self.eval_gap == 0:
                 print(f"\n------------- Round number: {i} -------------")
                 # 평가 실행 및 클러스터별 정확도 로깅
-                self.evaluate_with_clusters(i, wall_start, cpu_start)
+                self.evaluate_with_clusters(i, wall_start, cpu_start, round_uplink, round_downlink)
+
+        print("\nTraining finished. Saving results...")
+        self.save_results()
 
     # 기존 evaluate 함수 대신 클러스터 정보 포함하여 평가
-    def evaluate_with_clusters(self, round_idx, wall_start, cpu_start):
+    def evaluate_with_clusters(self, round_idx, wall_start, cpu_start, uplink=0, downlink=0):
         stats = self.test_metrics()
         stats_train = self.train_metrics()
         # stats: ids, num_samples, tot_correct, tot_auc
@@ -285,7 +320,7 @@ class FedCD(Server):
 
         # CSV 로그에 기록
         if self.log_usage:
-            self._log_usage(round_idx, "evaluation", wall_start, cpu_start, test_acc=avg_acc, train_loss=avg_loss)
+            self._log_usage(round_idx, "evaluation", wall_start, cpu_start, test_acc=avg_acc, train_loss=avg_loss, uplink=uplink, downlink=downlink)
 
         # 클러스터별 정확도 계산 및 출력, 로깅
         cluster_stats = {}
@@ -329,10 +364,25 @@ class FedCD(Server):
         return cluster_avg
 
     def send_cluster_pms(self, cluster_pms):
+        # [Info] Calculate and print Cluster PM Size (Assuming all clusters have same model size)
+        total_broadcast_bytes = 0
+        
+        if cluster_pms:
+            # Assuming all clusters have roughly same PM structure/size
+            first_pm = next(iter(cluster_pms.values()))
+            pm_bytes = sum(v.numel() * v.element_size() for v in first_pm.values())
+            print(f"[FedCD] Broadcast Cluster PM Size: {pm_bytes / (1024**2):.2f} MB per client (in cluster)")
+
         for client in self.clients:
             cluster_id = self.cluster_map.get(client.id, 0)
             if cluster_id in cluster_pms:
                 client.set_personalized_parameters(cluster_pms[cluster_id])
+                # Add size for this client
+                current_pm = cluster_pms[cluster_id]
+                current_bytes = sum(v.numel() * v.element_size() for v in current_pm.values())
+                total_broadcast_bytes += current_bytes
+        
+        return total_broadcast_bytes
 
     def cluster_clients_by_distribution(self):
         # Cluster clients by f_ext feature distribution stats

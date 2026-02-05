@@ -393,7 +393,12 @@ def run(args):
     
 
     # Global average
-    average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
+    if args.log_usage_path:
+        result_dir = os.path.dirname(args.log_usage_path)
+    else:
+        result_dir = "../results/"
+        
+    average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times, result_path=result_dir)
 
     print("All done!")
 
