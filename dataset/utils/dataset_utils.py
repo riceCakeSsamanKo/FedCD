@@ -9,7 +9,7 @@ from PIL import Image
 
 batch_size = 10
 train_ratio = 0.75 # merge original training set and test set, then split it manually. 
-alpha = 0.1 # for Dirichlet distribution. 100 for exdir
+alpha = 0.5 # for Dirichlet distribution. 100 for exdir
 
 def check(config_path, train_path, test_path, num_clients, niid=False, 
         balance=True, partition=None):

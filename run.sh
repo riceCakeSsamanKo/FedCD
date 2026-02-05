@@ -46,6 +46,11 @@ do
         # ------------------------------------------------------------------
         echo ""
         echo ">>> [Exp 1/2] Setting up Pathological Non-IID (pat) - Balanced | Clients: $NUM_CLIENTS"
+        echo "Cleaning up old dataset partition..."
+        rm -f dataset/$DATASET/config.json
+        rm -rf dataset/$DATASET/train
+        rm -rf dataset/$DATASET/test
+
         echo "Generating Dataset..."
         # [Fix] Change directory to dataset/ to ensure Cifar10 folder is created inside dataset/
         (cd dataset && python generate_Cifar10.py noniid balance pat $NUM_CLIENTS) || echo "Warning: Dataset generation (pat) failed!"
@@ -93,6 +98,11 @@ do
         # ------------------------------------------------------------------
         echo ""
         echo ">>> [Exp 2/2] Setting up Dirichlet Non-IID (dir) - Unbalanced | Clients: $NUM_CLIENTS"
+        echo "Cleaning up old dataset partition..."
+        rm -f dataset/$DATASET/config.json
+        rm -rf dataset/$DATASET/train
+        rm -rf dataset/$DATASET/test
+
         echo "Generating Dataset..."
         # [Fix] Change directory to dataset/ to ensure Cifar10 folder is created inside dataset/
         (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS) || echo "Warning: Dataset generation (dir) failed!"

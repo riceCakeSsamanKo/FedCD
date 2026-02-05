@@ -14,7 +14,7 @@ AVOID_OOM=True
 
 # List of client counts to test
 CLUSTERS_COUNTS=(5 10 20)
-CLIENT_COUNTS=(20 50 100)
+CLIENT_COUNTS=(100)
 
 echo "============================================================"
 echo "Starting Experiment Suite for FedCD"
@@ -46,6 +46,11 @@ do
         # ------------------------------------------------------------------
         echo ""
         echo ">>> Setting up Dirichlet Non-IID (dir) - Unbalanced | Clients: $NUM_CLIENTS"
+        echo "Cleaning up old dataset partition..."
+        rm -f dataset/$DATASET/config.json
+        rm -rf dataset/$DATASET/train
+        rm -rf dataset/$DATASET/test
+
         echo "Generating Dataset..."
         # [Fix] Change directory to dataset/ to ensure Cifar10 folder is created inside dataset/
         (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS) || echo "Warning: Dataset generation (dir) failed!"
