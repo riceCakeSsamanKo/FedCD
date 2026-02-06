@@ -105,7 +105,7 @@ do
 
         echo "Generating Dataset..."
         # [Fix] Change directory to dataset/ to ensure Cifar10 folder is created inside dataset/
-        (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS) || echo "Warning: Dataset generation (dir) failed!"
+        (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS) || echo "지금 Warning: Dataset generation (dir) failed!"
 
         echo "Running Training (dir)..."
         START_TIME=$SECONDS

@@ -61,6 +61,11 @@ class Client(object):
     def load_train_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
+
+        # [Fix] Prevent empty dataloader when batch_size > train_samples due to drop_last=True
+        if batch_size > self.train_samples:
+            batch_size = self.train_samples
+
         train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
         loader_kwargs = {
             "batch_size": batch_size,

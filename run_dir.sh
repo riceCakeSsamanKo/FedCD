@@ -14,7 +14,7 @@ AVOID_OOM=True
 
 # List of client counts to test
 CLUSTERS_COUNTS=(5 10 20)
-CLIENT_COUNTS=(100)
+CLIENT_COUNTS=(20)
 
 echo "============================================================"
 echo "Starting Experiment Suite for FedCD"
