@@ -13,7 +13,7 @@ AVOID_OOM=True
 
 
 # List of distance thresholds for Agglomerative Clustering
-THRESHOLDS=(15.0 20.0 25.0)
+THRESHOLDS=(0.2 0.5 0.8)
 CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
@@ -82,7 +82,7 @@ do
         ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
         # Copy dataset config to the latest log directory
-        LATEST_LOG_DIR=$(find logs -type d -name "exp_*" | xargs ls -td | head -n 1)
+        LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
         if [ -d "$LATEST_LOG_DIR" ]; then
             cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_dir_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
             echo "Dirichlet (dir) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"

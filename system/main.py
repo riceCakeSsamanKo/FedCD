@@ -568,18 +568,16 @@ if __name__ == "__main__":
 
     # [New] Experiment Logging Setup
     partition_info = "unknown"
+    alpha_info = ""
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     config_path = os.path.join(repo_root, "dataset", args.dataset, "config.json")
     if os.path.exists(config_path):
         try:
             with open(config_path, "r") as f:
                 cfg = json.load(f)
-                partition = cfg.get("partition", "unknown")
-                if partition == "dir":
-                    alpha = cfg.get("alpha", "unknown")
-                    partition_info = f"dir_{alpha}"
-                else:
-                    partition_info = partition
+                partition_info = cfg.get("partition", "unknown")
+                if partition_info == "dir":
+                    alpha_info = str(cfg.get("alpha", "unknown"))
         except Exception:
             pass
 
@@ -589,10 +587,13 @@ if __name__ == "__main__":
     pm_name = getattr(args, "pm_model_name", "none")
     fext_name = getattr(args, "fext_model", "none")
     
-    # Structure: logs/{ALGO}/exp_{date}/{partition}/GM_{GM}_PM_{PM}_Fext_{Fext}/exp_{timestamp}_NC_{NC}
-    exp_dir = os.path.join("logs", args.algorithm, f"exp_{date_str}", partition_info, 
-                           f"GM_{gm_name}_PM_{pm_name}_Fext_{fext_name}", 
-                           f"exp_{timestamp}_NC_{args.num_clients}")
+    # Structure: logs/FedCD/GM_{GM}_PM_{PM}_Fext_{Fext}/{partition}/{alpha if dir}/NC_{NC}/date_{date}/time_{time}
+    path_parts = ["logs", args.algorithm, f"GM_{gm_name}_PM_{pm_name}_Fext_{fext_name}", partition_info]
+    if partition_info == "dir" and alpha_info:
+        path_parts.append(alpha_info)
+    path_parts.extend([f"NC_{args.num_clients}", f"date_{date_str}", f"time_{timestamp}"])
+    
+    exp_dir = os.path.join(*path_parts)
     
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)

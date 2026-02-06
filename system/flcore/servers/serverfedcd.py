@@ -387,23 +387,24 @@ class FedCD(Server):
     def cluster_clients_by_distribution(self):
         # Cluster clients by f_ext feature distribution stats
         from sklearn.cluster import AgglomerativeClustering, KMeans
-        from sklearn.preprocessing import StandardScaler
+        from sklearn.preprocessing import normalize
 
         features = []
         client_ids = []
         for client in self.clients:
             mean, var = client.get_feature_stats(self.cluster_sample_size)
-            feat = torch.cat([mean, var], dim=0).cpu().numpy()
+            # Flatten to ensure 1D vectors before concatenation
+            feat = torch.cat([mean.flatten(), var.flatten()], dim=0).cpu().numpy()
             features.append(feat)
             client_ids.append(client.id)
 
         X = np.stack(features, axis=0)
-        # Normalize features to make threshold more meaningful
-        X = StandardScaler().fit_transform(X)
+        # L2 Normalization (Cosine-like distance)
+        X = normalize(X, axis=1)
 
         threshold = float(getattr(self.args, "cluster_threshold", 0.0))
         if threshold > 0:
-            print(f"[FedCD] Using Agglomerative Clustering with threshold={threshold}")
+            print(f"[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold={threshold}")
             clustering = AgglomerativeClustering(
                 n_clusters=None,
                 distance_threshold=threshold,
