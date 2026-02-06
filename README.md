@@ -1,49 +1,52 @@
-# 빠른 시작 (FedCD)
+# FedCD (Federated Clustering and Diversity)
+FedCD는 클라이언트 간의 데이터 분포 유사성을 기반으로 동적 클러스터링을 수행하고, 각 클러스터에 최적화된 Personalized Model(PM)과 지식 증류(Knowledge Distillation)를 통한 Global Model(GM) 업데이트를 결합한 알고리즘입니다.
+
 ## 데이터셋 생성 (Cifar10 예시)
 - `dataset` 폴더에서 실행해야 `dataset/Cifar10`에 저장됩니다.
 - Non-IID + 클라이언트당 2클래스(패턴 분할):
   - `cd dataset`
-  - `python generate_Cifar10.py noniid - pat 50`
   - `python generate_Cifar10.py noniid balance pat 50`
 - Dirichlet 분할(클래스 수 제한 없음):
   - `cd dataset`
   - `python generate_Cifar10.py noniid - dir 50`
 
-## FedCD 학습 실행
+## FedCD 학습 실행 (동적 클러스터링)
+이제 더 이상 클러스터 개수를 직접 지정할 필요가 없습니다. `--cluster_threshold`를 통해 클라이언트 간의 거리를 기준으로 자동으로 클러스터가 형성됩니다.
+```powershell
+python .\system\main.py -data Cifar10 -algo FedCD --fext_model VGG16 --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 --cluster_threshold 15.0 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 0 --pin_memory True --prefetch_factor 2 --amp True --tf32 True --gpu_batch_mult 32 --gpu_batch_max 0 --log_usage True --avoid_oom True --local_epochs 1
 ```
-python .\system\main.py -data Cifar10 -algo FedCD --fext_model VGG16 --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 --num_clusters 10 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 0 --pin_memory True --prefetch_factor 2 --amp True --tf32 True --gpu_batch_mult 1 --gpu_batch_max 0 --log_usage True --avoid_oom True --local_epochs 1
-```
+
+## 실험 결과 저장 구조 (New)
+실험 로그는 체계적인 계층 구조로 자동 저장되어 관리가 용이합니다:
+`logs/{알고리즘}/exp_{날짜}/{데이터분포}/GM_{GM}_PM_{PM}_Fext_{Fext}/exp_{시간}_NC_{클라이언트수}/`
+
+- **알고리즘**: `FedCD`, `FedAvg` 등
+- **데이터분포**: `pat` (Pathological) 또는 `dir_0.5` (Dirichlet alpha=0.5)
+- **파일 구성**:
+  - `acc.csv`: 라운드별 정확도 및 손실
+  - `cluster_acc.csv`: 클러스터별 정확도 상세 로그
+  - `config.json`: 해당 실험의 모든 하이퍼파라미터 설정
+  - `dataset_config.json`: 데이터셋 파티션 정보 (복사본)
 
 ## 주요 argument 설명 (기본값 포함)
 - `-data` : 데이터셋 이름 (default: `Cifar10`)
-- `-m` : 모델 아키텍처 (default: `VGG16`, FedCD 외 알고리즘용)
 - `-algo` : 알고리즘 이름 (default: `FedCD`)
 - `-gr` : 글로벌 라운드 수 (default: `100`)
-- `-nc` : 클라이언트 수 (default: `10`)
+- `-nc` : 전체 클라이언트 수 (default: `10`)
 - `-lbs` : 배치 크기 (default: `128`)
-- `-lr` : 로컬 학습률 (default: `0.005`)
-- `-ls` : 로컬 에포크 수 (default: `1`)
-- `-dev` : 학습 디바이스 (`cpu` 또는 `cuda`) (default: `cuda`)
-- `-nw` : DataLoader 워커 수 (default: `0`)
-- `--pin_memory` : pinned memory 사용 여부 (default: `True`)
-- `--prefetch_factor` : 워커당 prefetch 배치 수 (default: `2`)
-- `--gpu_batch_mult` : GPU에서 배치 확대 배수 (default: `1`)
-- `--gpu_batch_max` : GPU 배치 최대치 (0이면 제한 없음) (default: `0`)
-- `--amp` : mixed precision 사용 여부 (default: `True`)
-- `--tf32` : TF32 사용 여부 (default: `True`)
-- `--log_usage` : 라운드별 CPU/GPU 사용 로그 (default: `False`)
-- `--log_usage_every` : N 라운드마다 로그 (default: `1`)
-- `--log_usage_path` : 로그 CSV 저장 경로 (default: `logs/usage.csv`)
-- `--num_clusters` : FedCD 클러스터 개수 (default: `5`)
+- `--cluster_threshold` : **FedCD 동적 클러스터링 임계값** (default: `0.0`). 이 값이 0보다 크면 `num_clusters`는 무시되고 병합 군집(Agglomerative Clustering)을 통해 클러스터 수가 자동 결정됩니다. (추천: 15.0 ~ 25.0)
+- `--num_clusters` : 클러스터 개수 (default: `5`, `cluster_threshold`가 0일 때만 사용)
 - `--cluster_period` : 클러스터링 주기 (글로벌 라운드 기준) (default: `2`)
-- `--pm_period` : 클러스터 PM 통합/배포 주기 (글로벌 라운드 기준) (default: `1`)
-- `--global_period` : GM 증류/브로드캐스트 주기 (글로벌 라운드 기준) (default: `4`)
-- `--cluster_sample_size` : 클러스터링에 사용할 샘플 수 (default: `512`)
-- `--gm_model` : GM 모델 이름 (default: `VGG16`)
-- `--pm_model` : PM 모델 이름 (default: `VGG8`)
-- `--fext_model` : 고정 feature extractor 모델 (default: `SmallFExt`)
-- `--fext_dim` : f_ext 출력 차원 (default: `512`)
-- `--avoid_oom` : OOM 방지 (default: `True`)
+- `--pm_period` : 클러스터 PM 통합/배포 주기 (default: `1`)
+- `--global_period` : GM 증류/브로드캐스트 주기 (default: `4`)
+- `--cluster_sample_size` : 클러스터링을 위한 특징 추출용 샘플 수 (default: `512`)
+- `--gm_model` : FedCD Global Model (default: `VGG16`)
+- `--pm_model` : FedCD Personalized Model (default: `VGG8`)
+- `--fext_model` : Feature Extractor (default: `VGG16`)
+- `--avoid_oom` : GPU 메모리 부족 방지 옵션 (default: `True`)
+- `--gpu_batch_mult` : GPU 메모리 여유 시 배치 사이즈 배수 확대 (default: `1`)
+
+---
 
 # <img src="docs/imgs/logo-green.png" alt="icon" height="24" style="vertical-align:sub;"/> PFLlib: Personalized Federated Learning Library and Benchmark
 

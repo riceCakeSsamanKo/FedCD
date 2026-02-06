@@ -12,12 +12,12 @@ TOTAL_DATA=50000
 AVOID_OOM=True
 
 
-# List of thresholds to test (dynamic clustering)
+# List of distance thresholds for Agglomerative Clustering
 THRESHOLDS=(15.0 20.0 25.0)
 CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
-echo "Starting Experiment Suite for FedCD (Dynamic Clustering)"
+echo "Starting Experiment Suite for FedCD (Dirichlet + Dynamic Clustering)"
 echo "Thresholds to Test: ${THRESHOLDS[*]}"
 echo "============================================================"
 
@@ -52,7 +52,6 @@ do
         rm -rf dataset/$DATASET/test
 
         echo "Generating Dataset..."
-        # [Fix] Change directory to dataset/ to ensure Cifar10 folder is created inside dataset/
         (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS) || echo "Warning: Dataset generation (dir) failed!"
 
         echo "Running Training (dir)..."
@@ -83,14 +82,14 @@ do
         ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
         # Copy dataset config to the latest log directory
-        LATEST_LOG_DIR=$(ls -td logs/exp_* | head -n 1)
+        LATEST_LOG_DIR=$(find logs -type d -name "exp_*" | xargs ls -td | head -n 1)
         if [ -d "$LATEST_LOG_DIR" ]; then
             cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_dir_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
             echo "Dirichlet (dir) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
             echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
         fi
 
-        echo ">>> Exp 2 (dir) Finished."
+        echo ">>> Dirichlet (dir) Finished."
         sleep 5
     done
 
