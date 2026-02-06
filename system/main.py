@@ -457,6 +457,8 @@ if __name__ == "__main__":
                         help="Total number of clients")
     # FedCD
     parser.add_argument('--num_clusters', type=int, default=5)
+    parser.add_argument('--cluster_threshold', type=float, default=0.0,
+                        help="Distance threshold for dynamic clustering. If > 0, num_clusters is ignored.")
     parser.add_argument('--cluster_period', type=int, default=2)
     parser.add_argument('--pm_period', type=int, default=1,
                         help="PM aggregation/broadcast period (global rounds)")

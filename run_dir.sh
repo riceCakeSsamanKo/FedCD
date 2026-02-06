@@ -12,17 +12,17 @@ TOTAL_DATA=50000
 AVOID_OOM=True
 
 
-# List of client counts to test
-CLUSTERS_COUNTS=(5 10 20)
-CLIENT_COUNTS=(20)
+# List of thresholds to test (dynamic clustering)
+THRESHOLDS=(15.0 20.0 25.0)
+CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
-echo "Starting Experiment Suite for FedCD"
-echo "Client Counts to Test: ${CLIENT_COUNTS[*]}"
+echo "Starting Experiment Suite for FedCD (Dynamic Clustering)"
+echo "Thresholds to Test: ${THRESHOLDS[*]}"
 echo "============================================================"
 
 
-for NUM_CLUSTERS in "${CLUSTERS_COUNTS[@]}"
+for THRESHOLD in "${THRESHOLDS[@]}"
 do
     for NUM_CLIENTS in "${CLIENT_COUNTS[@]}"
     do
@@ -37,7 +37,7 @@ do
         echo ""
         echo "############################################################"
         echo "Running Experiments for NUM_CLIENTS = $NUM_CLIENTS"
-        echo "NUM_CLUSTERS = $NUM_CLUSTERS"
+        echo "CLUSTER_THRESHOLD = $THRESHOLD"
         echo "Adjusted cluster_sample_size = $CLUSTER_SAMPLE_SIZE"
         echo "############################################################"
 
@@ -64,7 +64,7 @@ do
             --pm_model VGG8 \
             -gr $GLOBAL_ROUNDS \
             -nc $NUM_CLIENTS \
-            --num_clusters $NUM_CLUSTERS \
+            --cluster_threshold $THRESHOLD \
             --cluster_period 2 \
             --pm_period 1 \
             --global_period 4 \
@@ -85,7 +85,7 @@ do
         # Copy dataset config to the latest log directory
         LATEST_LOG_DIR=$(ls -td logs/exp_* | head -n 1)
         if [ -d "$LATEST_LOG_DIR" ]; then
-            cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_dir_NUM_CLUSTERS_${NUM_CLUSTERS}_NUM_CLIENTS_${NUM_CLIENTS}.json"
+            cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_dir_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
             echo "Dirichlet (dir) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
             echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
         fi
@@ -95,5 +95,5 @@ do
     done
 
     echo "============================================================"
-    echo "All Experiments Completed for clients: ${CLIENT_COUNTS[*]}"
+    echo "All Experiments Completed for thresholds: ${THRESHOLDS[*]}"
 done

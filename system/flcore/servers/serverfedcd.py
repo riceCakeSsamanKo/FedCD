@@ -386,7 +386,8 @@ class FedCD(Server):
 
     def cluster_clients_by_distribution(self):
         # Cluster clients by f_ext feature distribution stats
-        from sklearn.cluster import KMeans
+        from sklearn.cluster import AgglomerativeClustering, KMeans
+        from sklearn.preprocessing import StandardScaler
 
         features = []
         client_ids = []
@@ -396,12 +397,29 @@ class FedCD(Server):
             features.append(feat)
             client_ids.append(client.id)
 
-        n_clusters = min(self.num_clusters, len(client_ids))
-        if n_clusters <= 1:
-            return {cid: 0 for cid in client_ids}
+        X = np.stack(features, axis=0)
+        # Normalize features to make threshold more meaningful
+        X = StandardScaler().fit_transform(X)
 
-        kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=0)
-        labels = kmeans.fit_predict(np.stack(features, axis=0))
+        threshold = float(getattr(self.args, "cluster_threshold", 0.0))
+        if threshold > 0:
+            print(f"[FedCD] Using Agglomerative Clustering with threshold={threshold}")
+            clustering = AgglomerativeClustering(
+                n_clusters=None,
+                distance_threshold=threshold,
+                linkage='ward'
+            )
+            labels = clustering.fit_predict(X)
+            # Update num_clusters for logging/monitoring
+            self.num_clusters = len(set(labels))
+        else:
+            n_clusters = min(self.num_clusters, len(client_ids))
+            if n_clusters <= 1:
+                return {cid: 0 for cid in client_ids}
+            print(f"[FedCD] Using K-Means Clustering with n_clusters={n_clusters}")
+            kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=0)
+            labels = kmeans.fit_predict(X)
+
         return {cid: int(label) for cid, label in zip(client_ids, labels)}
 
     @staticmethod
