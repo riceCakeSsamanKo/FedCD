@@ -14,7 +14,7 @@ AVOID_OOM=True
 
 # List of distance thresholds for Agglomerative Clustering
 # (If threshold > 0, num_clusters is ignored)
-THRESHOLDS=(0.2 0.5 0.8)
+THRESHOLDS=(0.05 0.1 0.15)
 CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
