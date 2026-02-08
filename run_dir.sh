@@ -78,7 +78,8 @@ do
             --gpu_batch_max 0 \
             --log_usage True \
             --avoid_oom $AVOID_OOM \
-            --local_epochs 1 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
+            --local_epochs 1 \
+            --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
         ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
         # Copy dataset config to the latest log directory

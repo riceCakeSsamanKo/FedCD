@@ -12,6 +12,7 @@ TOTAL_DATA=50000
 AVOID_OOM=True
 
 
+
 # List of distance thresholds for Agglomerative Clustering
 # (If threshold > 0, num_clusters is ignored)
 THRESHOLDS=(0.05 0.1 0.15)
@@ -79,7 +80,8 @@ do
             --gpu_batch_max 0 \
             --log_usage True \
             --avoid_oom $AVOID_OOM \
-            --local_epochs 1 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
+            --local_epochs 1 \
+            --proxy_dataset TinyImagenet --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
         ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
         # Copy dataset config to the latest log directory
@@ -130,7 +132,8 @@ do
             --gpu_batch_max 0 \
             --log_usage True \
             --avoid_oom $AVOID_OOM \
-            --local_epochs 1 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
+            --local_epochs 1 \
+            --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
         ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
         # Copy dataset config to the latest log directory

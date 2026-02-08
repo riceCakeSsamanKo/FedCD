@@ -531,14 +531,54 @@ class FedCD(Server):
             raise
             
     def load_proxy_data(self):
-        # 원래는 별도의 공용 데이터셋을 로드해야 하지만, 
-        # 실험을 위해 일단 Test 데이터셋 로더를 가져와서 씁니다.
-        # (PFLlib은 args에 데이터 정보가 들어있음)
-        from utils.data_utils import read_client_data
+        # [수정] Proxy Data로 TinyImageNet을 사용하거나 N개의 임의 샘플을 추출하도록 개선
+        proxy_dataset_name = getattr(self.args, "proxy_dataset", "TinyImagenet")
+        proxy_samples = int(getattr(self.args, "proxy_samples", 1000))
         
-        # 임시: 첫 번째 클라이언트의 테스트 데이터를 Proxy로 사용
-        # (실제 연구에선 이렇게 하면 안 되지만 코드 검증용으로는 OK)
-        test_data = read_client_data(self.args.dataset, 0, is_train=False)
+        print(f"[FedCD] Loading Proxy Data: {proxy_dataset_name} (Samples: {proxy_samples})")
+
+        # TinyImageNet 경로 설정
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        tiny_path = os.path.join(base_dir, "dataset", "TinyImagenet", "rawdata", "tiny-imagenet-200", "train")
+
+        if proxy_dataset_name == "TinyImagenet" and os.path.exists(tiny_path):
+            from torchvision.datasets import ImageFolder
+            import torchvision.transforms as transforms
+            from torch.utils.data import Subset
+            import random
+
+            transform = transforms.Compose([
+                transforms.Resize((64, 64)), # TinyImageNet default size
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            ])
+            
+            # 흑백 이미지일 경우 3채널로 변환하는 transform 추가 (필요시)
+            full_dataset = ImageFolder(root=tiny_path, transform=transform)
+            
+            # 전체 데이터셋 중 임의로 N장 선택 (라벨은 무시됨)
+            if proxy_samples < len(full_dataset):
+                indices = random.sample(range(len(full_dataset)), proxy_samples)
+                proxy_dataset = Subset(full_dataset, indices)
+            else:
+                proxy_dataset = full_dataset
+            
+            print(f"[FedCD] Successfully loaded {len(proxy_dataset)} samples from TinyImageNet.")
+        else:
+            # Fallback: 기존 방식 (첫 번째 클라이언트의 테스트 데이터 사용)
+            if proxy_dataset_name == "TinyImagenet":
+                print(f"[Warn] TinyImageNet raw data not found at {tiny_path}. Fallback to client test data.")
+            
+            from utils.data_utils import read_client_data
+            test_data = read_client_data(self.args.dataset, 0, is_train=False)
+            
+            # N개 샘플링
+            if proxy_samples < len(test_data):
+                import random
+                proxy_dataset = random.sample(test_data, proxy_samples)
+            else:
+                proxy_dataset = test_data
+
         num_workers = int(getattr(self.args, "num_workers", 0))
         pin_memory = bool(getattr(self.args, "pin_memory", False)) and self.device == "cuda"
         loader_kwargs = {
@@ -550,4 +590,5 @@ class FedCD(Server):
         if num_workers > 0:
             loader_kwargs["persistent_workers"] = True
             loader_kwargs["prefetch_factor"] = int(getattr(self.args, "prefetch_factor", 2))
-        return torch.utils.data.DataLoader(test_data, **loader_kwargs)
+        
+        return torch.utils.data.DataLoader(proxy_dataset, **loader_kwargs)
