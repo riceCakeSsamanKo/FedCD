@@ -70,7 +70,8 @@ class FedCD(Server):
         
         # [ACT] Zig-Zag Convergence State
         self.act_direction = 1 # 1: increase, -1: decrease
-        self.prev_mean_acc = -1.0
+        self.acc_history = [] # Stores mean accuracy for regression
+        self.window_size = int(getattr(args, "act_window_size", 5))
 
     def _build_f_ext(self, args):
         model_name = str(getattr(args, "fext_model", "SmallFExt"))
@@ -408,36 +409,50 @@ class FedCD(Server):
 
     def adjust_dynamic_threshold(self, ids, current_accs):
         """
-        [ACT] Adjust clustering threshold using Zig-Zag Convergence.
+        [ACT] Adjust clustering threshold using Relative Trend Convergence.
         Strategy:
-        1. Keep moving threshold in current direction (increase/decrease) as long as performance improves/stable.
-        2. If performance drops, reverse direction and decay step size.
+        1. Calculate current improvement: current_acc - prev_acc.
+        2. Calculate established trend (Slope) from recent history.
+        3. If current improvement is LESS than the trend slope (slowdown), 
+           reverse direction and decay step.
         """
         if not self.adaptive_threshold:
             return
 
         mean_acc = sum(current_accs) / len(current_accs) if current_accs else 0.0
         
-        # Initialize baseline if first run
-        if self.prev_mean_acc == -1.0:
-            self.prev_mean_acc = mean_acc
-            print(f"[ACT] Initial Mean Acc: {mean_acc:.4f}. Starting optimization (Dir: {self.act_direction}, Step: {self.threshold_step:.4f})")
-            # Apply first step
-            self.current_threshold += self.act_direction * self.threshold_step
-            self.current_threshold = max(0.01, min(self.threshold_max, self.current_threshold))
-            return
+        if len(self.acc_history) >= 2:
+            # 1. Calculate established trend (Slope) from history
+            x = np.arange(len(self.acc_history))
+            y = np.array(self.acc_history)
+            trend_slope, _ = np.polyfit(x, y, 1)
+            
+            # 2. Calculate current improvement (latest step)
+            current_diff = mean_acc - self.acc_history[-1]
+            
+            print(f"[ACT] Mean Acc: {mean_acc:.4f} | Current Diff: {current_diff:.6f} | Trend Slope: {trend_slope:.6f}")
 
-        diff = mean_acc - self.prev_mean_acc
-        print(f"[ACT] Mean Acc: {mean_acc:.4f} (Prev: {self.prev_mean_acc:.4f}, Diff: {diff:.4f})")
-
-        if diff < 0:
-            # Performance dropped -> Zig-Zag (Reverse & Decay)
-            print(f"[ACT] Performance Dropped! Reversing direction and decaying step.")
-            self.act_direction *= -1
-            self.threshold_step *= self.threshold_decay
+            # 3. Decision: If current growth is slower than the established trend
+            # We also add act_min_slope as a safety floor to avoid reversing on tiny noise 
+            # when the trend is near zero.
+            min_slope = getattr(self.args, "act_min_slope", 0.0001)
+            
+            if current_diff < max(min_slope, trend_slope):
+                reason = "Slowdown" if current_diff >= 0 else "Drop"
+                print(f"[ACT] {reason} detected (Diff < Trend)! Reversing direction and decaying step.")
+                self.act_direction *= -1
+                self.threshold_step *= self.threshold_decay
+                # Reset history to establish a new trend in the new direction
+                self.acc_history = []
+            else:
+                print(f"[ACT] Growth Accelerating (Diff >= Trend). Continuing direction.")
         else:
-            # Performance improved or stable -> Keep going
-            print(f"[ACT] Performance Stable/Improved. Continuing direction.")
+            print(f"[ACT] Mean Acc: {mean_acc:.4f} | Collecting history (n={len(self.acc_history)})...")
+
+        # Update History
+        self.acc_history.append(mean_acc)
+        if len(self.acc_history) > self.window_size:
+            self.acc_history.pop(0)
 
         # Update Threshold
         old_th = self.current_threshold
@@ -445,8 +460,6 @@ class FedCD(Server):
         self.current_threshold = max(0.01, min(self.threshold_max, self.current_threshold))
         
         print(f"[ACT] Updated Threshold: {old_th:.4f} -> {self.current_threshold:.4f} (Dir: {self.act_direction}, Step: {self.threshold_step:.4f})")
-        
-        self.prev_mean_acc = mean_acc
 
     def cluster_clients_by_distribution(self):
         # Cluster clients by f_ext feature distribution stats

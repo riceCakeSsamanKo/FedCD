@@ -6,8 +6,9 @@ FedCD는 클라이언트 간의 데이터 분포 유사성을 기반으로 **동
    - **Global Model (GM)**: 지식 저장소 역할을 하며 영구적으로 Freeze되어 Backbone 특징 추출기로 사용됩니다.
    - **Personalized Model (PM)**: 각 클라이언트/클러스터의 고유한 데이터 분포에 맞춰 학습되는 Trainable 모듈입니다.
 2. **ACT (Adaptive Clustering Threshold)**: 
-   - **동적 임계값 조절**: 개별 클라이언트의 성능 추세(EMA)를 모니터링하여 클러스터링 임계값을 자동으로 최적화합니다.
-   - **Proportional Control**: 성능 향상 시 임계값을 30% 증가(Expansion)시키고, 성능 저하 관찰 시 50% 감소(Shrink)시켜 개인화 성능을 보호합니다.
+   - **Regression-based Zig-Zag Convergence**: 전역 성능의 추세(Trend)를 분석하여 임계값을 최적화합니다.
+   - **Trend Analysis**: 최근 $N$개 라운드의 정확도를 바탕으로 **선형 회귀(Linear Regression)**를 수행하여 기울기(Slope)를 계산합니다.
+   - **Zig-Zag Control**: 기울기가 정체(Slope < 0.0002)되거나 하락하면 즉시 방향을 반전시키고 보폭(Step)을 감쇠시켜 최적 임계값으로 수렴합니다.
    - **Sync with Period**: 클러스터링 주기(`cluster_period`)와 동기화되어 안정적인 구조 변화를 유도합니다.
 3. **Clustering Strategy (Feature Distribution Analysis)**:
    - **Feature Statistics**: 각 클라이언트는 로컬 데이터의 Feature Embedding($z$)에 대한 **평균(Mean)**과 **분산(Variance)**을 추출하여 서버로 전송합니다.
@@ -27,8 +28,7 @@ FedCD는 클라이언트 간의 데이터 분포 유사성을 기반으로 **동
 ## FedCD 학습 실행 (ACT 적용 예시)
 ```powershell
 python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 \
-    --adaptive_threshold True --cluster_threshold 0.1 \
-    --threshold_inc_rate 1.3 --threshold_dec_rate 0.5 \
+    --adaptive_threshold True --cluster_threshold 0.1 --threshold_step 0.05 --threshold_decay 0.9 --act_window_size 5 \
     --proxy_dataset TinyImagenet --proxy_samples 2000 \
     --cluster_period 2 --pm_period 1 --global_period 4 \
     -dev cuda -nw 0 --amp True --avoid_oom True
@@ -37,10 +37,11 @@ python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VG
 ## 주요 Argument 설명 (FedCD & ACT)
 - `--cluster_threshold`: 동적 클러스터링의 초기 임계값. (default: `0.0`)
 - `--adaptive_threshold`: **ACT 활성화 여부**. (default: `False`)
-- `--threshold_inc_rate`: 성능 안정 시 임계값 증가 비율. (예: `1.3` = 30% 증가)
-- `--threshold_dec_rate`: 성능 저하 시 임계값 감소 비율. (예: `0.5` = 50% 감소)
-- `--ema_alpha`: 클라이언트 성능 추세선 반영 가중치. (default: `0.3`)
-- `--tolerance_ratio`: Threshold를 줄이기 위한 성능 하락 클라이언트 비율 임계치. (default: `0.4`)
+- `--threshold_step`: 임계값 조절의 기본 보폭. (default: `0.05`)
+- `--threshold_decay`: 방향 반전 시 보폭 감쇠 비율. (예: `0.9` = 10% 감소)
+- `--act_window_size`: 회귀 분석을 위한 슬라이딩 윈도우 크기. (default: `5`)
+- `--act_min_slope`: '정체'를 판단하는 최소 기울기 임계값. (default: `0.0002`)
+- `--threshold_max`: 임계값의 최대 제한치. (default: `0.95`)
 - `--proxy_dataset`: 서버 증류용 데이터셋 이름. (default: `TinyImagenet`)
 - `--proxy_samples`: Proxy 데이터셋에서 추출할 무작위 샘플 수. (default: `1000`)
 - `--gm_model` / `--pm_model`: 각각 글로벌 및 개인화 모델 구조. (VGG16, VGG8, ResNet 등)
