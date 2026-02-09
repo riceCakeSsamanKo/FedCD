@@ -463,6 +463,8 @@ if __name__ == "__main__":
                         help="Enable adaptive threshold adjustment based on client performance trends.")
     parser.add_argument('--threshold_step', type=float, default=0.05,
                         help="Step size for increasing/decreasing the clustering threshold (used if rates are not specified).")
+    parser.add_argument('--threshold_decay', type=float, default=0.9,
+                        help="Decay rate for the threshold step size when direction reverses (Zig-Zag).")
     parser.add_argument('--threshold_inc_rate', type=float, default=1.3,
                         help="Multiplier for increasing the clustering threshold (e.g., 1.3 for 30%% increase).")
     parser.add_argument('--threshold_dec_rate', type=float, default=0.5,

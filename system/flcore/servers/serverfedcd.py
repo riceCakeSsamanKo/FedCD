@@ -65,12 +65,12 @@ class FedCD(Server):
             self.current_threshold = 0.05
             
         self.threshold_step = float(getattr(args, "threshold_step", 0.05))
-        self.threshold_inc_rate = float(getattr(args, "threshold_inc_rate", 1.3))
-        self.threshold_dec_rate = float(getattr(args, "threshold_dec_rate", 0.5))
+        self.threshold_decay = float(getattr(args, "threshold_decay", 0.9))
         self.threshold_max = float(getattr(args, "threshold_max", 0.95))
-        self.ema_alpha = float(getattr(args, "ema_alpha", 0.3))
-        self.tolerance_ratio = float(getattr(args, "tolerance_ratio", 0.4))
-        self.client_trends = {} # {client_id: ema_accuracy}
+        
+        # [ACT] Zig-Zag Convergence State
+        self.act_direction = 1 # 1: increase, -1: decrease
+        self.prev_mean_acc = -1.0
 
     def _build_f_ext(self, args):
         model_name = str(getattr(args, "fext_model", "SmallFExt"))
@@ -408,51 +408,45 @@ class FedCD(Server):
 
     def adjust_dynamic_threshold(self, ids, current_accs):
         """
-        [ACT] Adjust clustering threshold based on client performance trends.
-        Logic:
-        1. Compare current accuracy with client's EMA trend.
-        2. Count negative votes (performance < trend).
-        3. If negative votes ratio > tolerance, shrink threshold. Else, expand.
-        4. Update EMA trends.
+        [ACT] Adjust clustering threshold using Zig-Zag Convergence.
+        Strategy:
+        1. Keep moving threshold in current direction (increase/decrease) as long as performance improves/stable.
+        2. If performance drops, reverse direction and decay step size.
         """
         if not self.adaptive_threshold:
             return
 
-        # 1. Update trends and Collect votes
-        negative_votes = 0
-        valid_clients = 0
+        mean_acc = sum(current_accs) / len(current_accs) if current_accs else 0.0
         
-        # Map current accuracies for easy access
-        curr_acc_map = {cid: acc for cid, acc in zip(ids, current_accs)}
-        
-        for cid, acc in curr_acc_map.items():
-            if cid in self.client_trends:
-                valid_clients += 1
-                trend = self.client_trends[cid]
-                # Compare: If current performance is worse than trend (with slight margin if needed)
-                if acc < trend:
-                    negative_votes += 1
-            
-            # Update Trend (EMA)
-            prev_trend = self.client_trends.get(cid, acc)
-            self.client_trends[cid] = (1 - self.ema_alpha) * prev_trend + self.ema_alpha * acc
-
-        if valid_clients == 0:
+        # Initialize baseline if first run
+        if self.prev_mean_acc == -1.0:
+            self.prev_mean_acc = mean_acc
+            print(f"[ACT] Initial Mean Acc: {mean_acc:.4f}. Starting optimization (Dir: {self.act_direction}, Step: {self.threshold_step:.4f})")
+            # Apply first step
+            self.current_threshold += self.act_direction * self.threshold_step
+            self.current_threshold = max(0.01, min(self.threshold_max, self.current_threshold))
             return
 
-        # 2. Global Decision
-        neg_ratio = negative_votes / valid_clients
-        print(f"[ACT] Negative Ratio: {neg_ratio:.2f} ({negative_votes}/{valid_clients}) | Current Threshold: {self.current_threshold:.4f}")
+        diff = mean_acc - self.prev_mean_acc
+        print(f"[ACT] Mean Acc: {mean_acc:.4f} (Prev: {self.prev_mean_acc:.4f}, Diff: {diff:.4f})")
 
-        old_th = self.current_threshold
-        if neg_ratio > self.tolerance_ratio:
-            # Too many clients suffered -> Shrink clusters
-            self.current_threshold = max(0.01, self.current_threshold * self.threshold_dec_rate)
-            print(f"[ACT] !!! Integration Harmful. Shrinking Threshold ({self.threshold_dec_rate}): {old_th:.4f} -> {self.current_threshold:.4f}")
+        if diff < 0:
+            # Performance dropped -> Zig-Zag (Reverse & Decay)
+            print(f"[ACT] Performance Dropped! Reversing direction and decaying step.")
+            self.act_direction *= -1
+            self.threshold_step *= self.threshold_decay
         else:
-            # Performance stable or improved -> Expand clusters
-            self.current_threshold = min(self.threshold_max, self.current_threshold * self.threshold_inc_rate)
-            print(f"[ACT] *** Integration Successful. Expanding Threshold ({self.threshold_inc_rate}): {old_th:.4f} -> {self.current_threshold:.4f}")
+            # Performance improved or stable -> Keep going
+            print(f"[ACT] Performance Stable/Improved. Continuing direction.")
+
+        # Update Threshold
+        old_th = self.current_threshold
+        self.current_threshold += self.act_direction * self.threshold_step
+        self.current_threshold = max(0.01, min(self.threshold_max, self.current_threshold))
+        
+        print(f"[ACT] Updated Threshold: {old_th:.4f} -> {self.current_threshold:.4f} (Dir: {self.act_direction}, Step: {self.threshold_step:.4f})")
+        
+        self.prev_mean_acc = mean_acc
 
     def cluster_clients_by_distribution(self):
         # Cluster clients by f_ext feature distribution stats
