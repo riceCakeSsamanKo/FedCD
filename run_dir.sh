@@ -66,8 +66,9 @@ do
                 -nc $NUM_CLIENTS \
                 --cluster_threshold $THRESHOLD \
                 --adaptive_threshold True \
-                --threshold_inc_rate 1.3 \
-                --threshold_dec_rate 0.5 \
+                --threshold_step 0.05 \
+                --threshold_decay 0.9 \
+                --act_window_size 5 \
                 --cluster_period 2 \
                 --pm_period 1 \
                 --global_period 4 \
