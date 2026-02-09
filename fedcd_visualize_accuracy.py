@@ -21,26 +21,23 @@ def visualize_single_experiment(exp_path):
                 config = json.load(f)
                 algo = config.get("algorithm", "Unknown")
                 n_clients = config.get("num_clients", "?")
-                n_clusters = config.get("num_clusters", "?")
                 
-                # Determine partition type from copied dataset config name if possible
-                partition = "?"
-                ds_configs = glob.glob(os.path.join(exp_path, "dataset_config_*.json"))
-                if ds_configs:
-                    fname = os.path.basename(ds_configs[0])
-                    if "_pat_" in fname: partition = "Pat"
-                    elif "_dir_" in fname: partition = "Dir"
+                # Extract partition and alpha from path if possible
+                path_parts = exp_path.replace("\\", "/").split("/")
+                # Example: logs/FedCD/GM_.../dir/0.1/NC_20/...
+                partition = "Unknown"
+                if "dir" in path_parts: partition = "Dir"
+                elif "pat" in path_parts: partition = "Pat"
                 
-                title_suffix = f"({algo}, {partition}, Clients={n_clients}, Clusters={n_clusters})"
+                title_suffix = f"({algo}, {partition}, NC={n_clients})"
 
         # 1. Plot Main Accuracy Curve
         acc_file = os.path.join(exp_path, "acc.csv")
         if os.path.exists(acc_file):
             df = pd.read_csv(acc_file)
-            if not df.empty:
+            if not df.empty and "test_acc" in df.columns:
                 plt.figure(figsize=(10, 6))
                 sns.lineplot(data=df, x="round", y="test_acc", label="Test Accuracy", marker="o")
-                # Also plot train loss on secondary axis if needed, or just accuracy
                 
                 plt.title(f"Test Accuracy Curve {title_suffix}")
                 plt.xlabel("Round")
@@ -59,9 +56,6 @@ def visualize_single_experiment(exp_path):
             df_c = pd.read_csv(cluster_file)
             if not df_c.empty and "cluster_id" in df_c.columns:
                 plt.figure(figsize=(12, 8))
-                
-                # Pivot or filter to plot lines for each cluster
-                # unique_clusters = df_c["cluster_id"].unique()
                 sns.lineplot(data=df_c, x="round", y="accuracy", hue="cluster_id", 
                              palette="tab10", marker="o")
                 
@@ -70,7 +64,8 @@ def visualize_single_experiment(exp_path):
                 plt.ylabel("Accuracy")
                 plt.grid(True)
                 plt.ylim(0, 1.05)
-                plt.legend(title="Cluster ID")
+                plt.legend(title="Cluster ID", bbox_to_anchor=(1.05, 1), loc='upper left')
+                plt.tight_layout()
                 
                 save_path = os.path.join(exp_path, "cluster_accuracy_curve.png")
                 plt.savefig(save_path)
@@ -81,20 +76,26 @@ def visualize_single_experiment(exp_path):
         print(f"Error processing {exp_path}: {e}")
 
 def main():
-    log_dir = "logs"
+    log_dir = "logs/FedCD/"
     if not os.path.exists(log_dir):
         print(f"Directory '{log_dir}' not found.")
         return
 
-    # Find all experiment directories (subdirectories of logs/)
-    exp_dirs = [os.path.join(log_dir, d) for d in os.listdir(log_dir) if os.path.isdir(os.path.join(log_dir, d))]
+    print(f"Searching for experiments in {log_dir} ...")
     
-    print(f"Found {len(exp_dirs)} experiment directories.")
-    
-    for exp_path in exp_dirs:
-        # Check if it looks like an experiment folder (has config or csvs)
-        if glob.glob(os.path.join(exp_path, "*.csv")) or glob.glob(os.path.join(exp_path, "*.json")):
-            visualize_single_experiment(exp_path)
+    found_count = 0
+    # Walk through all subdirectories
+    for root, dirs, files in os.walk(log_dir):
+        # We consider a directory as an experiment if it contains acc.csv
+        if "acc.csv" in files:
+            print(f"\nProcessing Experiment: {root}")
+            visualize_single_experiment(root)
+            found_count += 1
+            
+    if found_count == 0:
+        print("No experiments with 'acc.csv' found.")
+    else:
+        print(f"\nFinished processing {found_count} experiments.")
 
 if __name__ == "__main__":
     main()
