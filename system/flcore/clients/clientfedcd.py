@@ -452,6 +452,17 @@ class clientFedCD(Client):
         combiner_state = {k.replace("combiner.", ""): v for k, v in state.items() if k.startswith("combiner.")}
         if combiner_state:
             self.combiner.load_state_dict(combiner_state, strict=True)
+            
+        # [Fix] Reset optimizer state when model parameters are forcibly changed
+        # This prevents momentum from previous (possibly incompatible) weights 
+        # from interfering with the new cluster model.
+        self._reset_optimizer()
+
+    def _reset_optimizer(self):
+        pm_params = list(self.pm_head.parameters()) + list(self.pm_final.parameters()) + list(self.combiner.parameters())
+        if self.pm_adapter is not None:
+            pm_params += list(self.pm_adapter.parameters())
+        self.optimizer = torch.optim.SGD(pm_params, lr=self.learning_rate)
 
     def upload_parameters(self):
         # 업링크 비용 절감: PM만 전송
