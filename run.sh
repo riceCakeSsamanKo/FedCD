@@ -11,149 +11,149 @@ DATASET="Cifar10"
 TOTAL_DATA=50000
 AVOID_OOM=True
 
-
-
+# List of Dirichlet alpha values to test
+ALPHAS=(0.1 1.0) # (0.1 0.5 1.0)
 # List of distance thresholds for Agglomerative Clustering
-# (If threshold > 0, num_clusters is ignored)
 THRESHOLDS=(0.1 0.2)
 CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
 echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
+echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "============================================================"
 
-
-for THRESHOLD in "${THRESHOLDS[@]}"
+for ALPHA in "${ALPHAS[@]}"
 do
-    for NUM_CLIENTS in "${CLIENT_COUNTS[@]}"
+    for THRESHOLD in "${THRESHOLDS[@]}"
     do
-        # Calculate safe cluster_sample_size
-        AVG_DATA_PER_CLIENT=$((TOTAL_DATA / NUM_CLIENTS))
-        if [ "$AVG_DATA_PER_CLIENT" -lt 512 ]; then
-            CLUSTER_SAMPLE_SIZE=$AVG_DATA_PER_CLIENT
-        else
-            CLUSTER_SAMPLE_SIZE=512
-        fi
-        
-        echo ""
-        echo "############################################################"
-        echo "Running Experiments for NUM_CLIENTS = $NUM_CLIENTS"
-        echo "CLUSTER_THRESHOLD = $THRESHOLD"
-        echo "Adjusted cluster_sample_size = $CLUSTER_SAMPLE_SIZE"
-        echo "############################################################"
+        for NUM_CLIENTS in "${CLIENT_COUNTS[@]}"
+        do
+            # Calculate safe cluster_sample_size
+            AVG_DATA_PER_CLIENT=$((TOTAL_DATA / NUM_CLIENTS))
+            if [ "$AVG_DATA_PER_CLIENT" -lt 512 ]; then
+                CLUSTER_SAMPLE_SIZE=$AVG_DATA_PER_CLIENT
+            else
+                CLUSTER_SAMPLE_SIZE=512
+            fi
+            
+            echo ""
+            echo "############################################################"
+            echo "ALPHA = $ALPHA"
+            echo "NUM_CLIENTS = $NUM_CLIENTS"
+            echo "CLUSTER_THRESHOLD = $THRESHOLD"
+            echo "Adjusted cluster_sample_size = $CLUSTER_SAMPLE_SIZE"
+            echo "############################################################"
 
-        # ------------------------------------------------------------------
-        # Experiment 1: Pathological Non-IID (pat) - Balanced
-        # ------------------------------------------------------------------
-        echo ""
-        echo ">>> [Exp 1/2] Setting up Pathological Non-IID (pat) - Balanced | Clients: $NUM_CLIENTS"
-        echo "Cleaning up old dataset partition..."
-        rm -f dataset/$DATASET/config.json
-        rm -rf dataset/$DATASET/train
-        rm -rf dataset/$DATASET/test
+            # ------------------------------------------------------------------
+            # Experiment 1: Pathological Non-IID (pat) - Balanced
+            # ------------------------------------------------------------------
+            echo ""
+            echo ">>> [Exp 1/2] Setting up Pathological (pat) | Alpha: $ALPHA | Clients: $NUM_CLIENTS"
+            echo "Cleaning up old dataset partition..."
+            rm -f dataset/$DATASET/config.json
+            rm -rf dataset/$DATASET/train
+            rm -rf dataset/$DATASET/test
 
-        echo "Generating Dataset..."
-        (cd dataset && python generate_Cifar10.py noniid balance pat $NUM_CLIENTS) || echo "Warning: Dataset generation (pat) failed!"
+            echo "Generating Dataset..."
+            (cd dataset && python generate_Cifar10.py noniid balance pat $NUM_CLIENTS $ALPHA) || echo "Warning: Dataset generation (pat) failed!"
 
-        echo "Running Training (pat)..."
-        START_TIME=$SECONDS
-        python system/main.py \
-            -data $DATASET \
-            -algo $ALGO \
-            --gm_model VGG16 \
-            --pm_model VGG8 \
-            -gr $GLOBAL_ROUNDS \
-            -nc $NUM_CLIENTS \
-            --cluster_threshold $THRESHOLD \
-            --adaptive_threshold True \
-            --threshold_inc_rate 1.3 \
-            --threshold_dec_rate 0.5 \
-            --cluster_period 2 \
-            --pm_period 1 \
-            --global_period 4 \
-            --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
-            -dev $GPU_DEVICE \
-            -nw 0 \
-            --pin_memory True \
-            --prefetch_factor 2 \
-            --amp True \
-            --tf32 True \
-            --gpu_batch_mult 32 \
-            --gpu_batch_max 0 \
-            --log_usage True \
-            --avoid_oom $AVOID_OOM \
-            --local_epochs 1 \
-            --proxy_dataset TinyImagenet --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
-        ELAPSED_TIME=$(($SECONDS - $START_TIME))
+            echo "Running Training (pat)..."
+            START_TIME=$SECONDS
+            python system/main.py \
+                -data $DATASET \
+                -algo $ALGO \
+                --gm_model VGG16 \
+                --pm_model VGG8 \
+                -gr $GLOBAL_ROUNDS \
+                -nc $NUM_CLIENTS \
+                --cluster_threshold $THRESHOLD \
+                --adaptive_threshold True \
+                --threshold_inc_rate 1.3 \
+                --threshold_dec_rate 0.5 \
+                --cluster_period 2 \
+                --pm_period 1 \
+                --global_period 4 \
+                --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
+                -dev $GPU_DEVICE \
+                -nw 0 \
+                --pin_memory True \
+                --prefetch_factor 2 \
+                --amp True \
+                --tf32 True \
+                --gpu_batch_mult 32 \
+                --gpu_batch_max 0 \
+                --log_usage True \
+                --avoid_oom $AVOID_OOM \
+                --local_epochs 1 \
+                --proxy_dataset TinyImagenet --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
+            ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
-        # Copy dataset config to the latest log directory
-        LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
-        if [ -d "$LATEST_LOG_DIR" ]; then
-            cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_pat_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
-            echo "Pathological (pat) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
-            echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
-        fi
+            # Copy dataset config to the latest log directory
+            LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
+            if [ -d "$LATEST_LOG_DIR" ]; then
+                cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_pat_ALPHA_${ALPHA}_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
+                echo "Pathological (pat) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
+                echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
+            fi
 
-        echo ">>> Exp 1 (pat) Finished."
-        sleep 5
+            echo ">>> Exp 1 (pat) Finished."
+            sleep 5
 
-        # ------------------------------------------------------------------
-        # Experiment 2: Dirichlet Non-IID (dir) - Unbalanced
-        # ------------------------------------------------------------------
-        echo ""
-        echo ">>> [Exp 2/2] Setting up Dirichlet Non-IID (dir) - Unbalanced | Clients: $NUM_CLIENTS"
-        echo "Cleaning up old dataset partition..."
-        rm -f dataset/$DATASET/config.json
-        rm -rf dataset/$DATASET/train
-        rm -rf dataset/$DATASET/test
+            # ------------------------------------------------------------------
+            # Experiment 2: Dirichlet Non-IID (dir) - Unbalanced
+            # ------------------------------------------------------------------
+            echo ""
+            echo ">>> [Exp 2/2] Setting up Dirichlet (dir) | Alpha: $ALPHA | Clients: $NUM_CLIENTS"
+            echo "Cleaning up old dataset partition..."
+            rm -f dataset/$DATASET/config.json
+            rm -rf dataset/$DATASET/train
+            rm -rf dataset/$DATASET/test
 
-        echo "Generating Dataset..."
-        (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS) || echo "Warning: Dataset generation (dir) failed!"
+            echo "Generating Dataset..."
+            (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS $ALPHA) || echo "Warning: Dataset generation (dir) failed!"
 
-        echo "Running Training (dir)..."
-        START_TIME=$SECONDS
-        python system/main.py \
-            -data $DATASET \
-            -algo $ALGO \
-            --gm_model VGG16 \
-            --pm_model VGG8 \
-            -gr $GLOBAL_ROUNDS \
-            -nc $NUM_CLIENTS \
-            --cluster_threshold $THRESHOLD \
-            --adaptive_threshold True \
-            --threshold_inc_rate 1.3 \
-            --threshold_dec_rate 0.5 \
-            --cluster_period 2 \
-            --pm_period 1 \
-            --global_period 4 \
-            --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
-            -dev $GPU_DEVICE \
-            -nw 0 \
-            --pin_memory True \
-            --prefetch_factor 2 \
-            --amp True \
-            --tf32 True \
-            --gpu_batch_mult 32 \
-            --gpu_batch_max 0 \
-            --log_usage True \
-            --avoid_oom $AVOID_OOM \
-            --local_epochs 1 \
-            --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
-        ELAPSED_TIME=$(($SECONDS - $START_TIME))
+            echo "Running Training (dir)..."
+            START_TIME=$SECONDS
+            python system/main.py \
+                -data $DATASET \
+                -algo $ALGO \
+                --gm_model VGG16 \
+                --pm_model VGG8 \
+                -gr $GLOBAL_ROUNDS \
+                -nc $NUM_CLIENTS \
+                --cluster_threshold $THRESHOLD \
+                --adaptive_threshold True \
+                --threshold_inc_rate 1.3 \
+                --threshold_dec_rate 0.5 \
+                --cluster_period 2 \
+                --pm_period 1 \
+                --global_period 4 \
+                --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
+                -dev $GPU_DEVICE \
+                -nw 0 \
+                --pin_memory True \
+                --prefetch_factor 2 \
+                --amp True \
+                --tf32 True \
+                --gpu_batch_mult 32 \
+                --gpu_batch_max 0 \
+                --log_usage True \
+                --avoid_oom $AVOID_OOM \
+                --local_epochs 1 \
+                --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
+            ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
-        # Copy dataset config to the latest log directory
-        LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
-        if [ -d "$LATEST_LOG_DIR" ]; then
-            cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_dir_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
-            echo "Dirichlet (dir) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
-            echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
-        fi
+            # Copy dataset config to the latest log directory
+            LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
+            if [ -d "$LATEST_LOG_DIR" ]; then
+                cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_dir_ALPHA_${ALPHA}_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
+                echo "Dirichlet (dir) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
+                echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
+            fi
 
-        echo ">>> Exp 2 (dir) Finished."
-        sleep 5
+            echo ">>> Exp 2 (dir) Finished."
+            sleep 5
+        done
     done
-
-    echo "============================================================"
-    echo "All Experiments Completed for thresholds: ${THRESHOLDS[*]}"
 done

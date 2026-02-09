@@ -254,7 +254,9 @@ For more details on datasets and FL algorithms in **IoT**, please refer to [FL-I
 ### Examples for **MNIST** in the ***label skew*** scenario
 ```bash
 cd ./dataset
-# Please modify train_ratio and alpha in dataset\utils\dataset_utils.py
+# Please modify train_ratio in dataset\utils\dataset_utils.py.
+# Alpha for Dirichlet distribution can be passed as an argument to generation scripts (e.g., generate_Cifar10.py) 
+# and shell scripts (run.sh, run_dir.sh).
 
 python generate_MNIST.py iid - - # for iid and unbalanced scenario
 python generate_MNIST.py iid balance - # for iid and balanced scenario
