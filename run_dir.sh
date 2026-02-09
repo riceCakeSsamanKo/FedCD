@@ -14,7 +14,7 @@ AVOID_OOM=True
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 1.0) # (0.1 0.5 1.0)
 # List of distance thresholds for Agglomerative Clustering
-THRESHOLDS=(0.1 0.2)
+THRESHOLDS=(0.1)
 CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
