@@ -458,7 +458,21 @@ if __name__ == "__main__":
     # FedCD
     parser.add_argument('--num_clusters', type=int, default=5)
     parser.add_argument('--cluster_threshold', type=float, default=0.0,
-                        help="Distance threshold for dynamic clustering. If > 0, num_clusters is ignored.")
+                        help="Initial distance threshold for dynamic clustering. If > 0, num_clusters is ignored.")
+    parser.add_argument('--adaptive_threshold', type=str2bool, default=False,
+                        help="Enable adaptive threshold adjustment based on client performance trends.")
+    parser.add_argument('--threshold_step', type=float, default=0.05,
+                        help="Step size for increasing/decreasing the clustering threshold (used if rates are not specified).")
+    parser.add_argument('--threshold_inc_rate', type=float, default=1.3,
+                        help="Multiplier for increasing the clustering threshold (e.g., 1.3 for 30%% increase).")
+    parser.add_argument('--threshold_dec_rate', type=float, default=0.5,
+                        help="Multiplier for decreasing the clustering threshold (e.g., 0.5 for 50%% decrease).")
+    parser.add_argument('--threshold_max', type=float, default=0.95,
+                        help="Maximum limit for the clustering threshold.")
+    parser.add_argument('--ema_alpha', type=float, default=0.3,
+                        help="Exponential Moving Average alpha for client performance trend.")
+    parser.add_argument('--tolerance_ratio', type=float, default=0.4,
+                        help="Ratio of clients allowed to degrade before shrinking clusters.")
     parser.add_argument('--cluster_period', type=int, default=2)
     parser.add_argument('--pm_period', type=int, default=1,
                         help="PM aggregation/broadcast period (global rounds)")

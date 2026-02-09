@@ -15,12 +15,12 @@ AVOID_OOM=True
 
 # List of distance thresholds for Agglomerative Clustering
 # (If threshold > 0, num_clusters is ignored)
-THRESHOLDS=(0.05 0.1 0.15)
+THRESHOLDS=(0.1 0.2)
 CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
-echo "Starting Experiment Suite for FedCD (Dynamic Clustering)"
-echo "Thresholds to Test: ${THRESHOLDS[*]}"
+echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
+echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "============================================================"
 
 
@@ -66,6 +66,9 @@ do
             -gr $GLOBAL_ROUNDS \
             -nc $NUM_CLIENTS \
             --cluster_threshold $THRESHOLD \
+            --adaptive_threshold True \
+            --threshold_inc_rate 1.3 \
+            --threshold_dec_rate 0.5 \
             --cluster_period 2 \
             --pm_period 1 \
             --global_period 4 \
@@ -118,6 +121,9 @@ do
             -gr $GLOBAL_ROUNDS \
             -nc $NUM_CLIENTS \
             --cluster_threshold $THRESHOLD \
+            --adaptive_threshold True \
+            --threshold_inc_rate 1.3 \
+            --threshold_dec_rate 0.5 \
             --cluster_period 2 \
             --pm_period 1 \
             --global_period 4 \

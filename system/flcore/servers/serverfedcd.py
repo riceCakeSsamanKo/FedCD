@@ -57,6 +57,21 @@ class FedCD(Server):
             self.pm_final = None
             self.pm_adapter = None
 
+        # [ACT] Adaptive Clustering Threshold Initialization
+        self.adaptive_threshold = bool(getattr(args, "adaptive_threshold", False))
+        self.current_threshold = float(getattr(args, "cluster_threshold", 0.0))
+        # If ACT is enabled but initial threshold is 0, start with a small value
+        if self.adaptive_threshold and self.current_threshold <= 0:
+            self.current_threshold = 0.05
+            
+        self.threshold_step = float(getattr(args, "threshold_step", 0.05))
+        self.threshold_inc_rate = float(getattr(args, "threshold_inc_rate", 1.3))
+        self.threshold_dec_rate = float(getattr(args, "threshold_dec_rate", 0.5))
+        self.threshold_max = float(getattr(args, "threshold_max", 0.95))
+        self.ema_alpha = float(getattr(args, "ema_alpha", 0.3))
+        self.tolerance_ratio = float(getattr(args, "tolerance_ratio", 0.4))
+        self.client_trends = {} # {client_id: ema_accuracy}
+
     def _build_f_ext(self, args):
         model_name = str(getattr(args, "fext_model", "SmallFExt"))
         if model_name == "VGG16":
@@ -313,6 +328,13 @@ class FedCD(Server):
         print(f"Server: Overall Averaged Test AUC: {avg_auc:.4f}")
         print(f"Server: Overall Averaged Train Loss: {avg_loss:.4f}")
 
+        # [ACT] Trigger adaptive threshold adjustment
+        # Only adjust threshold at the end of a clustering period to synchronize with structure updates
+        if self.adaptive_threshold and (round_idx % self.cluster_period == 0):
+            # Calculate per-client accuracy
+            current_accs = [correct / n_samples if n_samples > 0 else 0.0 for correct, n_samples in zip(tot_correct, num_samples)]
+            self.adjust_dynamic_threshold(ids, current_accs)
+
         # PFLlib 내부 변수에 저장 (h5 파일 저장용)
         self.rs_test_acc.append(avg_acc)
         self.rs_test_auc.append(avg_auc)
@@ -384,6 +406,54 @@ class FedCD(Server):
         
         return total_broadcast_bytes
 
+    def adjust_dynamic_threshold(self, ids, current_accs):
+        """
+        [ACT] Adjust clustering threshold based on client performance trends.
+        Logic:
+        1. Compare current accuracy with client's EMA trend.
+        2. Count negative votes (performance < trend).
+        3. If negative votes ratio > tolerance, shrink threshold. Else, expand.
+        4. Update EMA trends.
+        """
+        if not self.adaptive_threshold:
+            return
+
+        # 1. Update trends and Collect votes
+        negative_votes = 0
+        valid_clients = 0
+        
+        # Map current accuracies for easy access
+        curr_acc_map = {cid: acc for cid, acc in zip(ids, current_accs)}
+        
+        for cid, acc in curr_acc_map.items():
+            if cid in self.client_trends:
+                valid_clients += 1
+                trend = self.client_trends[cid]
+                # Compare: If current performance is worse than trend (with slight margin if needed)
+                if acc < trend:
+                    negative_votes += 1
+            
+            # Update Trend (EMA)
+            prev_trend = self.client_trends.get(cid, acc)
+            self.client_trends[cid] = (1 - self.ema_alpha) * prev_trend + self.ema_alpha * acc
+
+        if valid_clients == 0:
+            return
+
+        # 2. Global Decision
+        neg_ratio = negative_votes / valid_clients
+        print(f"[ACT] Negative Ratio: {neg_ratio:.2f} ({negative_votes}/{valid_clients}) | Current Threshold: {self.current_threshold:.4f}")
+
+        old_th = self.current_threshold
+        if neg_ratio > self.tolerance_ratio:
+            # Too many clients suffered -> Shrink clusters
+            self.current_threshold = max(0.01, self.current_threshold * self.threshold_dec_rate)
+            print(f"[ACT] !!! Integration Harmful. Shrinking Threshold ({self.threshold_dec_rate}): {old_th:.4f} -> {self.current_threshold:.4f}")
+        else:
+            # Performance stable or improved -> Expand clusters
+            self.current_threshold = min(self.threshold_max, self.current_threshold * self.threshold_inc_rate)
+            print(f"[ACT] *** Integration Successful. Expanding Threshold ({self.threshold_inc_rate}): {old_th:.4f} -> {self.current_threshold:.4f}")
+
     def cluster_clients_by_distribution(self):
         # Cluster clients by f_ext feature distribution stats
         from sklearn.cluster import AgglomerativeClustering, KMeans
@@ -402,9 +472,11 @@ class FedCD(Server):
         # L2 Normalization (Cosine-like distance)
         X = normalize(X, axis=1)
 
-        threshold = float(getattr(self.args, "cluster_threshold", 0.0))
+        # [ACT] Use self.current_threshold
+        threshold = self.current_threshold
+        
         if threshold > 0:
-            print(f"[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold={threshold}")
+            print(f"[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold={threshold:.4f}")
             clustering = AgglomerativeClustering(
                 n_clusters=None,
                 distance_threshold=threshold,

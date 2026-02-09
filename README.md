@@ -1,52 +1,59 @@
-# FedCD (Federated Clustering and Diversity)
-FedCD는 클라이언트 간의 데이터 분포 유사성을 기반으로 동적 클러스터링을 수행하고, 각 클러스터에 최적화된 Personalized Model(PM)과 지식 증류(Knowledge Distillation)를 통한 Global Model(GM) 업데이트를 결합한 알고리즘입니다.
+# FedCD (Federated Clustered Distillation)
+FedCD는 클라이언트 간의 데이터 분포 유사성을 기반으로 **동적 클러스터링**을 수행하고, **개인화(Personalization)**와 **일반화(Generalization)**를 동시에 달성하는 연합학습 알고리즘입니다.
+
+### 🌟 핵심 기능 (Core Features)
+1. **Tiered Architecture**: 
+   - **Global Model (GM)**: 지식 저장소 역할을 하며 영구적으로 Freeze되어 Backbone 특징 추출기로 사용됩니다.
+   - **Personalized Model (PM)**: 각 클라이언트/클러스터의 고유한 데이터 분포에 맞춰 학습되는 Trainable 모듈입니다.
+2. **ACT (Adaptive Clustering Threshold)**: 
+   - **동적 임계값 조절**: 개별 클라이언트의 성능 추세(EMA)를 모니터링하여 클러스터링 임계값을 자동으로 최적화합니다.
+   - **Proportional Control**: 성능 향상 시 임계값을 30% 증가(Expansion)시키고, 성능 저하 관찰 시 50% 감소(Shrink)시켜 개인화 성능을 보호합니다.
+   - **Sync with Period**: 클러스터링 주기(`cluster_period`)와 동기화되어 안정적인 구조 변화를 유도합니다.
+3. **Clustering Strategy (Feature Distribution Analysis)**:
+   - **Feature Statistics**: 각 클라이언트는 로컬 데이터의 Feature Embedding($z$)에 대한 **평균(Mean)**과 **분산(Variance)**을 추출하여 서버로 전송합니다.
+   - **Distance Metric**: 서버는 통계 벡터를 **L2 Normalization**하여 크기 영향을 제거한 뒤, 사실상 **코사인 유사도(Cosine Similarity)**를 기반으로 클라이언트 간 거리를 측정합니다.
+   - **Clustering Algorithm**: **Agglomerative Clustering (Hierarchical)** 및 **Ward Linkage**를 사용하여, 특징 분포의 형상(Shape)이 유사한 클라이언트들을 하나의 클러스터로 묶습니다.
+4. **Server-side Ensemble Distillation**: 
+   - 서버는 클러스터별 PM들의 앙상블로부터 지식을 추출하여 GM에 증류(Distillation)합니다.
+   - **Proxy Data**: TinyImageNet의 $N$장 이미지(라벨 미사용)를 활용하여 데이터 프라이버시를 유지하면서 지식을 전이합니다.
+5. **Zero-Uplink for GM**: 클라이언트는 오직 PM의 가중치만 서버로 전송하여 통신 비용을 대폭 절감합니다.
 
 ## 데이터셋 생성 (Cifar10 예시)
-- `dataset` 폴더에서 실행해야 `dataset/Cifar10`에 저장됩니다.
-- Non-IID + 클라이언트당 2클래스(패턴 분할):
-  - `cd dataset`
-  - `python generate_Cifar10.py noniid balance pat 50`
-- Dirichlet 분할(클래스 수 제한 없음):
-  - `cd dataset`
-  - `python generate_Cifar10.py noniid - dir 50`
+- `cd dataset`
+- `python generate_Cifar10.py noniid balance pat 50`
+- `python generate_Cifar10.py noniid - dir 50`
+- **Proxy용 TinyImageNet 생성**: `python generate_TinyImagenet.py noniid - -`
 
-## FedCD 학습 실행 (동적 클러스터링)
-이제 더 이상 클러스터 개수를 직접 지정할 필요가 없습니다. `--cluster_threshold`를 통해 클라이언트 간의 거리를 기준으로 자동으로 클러스터가 형성됩니다.
+## FedCD 학습 실행 (ACT 적용 예시)
 ```powershell
-python .\system\main.py -data Cifar10 -algo FedCD --fext_model VGG16 --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 --cluster_threshold 15.0 --cluster_period 2 --pm_period 1 --global_period 4 --cluster_sample_size 512 -dev cuda -nw 0 --pin_memory True --prefetch_factor 2 --amp True --tf32 True --gpu_batch_mult 32 --gpu_batch_max 0 --log_usage True --avoid_oom True --local_epochs 1
+python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 \
+    --adaptive_threshold True --cluster_threshold 0.1 \
+    --threshold_inc_rate 1.3 --threshold_dec_rate 0.5 \
+    --proxy_dataset TinyImagenet --proxy_samples 2000 \
+    --cluster_period 2 --pm_period 1 --global_period 4 \
+    -dev cuda -nw 0 --amp True --avoid_oom True
 ```
 
-## 실험 결과 저장 구조 (New)
-실험 로그는 체계적인 계층 구조로 자동 저장되어 관리가 용이합니다:
-`logs/{알고리즘}/exp_{날짜}/{데이터분포}/GM_{GM}_PM_{PM}_Fext_{Fext}/exp_{시간}_NC_{클라이언트수}/`
+## 주요 Argument 설명 (FedCD & ACT)
+- `--cluster_threshold`: 동적 클러스터링의 초기 임계값. (default: `0.0`)
+- `--adaptive_threshold`: **ACT 활성화 여부**. (default: `False`)
+- `--threshold_inc_rate`: 성능 안정 시 임계값 증가 비율. (예: `1.3` = 30% 증가)
+- `--threshold_dec_rate`: 성능 저하 시 임계값 감소 비율. (예: `0.5` = 50% 감소)
+- `--ema_alpha`: 클라이언트 성능 추세선 반영 가중치. (default: `0.3`)
+- `--tolerance_ratio`: Threshold를 줄이기 위한 성능 하락 클라이언트 비율 임계치. (default: `0.4`)
+- `--proxy_dataset`: 서버 증류용 데이터셋 이름. (default: `TinyImagenet`)
+- `--proxy_samples`: Proxy 데이터셋에서 추출할 무작위 샘플 수. (default: `1000`)
+- `--gm_model` / `--pm_model`: 각각 글로벌 및 개인화 모델 구조. (VGG16, VGG8, ResNet 등)
+- `--cluster_period`: 클러스터링 및 ACT 조절 주기. (default: `2`)
 
-- **알고리즘**: `FedCD`, `FedAvg` 등
-- **데이터분포**: `pat` (Pathological) 또는 `dir_0.5` (Dirichlet alpha=0.5)
-- **파일 구성**:
-  - `acc.csv`: 라운드별 정확도 및 손실
-  - `cluster_acc.csv`: 클러스터별 정확도 상세 로그
-  - `config.json`: 해당 실험의 모든 하이퍼파라미터 설정
-  - `dataset_config.json`: 데이터셋 파티션 정보 (복사본)
-
-## 주요 argument 설명 (기본값 포함)
-- `-data` : 데이터셋 이름 (default: `Cifar10`)
-- `-algo` : 알고리즘 이름 (default: `FedCD`)
-- `-gr` : 글로벌 라운드 수 (default: `100`)
-- `-nc` : 전체 클라이언트 수 (default: `10`)
-- `-lbs` : 배치 크기 (default: `128`)
-- `--cluster_threshold` : **FedCD 동적 클러스터링 임계값** (default: `0.0`). 이 값이 0보다 크면 `num_clusters`는 무시되고 병합 군집(Agglomerative Clustering)을 통해 클러스터 수가 자동 결정됩니다. (추천: 15.0 ~ 25.0)
-- `--num_clusters` : 클러스터 개수 (default: `5`, `cluster_threshold`가 0일 때만 사용)
-- `--cluster_period` : 클러스터링 주기 (글로벌 라운드 기준) (default: `2`)
-- `--pm_period` : 클러스터 PM 통합/배포 주기 (default: `1`)
-- `--global_period` : GM 증류/브로드캐스트 주기 (default: `4`)
-- `--cluster_sample_size` : 클러스터링을 위한 특징 추출용 샘플 수 (default: `512`)
-- `--gm_model` : FedCD Global Model (default: `VGG16`)
-- `--pm_model` : FedCD Personalized Model (default: `VGG8`)
-- `--fext_model` : Feature Extractor (default: `VGG16`)
-- `--avoid_oom` : GPU 메모리 부족 방지 옵션 (default: `True`)
-- `--gpu_batch_mult` : GPU 메모리 여유 시 배치 사이즈 배수 확대 (default: `1`)
+## 실험 결과 저장 구조 (Updated)
+로그는 `logs/FedCD/GM_{GM}_PM_{PM}_Fext_{Fext}/...` 경로에 저장되며, **ACT** 동작 로그(`[ACT] ...`)를 통해 임계값 변화를 실시간으로 확인할 수 있습니다.
+- `acc.csv`: 라운드별 전체 정확도
+- `cluster_acc.csv`: 클러스터별 성능 추이
+- `usage.csv`: 하드웨어 리소스 및 통신량 (옵션)
 
 ---
+
 
 # <img src="docs/imgs/logo-green.png" alt="icon" height="24" style="vertical-align:sub;"/> PFLlib: Personalized Federated Learning Library and Benchmark
 

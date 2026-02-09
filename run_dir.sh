@@ -10,15 +10,17 @@ ALGO="FedCD"
 DATASET="Cifar10"
 TOTAL_DATA=50000
 AVOID_OOM=True
+THRESHOLD_INC_RATE=1.1
+THRESHOLD_DEC_RATE=0.5
 
 
 # List of distance thresholds for Agglomerative Clustering
-THRESHOLDS=(0.2 0.5 0.8)
+THRESHOLDS=(0.1 0.2) 
 CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
-echo "Starting Experiment Suite for FedCD (Dirichlet + Dynamic Clustering)"
-echo "Thresholds to Test: ${THRESHOLDS[*]}"
+echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
+echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "============================================================"
 
 
@@ -64,6 +66,9 @@ do
             -gr $GLOBAL_ROUNDS \
             -nc $NUM_CLIENTS \
             --cluster_threshold $THRESHOLD \
+            --adaptive_threshold True \
+            --threshold_inc_rate $THRESHOLD_INC_RATE \
+            --threshold_dec_rate $THRESHOLD_DEC_RATE \
             --cluster_period 2 \
             --pm_period 1 \
             --global_period 4 \
