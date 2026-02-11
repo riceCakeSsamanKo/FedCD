@@ -593,8 +593,9 @@ if __name__ == "__main__":
     # [New] Experiment Logging Setup
     partition_info = "unknown"
     alpha_info = ""
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    config_path = os.path.join(repo_root, "dataset", args.dataset, "config.json")
+    # Data is now in fl_data outside the repo
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    config_path = os.path.join(repo_root, "fl_data", args.dataset, "config.json")
     if os.path.exists(config_path):
         try:
             with open(config_path, "r") as f:

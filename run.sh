@@ -23,8 +23,6 @@ echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "============================================================"
 
-for ALPHA in "${ALPHAS[@]}"
-do
     for THRESHOLD in "${THRESHOLDS[@]}"
     do
         for NUM_CLIENTS in "${CLIENT_COUNTS[@]}"
@@ -39,7 +37,6 @@ do
             
             echo ""
             echo "############################################################"
-            echo "ALPHA = $ALPHA"
             echo "NUM_CLIENTS = $NUM_CLIENTS"
             echo "CLUSTER_THRESHOLD = $THRESHOLD"
             echo "Adjusted cluster_sample_size = $CLUSTER_SAMPLE_SIZE"
@@ -48,20 +45,14 @@ do
             # ------------------------------------------------------------------
             # Experiment 1: Pathological Non-IID (pat) - Balanced
             # ------------------------------------------------------------------
+            DATASET_NAME="Cifar10_pat_nc${NUM_CLIENTS}"
             echo ""
-            echo ">>> [Exp 1/2] Setting up Pathological (pat) | Alpha: $ALPHA | Clients: $NUM_CLIENTS"
-            echo "Cleaning up old dataset partition..."
-            rm -f dataset/$DATASET/config.json
-            rm -rf dataset/$DATASET/train
-            rm -rf dataset/$DATASET/test
-
-            echo "Generating Dataset..."
-            (cd dataset && python generate_Cifar10.py noniid balance pat $NUM_CLIENTS $ALPHA) || echo "Warning: Dataset generation (pat) failed!"
-
+            echo ">>> [Exp 1/2] Using Pathological (pat) | Clients: $NUM_CLIENTS"
+            
             echo "Running Training (pat)..."
             START_TIME=$SECONDS
             python system/main.py \
-                -data $DATASET \
+                -data $DATASET_NAME \
                 -algo $ALGO \
                 --gm_model VGG16 \
                 --pm_model VGG8 \
@@ -90,69 +81,73 @@ do
                 --proxy_dataset TinyImagenet --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
-            # Copy dataset config to the latest log directory
+            # Copy dataset config to the latest log directory from fl_data
             LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
             if [ -d "$LATEST_LOG_DIR" ]; then
-                cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_pat_ALPHA_${ALPHA}_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
+                cp "../fl_data/$DATASET_NAME/config.json" "$LATEST_LOG_DIR/dataset_config_pat_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
                 echo "Pathological (pat) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
-                echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
+                echo "[Shell] Copied dataset config from fl_data to $LATEST_LOG_DIR"
             fi
 
             echo ">>> Exp 1 (pat) Finished."
             sleep 5
 
-            # ------------------------------------------------------------------
-            # Experiment 2: Dirichlet Non-IID (dir) - Unbalanced
-            # ------------------------------------------------------------------
-            echo ""
-            echo ">>> [Exp 2/2] Setting up Dirichlet (dir) | Alpha: $ALPHA | Clients: $NUM_CLIENTS"
-            echo "Cleaning up old dataset partition..."
-            rm -f dataset/$DATASET/config.json
-            rm -rf dataset/$DATASET/train
-            rm -rf dataset/$DATASET/test
+            for ALPHA in "${ALPHAS[@]}"
+            do
+                echo ""
+                echo "------------------------------------------------------------"
+                echo "Running Dirichlet for ALPHA = $ALPHA"
+                echo "------------------------------------------------------------"
 
-            echo "Generating Dataset..."
-            (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS $ALPHA) || echo "Warning: Dataset generation (dir) failed!"
+                # ------------------------------------------------------------------
+                # Experiment 2: Dirichlet Non-IID (dir) - Unbalanced
+                # ------------------------------------------------------------------
+                DATASET_NAME="Cifar10_dir${ALPHA}_nc${NUM_CLIENTS}"
+                echo ""
+                echo ">>> [Exp 2/2] Using Dirichlet (dir) | Alpha: $ALPHA | Clients: $NUM_CLIENTS"
 
-            echo "Running Training (dir)..."
-            START_TIME=$SECONDS
-            python system/main.py \
-                -data $DATASET \
-                -algo $ALGO \
-                --gm_model VGG16 \
-                --pm_model VGG8 \
-                -gr $GLOBAL_ROUNDS \
-                -nc $NUM_CLIENTS \
-                --cluster_threshold $THRESHOLD \
-                --adaptive_threshold True \
-                --threshold_step 0.05 \
-                --threshold_decay 0.9 \
-                --act_window_size 5 \
-                --cluster_period 2 \
-                --pm_period 1 \
-                --global_period 4 \
-                --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
-                -dev $GPU_DEVICE \
-                -nw 0 \
-                --pin_memory True \
-                --prefetch_factor 2 \
-                --amp True \
-                --tf32 True \
-                --gpu_batch_mult 32 \
-                --gpu_batch_max 0 \
-                --log_usage True \
-                --avoid_oom $AVOID_OOM \
-                --local_epochs 1 \
-                --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
-            ELAPSED_TIME=$(($SECONDS - $START_TIME))
+                echo "Running Training (dir)..."
+                START_TIME=$SECONDS
+                python system/main.py \
+                    -data $DATASET_NAME \
+                    -algo $ALGO \
+                    --gm_model VGG16 \
+                    --pm_model VGG8 \
+                    -gr $GLOBAL_ROUNDS \
+                    -nc $NUM_CLIENTS \
+                    --cluster_threshold $THRESHOLD \
+                    --adaptive_threshold True \
+                    --threshold_step 0.05 \
+                    --threshold_decay 0.9 \
+                    --act_window_size 5 \
+                    --cluster_period 2 \
+                    --pm_period 1 \
+                    --global_period 4 \
+                    --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
+                    -dev $GPU_DEVICE \
+                    -nw 0 \
+                    --pin_memory True \
+                    --prefetch_factor 2 \
+                    --amp True \
+                    --tf32 True \
+                    --gpu_batch_mult 32 \
+                    --gpu_batch_max 0 \
+                    --log_usage True \
+                    --avoid_oom $AVOID_OOM \
+                    --local_epochs 1 \
+                    --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
+                ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
-            # Copy dataset config to the latest log directory
-            LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
-            if [ -d "$LATEST_LOG_DIR" ]; then
-                cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_dir_ALPHA_${ALPHA}_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
-                echo "Dirichlet (dir) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
-                echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
-            fi
+                # Copy dataset config to the latest log directory from fl_data
+                LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
+                if [ -d "$LATEST_LOG_DIR" ]; then
+                    cp "../fl_data/$DATASET_NAME/config.json" "$LATEST_LOG_DIR/dataset_config_dir_ALPHA_${ALPHA}_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
+                    echo "Dirichlet (dir) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
+                    echo "[Shell] Copied dataset config from fl_data to $LATEST_LOG_DIR"
+                fi
+            done
+        done
+    done
 
             echo ">>> Exp 2 (dir) Finished."
             sleep 5

@@ -46,19 +46,13 @@ do
             echo "############################################################"
 
             echo ""
-            echo ">>> [Exp] Setting up Dirichlet (dir) | Alpha: $ALPHA | Clients: $NUM_CLIENTS"
-            echo "Cleaning up old dataset partition..."
-            rm -f dataset/$DATASET/config.json
-            rm -rf dataset/$DATASET/train
-            rm -rf dataset/$DATASET/test
-
-            echo "Generating Dataset..."
-            (cd dataset && python generate_Cifar10.py noniid - dir $NUM_CLIENTS $ALPHA) || echo "Warning: Dataset generation (dir) failed!"
+            echo ">>> [Exp] Using Dirichlet (dir) | Alpha: $ALPHA | Clients: $NUM_CLIENTS"
+            DATASET_NAME="Cifar10_dir${ALPHA}_nc${NUM_CLIENTS}"
 
             echo "Running Training (dir)..."
             START_TIME=$SECONDS
             python system/main.py \
-                -data $DATASET \
+                -data $DATASET_NAME \
                 -algo $ALGO \
                 --gm_model VGG16 \
                 --pm_model VGG8 \
@@ -87,12 +81,12 @@ do
                 --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
-            # Copy dataset config to the latest log directory
+            # Copy dataset config to the latest log directory from fl_data
             LATEST_LOG_DIR=$(find logs -type d -name "time_*" | xargs ls -td | head -n 1)
             if [ -d "$LATEST_LOG_DIR" ]; then
-                cp "dataset/$DATASET/config.json" "$LATEST_LOG_DIR/dataset_config_dir_ALPHA_${ALPHA}_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
+                cp "../fl_data/$DATASET_NAME/config.json" "$LATEST_LOG_DIR/dataset_config_dir_ALPHA_${ALPHA}_THRESHOLD_${THRESHOLD}_NUM_CLIENTS_${NUM_CLIENTS}.json"
                 echo "Dirichlet (dir) execution time: ${ELAPSED_TIME}s" >> "$LATEST_LOG_DIR/time.txt"
-                echo "[Shell] Copied dataset config to $LATEST_LOG_DIR"
+                echo "[Shell] Copied dataset config from fl_data to $LATEST_LOG_DIR"
             fi
 
             echo ">>> Exp 2 (dir) Finished."

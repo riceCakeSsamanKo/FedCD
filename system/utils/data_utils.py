@@ -5,11 +5,11 @@ from collections import defaultdict
 
 
 def read_data(dataset, idx, is_train=True):
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     if is_train:
-        data_dir = os.path.join(base_dir, "dataset", dataset, "train")
+        data_dir = os.path.join(base_dir, "fl_data", dataset, "train")
     else:
-        data_dir = os.path.join(base_dir, "dataset", dataset, "test")
+        data_dir = os.path.join(base_dir, "fl_data", dataset, "test")
 
     file = os.path.join(data_dir, f"{idx}.npz")
     with open(file, 'rb') as f:
