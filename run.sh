@@ -146,11 +146,11 @@ echo "============================================================"
                     echo "[Shell] Copied dataset config from fl_data to $LATEST_LOG_DIR"
                 fi
             done
-        done
-    done
-
-            echo ">>> Exp 2 (dir) Finished."
+            echo ">>> Exp 2 (dir) Finished for NUM_CLIENTS=$NUM_CLIENTS"
             sleep 5
         done
     done
-done
+
+echo "============================================================"
+echo "All experiments completed."
+echo "============================================================"
