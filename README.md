@@ -1,3 +1,4 @@
+@ -1,559 +0,0 @@
 # FedCD (Federated Clustered Distillation)
 FedCD는 클라이언트 간의 데이터 분포 유사성을 기반으로 **동적 클러스터링**을 수행하고, **개인화(Personalization)**와 **일반화(Generalization)**를 동시에 달성하는 연합학습 알고리즘입니다.
 
