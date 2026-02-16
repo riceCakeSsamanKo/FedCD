@@ -1,6 +1,10 @@
-/results
-/system/models
+.DS_Store
+/fl_data
+/FedCD/results
+/FedCD/system/models
 *__pycache__*
-/dataset/Cifar10
-/dataset/TinyImagenet
-/Cifar10
+/FedCD/dataset/Cifar10
+/FedCD/dataset/TinyImagenet
+/FedCD/Cifar10
+/FedCD-Baseline/dataset/MNIST
+.DS_Store

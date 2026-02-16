@@ -1,1 +1,0 @@
-Dirichlet (dir) execution time: 12262s
