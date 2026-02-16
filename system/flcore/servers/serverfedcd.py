@@ -126,6 +126,15 @@ class FedCD(Server):
             return None
         return nn.Linear(f_ext_dim, pm_in_dim)
 
+    def _build_gm_broadcast_parts(self):
+        # Broadcast only GM classifier-related modules used on clients.
+        parts = {}
+        parts.update({f"head.{k}": v.detach().cpu() for k, v in self.gm_head.state_dict().items()})
+        parts.update({f"final.{k}": v.detach().cpu() for k, v in self.gm_final.state_dict().items()})
+        if self.gm_adapter is not None:
+            parts.update({f"adapter.{k}": v.detach().cpu() for k, v in self.gm_adapter.state_dict().items()})
+        return parts
+
     def _read_gpu_util(self):
         smi = shutil.which("nvidia-smi")
         if not smi:
@@ -222,20 +231,13 @@ class FedCD(Server):
 
     def send_models(self):
         assert (len(self.clients) > 0)
-        gm_state = {k: v.detach().cpu() for k, v in self.global_model.state_dict().items()}
-        gm_adapter_state = None
-        if self.gm_adapter is not None:
-            gm_adapter_state = {k: v.detach().cpu() for k, v in self.gm_adapter.state_dict().items()}
-        payload = {"gm_state": gm_state, "gm_adapter": gm_adapter_state}
+        gm_parts = self._build_gm_broadcast_parts()
+        payload = {"gm_parts": gm_parts}
         
-        # [Info] Calculate and print Broadcast GM Size
-        total_bytes = 0
-        if payload["gm_state"]:
-             total_bytes += sum(v.numel() * v.element_size() for v in payload["gm_state"].values())
-        if payload["gm_adapter"]:
-             total_bytes += sum(v.numel() * v.element_size() for v in payload["gm_adapter"].values())
+        # [Info] Calculate and print Broadcast GM Size (head/final/adapter only)
+        total_bytes = sum(v.numel() * v.element_size() for v in gm_parts.values())
         
-        print(f"[FedCD] Broadcast GM Size: {total_bytes / (1024**2):.2f} MB per client")
+        print(f"[FedCD] Broadcast GM(Classifier) Size: {total_bytes / (1024**2):.2f} MB per client")
         
         broadcast_bytes = total_bytes * len(self.clients)
 

@@ -413,19 +413,38 @@ class clientFedCD(Client):
 
     # [핵심] 서버로 보낼 때: GM은 안 보내고 PM만 보냄 (Zero-Uplink for GM)
     def set_parameters(self, model):
-        # 서버에서 받은 글로벌 GM(+gm_adapter)을 내 GM에 업데이트
+        # 서버에서 받은 GM classifier 관련 파라미터를 로드
         if isinstance(model, dict):
+            gm_parts = model.get("gm_parts", None)
             gm_state = model.get("gm_state", {})
             gm_adapter_state = model.get("gm_adapter", None)
         else:
+            gm_parts = None
             gm_state = model.state_dict()
             gm_adapter_state = None
-        if gm_state and next(iter(gm_state.values())).is_cuda:
-            gm_state = {k: v.detach().cpu() for k, v in gm_state.items()}
-        if gm_state:
-            self.gm.load_state_dict(gm_state, strict=True)
-        if gm_adapter_state is not None and self.gm_adapter is not None:
-            self.gm_adapter.load_state_dict(gm_adapter_state, strict=True)
+
+        # New lightweight payload path: gm_parts (head/final/adapter only)
+        if gm_parts is not None:
+            if gm_parts and next(iter(gm_parts.values())).is_cuda:
+                gm_parts = {k: v.detach().cpu() for k, v in gm_parts.items()}
+            head_state = {k.replace("head.", ""): v for k, v in gm_parts.items() if k.startswith("head.")}
+            final_state = {k.replace("final.", ""): v for k, v in gm_parts.items() if k.startswith("final.")}
+            adapter_state = {k.replace("adapter.", ""): v for k, v in gm_parts.items() if k.startswith("adapter.")}
+            if head_state:
+                self.gm_head.load_state_dict(head_state, strict=True)
+            if final_state:
+                self.gm_final.load_state_dict(final_state, strict=True)
+            if self.gm_adapter is not None and adapter_state:
+                self.gm_adapter.load_state_dict(adapter_state, strict=True)
+        else:
+            # Backward compatibility: full gm_state payload
+            if gm_state and next(iter(gm_state.values())).is_cuda:
+                gm_state = {k: v.detach().cpu() for k, v in gm_state.items()}
+            if gm_state:
+                self.gm.load_state_dict(gm_state, strict=True)
+            if gm_adapter_state is not None and self.gm_adapter is not None:
+                self.gm_adapter.load_state_dict(gm_adapter_state, strict=True)
+
         self.model.gm_head = self.gm_head
         self.model.gm_final = self.gm_final
         if self.gm_adapter is not None:
