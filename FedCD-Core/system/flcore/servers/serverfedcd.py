@@ -916,7 +916,7 @@ class FedCD(Server):
         return avg_state
 
     def aggregate_and_distill(self, cluster_pm_states, cluster_counts):
-        print("Server: Distilling cluster-wise GM_k with fixed combiner_k...")
+        print("Server: Ensemble distillation (teacher: GM_i+PM_i+combiner_i, student: frozen PM_k+combiner_k + trainable GM_k)...")
 
         if not cluster_pm_states:
             return {}
@@ -967,8 +967,35 @@ class FedCD(Server):
                     if k.startswith("combiner.")
                 }
 
-                if not personalized_module_state or not cluster_combiner_state:
+                gm_state = self.cluster_generalized_states.get(cluster_id, self._current_generalized_state())
+                generalized_module_state = {
+                    k.replace("generalized_module.", ""): v.to(device)
+                    for k, v in gm_state.items()
+                    if k.startswith("generalized_module.")
+                }
+                generalized_adapter_state = {
+                    k.replace("generalized_adapter.", ""): v.to(device)
+                    for k, v in gm_state.items()
+                    if k.startswith("generalized_adapter.")
+                }
+
+                if not personalized_module_state or not cluster_combiner_state or not generalized_module_state:
                     continue
+
+                gm_module = copy.deepcopy(self.generalized_module).to(device)
+                gm_module.load_state_dict(generalized_module_state, strict=True)
+                gm_module.eval()
+                for p in gm_module.parameters():
+                    p.requires_grad = False
+
+                gm_adapter = None
+                if self.generalized_adapter is not None:
+                    gm_adapter = copy.deepcopy(self.generalized_adapter).to(device)
+                    if generalized_adapter_state:
+                        gm_adapter.load_state_dict(generalized_adapter_state, strict=True)
+                    gm_adapter.eval()
+                    for p in gm_adapter.parameters():
+                        p.requires_grad = False
 
                 pm_module = copy.deepcopy(self.personalized_module).to(device)
                 pm_module.load_state_dict(personalized_module_state, strict=True)
@@ -993,6 +1020,8 @@ class FedCD(Server):
 
                 teacher_components[cluster_id] = {
                     "weight": weight,
+                    "gm_module": gm_module,
+                    "gm_adapter": gm_adapter,
                     "pm_module": pm_module,
                     "pm_adapter": pm_adapter,
                     "combiner": cluster_combiner,
@@ -1007,9 +1036,10 @@ class FedCD(Server):
             kl_loss_fn = nn.KLDivLoss(reduction='batchmean')
             ce_loss_fn = nn.CrossEntropyLoss()
 
+            self._ensure_cluster_generalized_states(set(cluster_pm_states.keys()))
             teacher_components = _build_teacher_components(device)
             if not teacher_components:
-                print("[FedCD] No valid PM+combiner teachers. Skipping distillation.")
+                print("[FedCD] No valid GM+PM+combiner teachers. Skipping distillation.")
                 return {}
 
             self._ensure_cluster_generalized_states(set(teacher_components.keys()))
@@ -1060,52 +1090,59 @@ class FedCD(Server):
                     x = x.to(device, non_blocking=(device == "cuda"))
 
                     with torch.no_grad():
+                        # Shared frozen feature extractor for both teacher and student.
                         z = self.f_ext(x)
                         if z.dim() > 2:
                             z = torch.flatten(z, 1)
 
-                        teacher_logits_sum = None
+                        # Teacher: ensemble over (GM_i + PM_i + combiner_i) with frozen branches.
+                        teacher_prob_sum = None
                         total_weight = 0.0
-                        target_pm_logits = None
                         for cluster_id, comp in teacher_components.items():
+                            # Exclude self-teacher (i == k): GM_k is distilled only from other clusters.
+                            if cluster_id == target_cluster_id:
+                                continue
+                            gm_adapter_i = comp["gm_adapter"]
+                            gm_module_i = comp["gm_module"]
                             pm_adapter_i = comp["pm_adapter"]
                             pm_module_i = comp["pm_module"]
                             combiner_i = comp["combiner"]
                             weight_i = comp["weight"]
 
+                            z_gm_i = gm_adapter_i(z) if gm_adapter_i is not None else z
+                            gm_logits_i = gm_module_i(z_gm_i)
                             z_pm_i = pm_adapter_i(z) if pm_adapter_i is not None else z
                             pm_logits_i = pm_module_i(z_pm_i)
-                            if cluster_id == target_cluster_id:
-                                target_pm_logits = pm_logits_i
 
-                            zeros_i = torch.zeros_like(pm_logits_i)
-                            teacher_input_i = torch.cat([zeros_i, pm_logits_i], dim=1)
+                            teacher_input_i = torch.cat([gm_logits_i, pm_logits_i], dim=1)
                             teacher_logits_i = combiner_i(teacher_input_i)
+                            teacher_prob_i = torch.softmax(teacher_logits_i / temp, dim=1)
 
                             total_weight += weight_i
-                            if teacher_logits_sum is None:
-                                teacher_logits_sum = teacher_logits_i * weight_i
+                            if teacher_prob_sum is None:
+                                teacher_prob_sum = teacher_prob_i * weight_i
                             else:
-                                teacher_logits_sum += teacher_logits_i * weight_i
+                                teacher_prob_sum += teacher_prob_i * weight_i
 
-                        if teacher_logits_sum is None or total_weight <= 0:
+                        if teacher_prob_sum is None or total_weight <= 0:
                             continue
-                        teacher_ensemble = teacher_logits_sum / total_weight
-                        if target_pm_logits is None:
-                            continue
+                        teacher_prob_ensemble = teacher_prob_sum / total_weight
+                        # Student fixed PM_k branch.
+                        z_pm_k = target_pm_adapter(z) if target_pm_adapter is not None else z
+                        target_pm_logits = target_pm_module(z_pm_k)
 
                     with torch.cuda.amp.autocast(enabled=use_amp):
+                        # Student: frozen (f_ext, PM_k, combiner_k) + trainable GM_k.
                         z_gm = gm_adapter(z) if gm_adapter is not None else z
                         gm_logits = gm_module(z_gm)
                         student_input = torch.cat([gm_logits, target_pm_logits.detach()], dim=1)
                         student_logits = target_combiner(student_input)
 
-                        teacher_prob = torch.softmax(teacher_ensemble / temp, dim=1)
                         student_log_prob = torch.log_softmax(student_logits / temp, dim=1)
-                        kd_loss = kl_loss_fn(student_log_prob, teacher_prob) * (temp * temp)
+                        kd_loss = kl_loss_fn(student_log_prob, teacher_prob_ensemble) * (temp * temp)
                         ce_loss = student_logits.new_tensor(0.0)
                         if self.distill_ce_weight > 0:
-                            pseudo_labels = torch.argmax(teacher_ensemble, dim=1)
+                            pseudo_labels = torch.argmax(teacher_prob_ensemble, dim=1)
                             ce_loss = ce_loss_fn(student_logits, pseudo_labels)
                         loss = self.distill_kl_weight * kd_loss + self.distill_ce_weight * ce_loss
 
@@ -1132,6 +1169,9 @@ class FedCD(Server):
                 updated_cluster_gm_states[target_cluster_id] = distilled_state
 
             for comp in teacher_components.values():
+                comp["gm_module"].to("cpu")
+                if comp["gm_adapter"] is not None:
+                    comp["gm_adapter"].to("cpu")
                 comp["pm_module"].to("cpu")
                 if comp["pm_adapter"] is not None:
                     comp["pm_adapter"].to("cpu")
