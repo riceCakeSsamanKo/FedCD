@@ -21,10 +21,16 @@ ALGO="FedCD"
 DATASET="Cifar10"
 TOTAL_DATA=50000
 AVOID_OOM=True
-# Common global evaluation settings
+# Global test evaluation settings
 EVAL_COMMON_GLOBAL=True
-COMMON_TEST_SAMPLES=2000
+GLOBAL_TEST_SAMPLES=0
 COMMON_EVAL_BATCH_SIZE=256
+
+# Server distillation settings (GM + Global Combiner)
+FEDCD_DISTILL_LR=0.01
+FEDCD_DISTILL_TEMP=2.0
+FEDCD_DISTILL_KL_WEIGHT=1.0
+FEDCD_DISTILL_CE_WEIGHT=0.2
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 0.5 1.0) # (0.1 0.5 1.0)
@@ -36,7 +42,8 @@ echo "============================================================"
 echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
 echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
-echo "Common Global Eval: ${EVAL_COMMON_GLOBAL} (samples=${COMMON_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
+echo "Global Test Eval: ${EVAL_COMMON_GLOBAL} (samples=${GLOBAL_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
+echo "Distill: lr=${FEDCD_DISTILL_LR}, temp=${FEDCD_DISTILL_TEMP}, kl=${FEDCD_DISTILL_KL_WEIGHT}, ce=${FEDCD_DISTILL_CE_WEIGHT}"
 echo "============================================================"
 
     for THRESHOLD in "${THRESHOLDS[@]}"
@@ -94,8 +101,12 @@ echo "============================================================"
                 --log_usage True \
                 --avoid_oom $AVOID_OOM \
                 --eval_common_global $EVAL_COMMON_GLOBAL \
-                --common_test_samples $COMMON_TEST_SAMPLES \
+                --global_test_samples $GLOBAL_TEST_SAMPLES \
                 --common_eval_batch_size $COMMON_EVAL_BATCH_SIZE \
+                --fedcd_distill_lr $FEDCD_DISTILL_LR \
+                --fedcd_distill_temp $FEDCD_DISTILL_TEMP \
+                --fedcd_distill_kl_weight $FEDCD_DISTILL_KL_WEIGHT \
+                --fedcd_distill_ce_weight $FEDCD_DISTILL_CE_WEIGHT \
                 --local_epochs 1 \
                 --proxy_dataset TinyImagenet --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
@@ -154,8 +165,12 @@ echo "============================================================"
                     --log_usage True \
                     --avoid_oom $AVOID_OOM \
                     --eval_common_global $EVAL_COMMON_GLOBAL \
-                    --common_test_samples $COMMON_TEST_SAMPLES \
+                    --global_test_samples $GLOBAL_TEST_SAMPLES \
                     --common_eval_batch_size $COMMON_EVAL_BATCH_SIZE \
+                    --fedcd_distill_lr $FEDCD_DISTILL_LR \
+                    --fedcd_distill_temp $FEDCD_DISTILL_TEMP \
+                    --fedcd_distill_kl_weight $FEDCD_DISTILL_KL_WEIGHT \
+                    --fedcd_distill_ce_weight $FEDCD_DISTILL_CE_WEIGHT \
                     --local_epochs 1 \
                     --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
                 ELAPSED_TIME=$(($SECONDS - $START_TIME))

@@ -411,8 +411,8 @@ if __name__ == "__main__":
                         help="Rounds gap for evaluation")
     parser.add_argument('--eval_common_global', type=str2bool, default=True,
                         help="Evaluate each client model on one shared common global test subset.")
-    parser.add_argument('--common_test_samples', type=int, default=2000,
-                        help="Number of samples for common global test evaluation (0 = full union).")
+    parser.add_argument('--global_test_samples', '--common_test_samples', dest='global_test_samples', type=int, default=0,
+                        help="Number of samples for shared global test evaluation (0 = full union).")
     parser.add_argument('--common_eval_batch_size', type=int, default=256,
                         help="Batch size for common global test evaluation.")
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')

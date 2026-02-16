@@ -484,6 +484,14 @@ if __name__ == "__main__":
     parser.add_argument('--cluster_sample_size', type=int, default=512)
     parser.add_argument('--fedcd_nc_weight', type=float, default=0.0)
     parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
+    parser.add_argument('--fedcd_distill_lr', type=float, default=0.01,
+                        help="Server distillation learning rate for GM+global combiner.")
+    parser.add_argument('--fedcd_distill_temp', type=float, default=2.0,
+                        help="Temperature for server distillation.")
+    parser.add_argument('--fedcd_distill_kl_weight', type=float, default=1.0,
+                        help="KL loss weight for server distillation.")
+    parser.add_argument('--fedcd_distill_ce_weight', type=float, default=0.2,
+                        help="Pseudo-label CE loss weight for server distillation.")
     parser.add_argument('--gm_model', type=str, default="VGG16",
                         help="FedCD GM model name")
     parser.add_argument('--pm_model', type=str, default="VGG8",
@@ -498,7 +506,7 @@ if __name__ == "__main__":
                         help="Number of random samples to use as proxy data")
     parser.add_argument('--eval_common_global', type=str2bool, default=True,
                         help="Evaluate personalized models on the same shared global test subset.")
-    parser.add_argument('--common_test_samples', type=int, default=2000,
+    parser.add_argument('--global_test_samples', '--common_test_samples', dest='global_test_samples', type=int, default=0,
                         help="Number of samples for shared global test evaluation (0 = full union).")
     parser.add_argument('--common_eval_batch_size', type=int, default=256,
                         help="Batch size for shared global test evaluation.")

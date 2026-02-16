@@ -35,11 +35,29 @@ def visualize_single_experiment(exp_path):
         acc_file = os.path.join(exp_path, "acc.csv")
         if os.path.exists(acc_file):
             df = pd.read_csv(acc_file)
-            if not df.empty and "test_acc" in df.columns:
+            local_acc_col = "local_test_acc" if "local_test_acc" in df.columns else "test_acc"
+            global_acc_col = "global_test_acc" if "global_test_acc" in df.columns else (
+                "common_test_acc" if "common_test_acc" in df.columns else None
+            )
+            gm_only_acc_col = (
+                "gm_only_global_test_acc" if "gm_only_global_test_acc" in df.columns else None
+            )
+
+            if not df.empty and local_acc_col in df.columns:
                 plt.figure(figsize=(10, 6))
-                sns.lineplot(data=df, x="round", y="test_acc", label="Test Accuracy", marker="o")
+                sns.lineplot(data=df, x="round", y=local_acc_col, label="Local Test Accuracy", marker="o")
+                if global_acc_col is not None:
+                    sns.lineplot(data=df, x="round", y=global_acc_col, label="Global Test Accuracy", marker="o")
+                if gm_only_acc_col is not None:
+                    sns.lineplot(
+                        data=df,
+                        x="round",
+                        y=gm_only_acc_col,
+                        label="GM-only Global Test Accuracy",
+                        marker="o",
+                    )
                 
-                plt.title(f"Test Accuracy Curve {title_suffix}")
+                plt.title(f"Accuracy Curve {title_suffix}")
                 plt.xlabel("Round")
                 plt.ylabel("Accuracy")
                 plt.grid(True)

@@ -424,14 +424,17 @@ class clientFedCD(Client):
     # [핵심] 서버에서 Generalized Module 파트를 받아 적용
     def set_parameters(self, model):
         # 서버에서 받은 Generalized Module 관련 파라미터를 로드
+        combiner_updated = False
         if isinstance(model, dict):
             gm_parts = model.get("gm_parts", None)
             gm_state = model.get("gm_state", {})
             gm_adapter_state = model.get("gm_adapter", None)
+            global_combiner_state = model.get("global_combiner", None)
         else:
             gm_parts = None
             gm_state = model.state_dict()
             gm_adapter_state = None
+            global_combiner_state = None
 
         # New lightweight payload path: generalized_module/generalized_adapter
         if gm_parts is not None:
@@ -446,6 +449,11 @@ class clientFedCD(Client):
                 k.replace("generalized_adapter.", ""): v
                 for k, v in gm_parts.items()
                 if k.startswith("generalized_adapter.")
+            }
+            global_combiner_state = {
+                k.replace("global_combiner.", ""): v
+                for k, v in gm_parts.items()
+                if k.startswith("global_combiner.")
             }
 
             # Backward compatibility for old "head/final/adapter" payload
@@ -466,6 +474,9 @@ class clientFedCD(Client):
                 self.generalized_module.load_state_dict(generalized_module_state, strict=True)
             if self.generalized_adapter is not None and generalized_adapter_state:
                 self.generalized_adapter.load_state_dict(generalized_adapter_state, strict=True)
+            if global_combiner_state:
+                self.combiner.load_state_dict(global_combiner_state, strict=True)
+                combiner_updated = True
         else:
             # Backward compatibility: full gm_state payload
             if gm_state and next(iter(gm_state.values())).is_cuda:
@@ -481,12 +492,24 @@ class clientFedCD(Client):
                         self.generalized_module.load_state_dict(generalized_module_state, strict=True)
                 else:
                     self.gm.load_state_dict(gm_state, strict=True)
+                if any(k.startswith("global_combiner.") for k in gm_state.keys()):
+                    global_combiner_state = {
+                        k.replace("global_combiner.", ""): v
+                        for k, v in gm_state.items()
+                        if k.startswith("global_combiner.")
+                    }
             if gm_adapter_state is not None and self.generalized_adapter is not None:
                 self.generalized_adapter.load_state_dict(gm_adapter_state, strict=True)
+            if global_combiner_state is not None:
+                self.combiner.load_state_dict(global_combiner_state, strict=True)
+                combiner_updated = True
 
         self.model.generalized_module = self.generalized_module
         if self.generalized_adapter is not None:
             self.model.generalized_adapter = self.generalized_adapter
+        self.model.combiner = self.combiner
+        if combiner_updated:
+            self._reset_optimizer()
         
         # PM은 GM과 너무 멀어지지 않게 살짝 당겨주거나(Regularization), 
         # 혹은 그대로 둡니다(Pure Personalization). 연구 의도에 따라 선택.

@@ -46,9 +46,13 @@ class FedCD(Server):
         self._usage_header_written = False
         self._cluster_header_written = False
         self.eval_common_global = bool(getattr(args, "eval_common_global", True))
-        self.common_test_samples = int(getattr(args, "common_test_samples", 2000))
+        self.global_test_samples = int(
+            getattr(args, "global_test_samples", getattr(args, "common_test_samples", 0))
+        )
         self.common_eval_batch_size = int(getattr(args, "common_eval_batch_size", 256))
-        self.common_test_loader = self._build_common_test_loader() if self.eval_common_global else None
+        self.global_test_loader = self._build_global_test_loader() if self.eval_common_global else None
+        # Backward-compatible alias
+        self.common_test_loader = self.global_test_loader
         self.f_ext = self._build_f_ext(args)
         self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
         self.generalized_module = self._extract_module(self.global_model)
@@ -58,6 +62,15 @@ class FedCD(Server):
             pm_model = copy.deepcopy(self.global_model)
         self.personalized_module = self._extract_module(pm_model)
         self.personalized_adapter = self._build_adapter(self.personalized_module)
+        # Global combiner shared by server and broadcast to clients.
+        # Initialize from the first client combiner for shape consistency.
+        self.global_combiner = copy.deepcopy(self.clients[0].combiner)
+        self.global_combiner.to("cpu")
+        # Distillation hyperparameters
+        self.distill_lr = float(getattr(args, "fedcd_distill_lr", 0.01))
+        self.distill_temp = float(getattr(args, "fedcd_distill_temp", 2.0))
+        self.distill_kl_weight = float(getattr(args, "fedcd_distill_kl_weight", 1.0))
+        self.distill_ce_weight = float(getattr(args, "fedcd_distill_ce_weight", 0.2))
 
         # [ACT] Adaptive Clustering Threshold Initialization
         self.adaptive_threshold = bool(getattr(args, "adaptive_threshold", False))
@@ -132,7 +145,7 @@ class FedCD(Server):
         return merged_state
 
     def _build_gm_broadcast_parts(self):
-        # Broadcast only GM components used on clients.
+        # Broadcast GM components and global combiner.
         parts = {}
         parts.update({
             f"generalized_module.{k}": v.detach().cpu()
@@ -143,6 +156,10 @@ class FedCD(Server):
                 f"generalized_adapter.{k}": v.detach().cpu()
                 for k, v in self.generalized_adapter.state_dict().items()
             })
+        parts.update({
+            f"global_combiner.{k}": v.detach().cpu()
+            for k, v in self.global_combiner.state_dict().items()
+        })
         return parts
 
     def _read_gpu_util(self):
@@ -173,43 +190,75 @@ class FedCD(Server):
         stage,
         wall_start,
         cpu_start,
-        test_acc=None,
+        local_test_acc=None,
         train_loss=None,
         uplink=0,
         downlink=0,
-        common_test_acc=None,
+        global_test_acc=None,
+        gm_only_global_test_acc=None,
     ):
         wall_delta = time.time() - wall_start
         # cpu_delta = time.process_time() - cpu_start
         # cpu_pct = (cpu_delta / wall_delta * 100.0) if wall_delta > 0 else 0.0
 
-        acc_str = f"acc={test_acc:.4f}" if test_acc is not None else ""
-        common_acc_str = f"common_acc={common_test_acc:.4f}" if common_test_acc is not None else ""
+        local_acc_str = f"local_acc={local_test_acc:.4f}" if local_test_acc is not None else ""
+        global_acc_str = f"global_acc={global_test_acc:.4f}" if global_test_acc is not None else ""
+        gm_only_acc_str = (
+            f"gm_only_global_acc={gm_only_global_test_acc:.4f}"
+            if gm_only_global_test_acc is not None
+            else ""
+        )
         loss_str = f"loss={train_loss:.4f}" if train_loss is not None else ""
         msg = (
             f"[FedCD] Round {round_idx} | {stage} | "
             f"wall={wall_delta:.2f}s "
-            + f"{acc_str} {common_acc_str} {loss_str}"
+            + f"{local_acc_str} {global_acc_str} {gm_only_acc_str} {loss_str}"
         )
         # print(msg)
-        self._append_usage_csv(round_idx, test_acc, common_test_acc, train_loss, uplink, downlink)
+        self._append_usage_csv(
+            round_idx,
+            local_test_acc,
+            global_test_acc,
+            gm_only_global_test_acc,
+            train_loss,
+            uplink,
+            downlink,
+        )
 
-    def _append_usage_csv(self, round_idx, test_acc, common_test_acc, train_loss, uplink, downlink):
+    def _append_usage_csv(
+        self,
+        round_idx,
+        local_test_acc,
+        global_test_acc,
+        gm_only_global_test_acc,
+        train_loss,
+        uplink,
+        downlink,
+    ):
         path = self.log_usage_path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        header = "round,test_acc,common_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n"
+        header = "round,local_test_acc,global_test_acc,gm_only_global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n"
         
         # Only log rows that have metrics (evaluation stage)
-        if test_acc is None and common_test_acc is None and train_loss is None:
+        if (
+            local_test_acc is None
+            and global_test_acc is None
+            and gm_only_global_test_acc is None
+            and train_loss is None
+        ):
             return
 
-        t_acc = f"{test_acc:.4f}" if test_acc is not None else ""
-        common_acc = f"{common_test_acc:.4f}" if common_test_acc is not None else ""
+        local_acc = f"{local_test_acc:.4f}" if local_test_acc is not None else ""
+        global_acc = f"{global_test_acc:.4f}" if global_test_acc is not None else ""
+        gm_only_acc = f"{gm_only_global_test_acc:.4f}" if gm_only_global_test_acc is not None else ""
         t_loss = f"{train_loss:.4f}" if train_loss is not None else ""
         uplink_mb = uplink / (1024**2)
         downlink_mb = downlink / (1024**2)
         total_mb = uplink_mb + downlink_mb
-        line = f"{round_idx},{t_acc},{common_acc},{t_loss},{uplink_mb:.4f},{downlink_mb:.4f},{total_mb:.4f}\n"
+        line = (
+            f"{round_idx},{local_acc},{global_acc},{gm_only_acc},{t_loss},"
+            f"{uplink_mb:.4f},{downlink_mb:.4f},{total_mb:.4f}\n"
+        )
         
         if not self._usage_header_written:
             need_header = not os.path.exists(path)
@@ -244,10 +293,10 @@ class FedCD(Server):
         gm_parts = self._build_gm_broadcast_parts()
         payload = {"gm_parts": gm_parts}
         
-        # [Info] Calculate and print Broadcast GM Size (Generalized Module only)
+        # [Info] Calculate and print broadcast size (GM + global combiner)
         total_bytes = sum(v.numel() * v.element_size() for v in gm_parts.values())
         
-        print(f"[FedCD] Broadcast Generalized Module Size: {total_bytes / (1024**2):.2f} MB per client")
+        print(f"[FedCD] Broadcast GM+Global Combiner Size: {total_bytes / (1024**2):.2f} MB per client")
         
         broadcast_bytes = total_bytes * len(self.clients)
 
@@ -318,7 +367,9 @@ class FedCD(Server):
 
             # 4. 서버 측 앙상블 증류 (Server-side Ensemble Distillation)
             if i % self.global_period == 0 and cluster_pms:
-                self.aggregate_and_distill(list(cluster_pms.values()))
+                cluster_counts = self._get_cluster_client_counts(received_pms)
+                self.update_global_combiner(cluster_pms, cluster_counts)
+                self.aggregate_and_distill(cluster_pms, cluster_counts)
                 # 업데이트된 GM을 모든 클라이언트에게 배포 (Downlink)
                 downlink_bytes = self.send_models()
                 round_downlink += downlink_bytes
@@ -354,11 +405,14 @@ class FedCD(Server):
         avg_acc = sum(tot_correct) / total_samples if total_samples > 0 else 0.0
         avg_auc = sum(tot_auc) / total_samples if total_samples > 0 else 0.0
         avg_loss = sum(losses) / total_samples_train if total_samples_train > 0 else 0.0
-        common_test_acc = self.evaluate_common_test_acc()
+        global_test_acc = self.evaluate_global_test_acc()
+        gm_only_global_test_acc = self.evaluate_gm_only_global_test_acc()
             
-        print(f"Server: Overall Averaged Personalized Test Accuracy: {avg_acc:.4f}")
-        if common_test_acc is not None:
-            print(f"Server: Common Global Test Accuracy: {common_test_acc:.4f}")
+        print(f"Server: Overall Averaged Local Test Accuracy: {avg_acc:.4f}")
+        if global_test_acc is not None:
+            print(f"Server: Overall Averaged Global Test Accuracy: {global_test_acc:.4f}")
+        if gm_only_global_test_acc is not None:
+            print(f"Server: GM-only Global Test Accuracy: {gm_only_global_test_acc:.4f}")
         print(f"Server: Overall Averaged Test AUC: {avg_auc:.4f}")
         print(f"Server: Overall Averaged Train Loss: {avg_loss:.4f}")
 
@@ -381,8 +435,9 @@ class FedCD(Server):
                 "evaluation",
                 wall_start,
                 cpu_start,
-                test_acc=avg_acc,
-                common_test_acc=common_test_acc,
+                local_test_acc=avg_acc,
+                global_test_acc=global_test_acc,
+                gm_only_global_test_acc=gm_only_global_test_acc,
                 train_loss=avg_loss,
                 uplink=uplink,
                 downlink=downlink,
@@ -449,6 +504,49 @@ class FedCD(Server):
                 total_broadcast_bytes += current_bytes
         
         return total_broadcast_bytes
+
+    def _get_cluster_client_counts(self, received_pms):
+        counts = {}
+        for client_id, _ in received_pms:
+            cluster_id = self.cluster_map.get(client_id, 0)
+            counts[cluster_id] = counts.get(cluster_id, 0) + 1
+        return counts
+
+    def update_global_combiner(self, cluster_pms, cluster_counts):
+        weighted_states = []
+        weights = []
+        for cluster_id, state in cluster_pms.items():
+            combiner_state = {
+                k.replace("combiner.", ""): v
+                for k, v in state.items()
+                if k.startswith("combiner.")
+            }
+            if not combiner_state:
+                continue
+            weight = float(cluster_counts.get(cluster_id, 1))
+            if weight <= 0:
+                continue
+            weighted_states.append(combiner_state)
+            weights.append(weight)
+
+        if not weighted_states:
+            return
+
+        total_weight = sum(weights)
+        avg_state = {}
+        template = self.global_combiner.state_dict()
+        for key in template.keys():
+            acc = None
+            for state, w in zip(weighted_states, weights):
+                if key not in state:
+                    continue
+                contrib = state[key] * (w / total_weight)
+                acc = contrib if acc is None else (acc + contrib)
+            if acc is not None:
+                avg_state[key] = acc
+
+        if avg_state:
+            self.global_combiner.load_state_dict(avg_state, strict=False)
 
     def adjust_dynamic_threshold(self, ids, current_accs):
         """
@@ -545,19 +643,19 @@ class FedCD(Server):
 
         return {cid: int(label) for cid, label in zip(client_ids, labels)}
 
-    def _build_common_test_loader(self):
+    def _build_global_test_loader(self):
         # Build one shared test subset so all clients are evaluated on exactly the same data.
         shared_test_data = []
         for client_id in range(self.num_clients):
             shared_test_data.extend(read_client_data(self.dataset, client_id, is_train=False))
 
         if len(shared_test_data) == 0:
-            print("[FedCD] Common global test set is empty. Skipping shared evaluation.")
+            print("[FedCD] Global test set is empty. Skipping shared evaluation.")
             return None
 
-        if self.common_test_samples > 0 and self.common_test_samples < len(shared_test_data):
+        if self.global_test_samples > 0 and self.global_test_samples < len(shared_test_data):
             rng = random.Random(0)
-            sample_indices = rng.sample(range(len(shared_test_data)), self.common_test_samples)
+            sample_indices = rng.sample(range(len(shared_test_data)), self.global_test_samples)
             shared_test_data = [shared_test_data[idx] for idx in sample_indices]
 
         num_workers = int(getattr(self.args, "num_workers", 0))
@@ -573,11 +671,15 @@ class FedCD(Server):
             loader_kwargs["persistent_workers"] = True
             loader_kwargs["prefetch_factor"] = int(getattr(self.args, "prefetch_factor", 2))
 
-        print(f"[FedCD] Common Global Test Set Size: {len(shared_test_data)}")
+        print(f"[FedCD] Global Test Set Size: {len(shared_test_data)}")
         return torch.utils.data.DataLoader(shared_test_data, **loader_kwargs)
 
-    def evaluate_common_test_acc(self):
-        if not self.eval_common_global or self.common_test_loader is None:
+    # Backward-compatible alias
+    def _build_common_test_loader(self):
+        return self._build_global_test_loader()
+
+    def evaluate_global_test_acc(self):
+        if not self.eval_common_global or self.global_test_loader is None:
             return None
 
         acc_sum = 0.0
@@ -592,7 +694,7 @@ class FedCD(Server):
             correct = 0
             total = 0
             with torch.no_grad():
-                for x, y in self.common_test_loader:
+                for x, y in self.global_test_loader:
                     if type(x) == type([]):
                         x = x[0]
                     x = x.to(device, non_blocking=use_non_blocking)
@@ -613,6 +715,53 @@ class FedCD(Server):
             return None
         return acc_sum / valid_clients
 
+    def evaluate_gm_only_global_test_acc(self):
+        if not self.eval_common_global or self.global_test_loader is None:
+            return None
+
+        device = self.device
+        use_non_blocking = device == "cuda" and bool(getattr(self.args, "pin_memory", False))
+        self.f_ext.to(device)
+        self.generalized_module.to(device)
+        self.f_ext.eval()
+        self.generalized_module.eval()
+        if self.generalized_adapter is not None:
+            self.generalized_adapter.to(device)
+            self.generalized_adapter.eval()
+
+        total = 0
+        correct = 0
+        with torch.no_grad():
+            for x, y in self.global_test_loader:
+                if type(x) == type([]):
+                    x = x[0]
+                x = x.to(device, non_blocking=use_non_blocking)
+                y = y.to(device, non_blocking=use_non_blocking)
+
+                z = self.f_ext(x)
+                if z.dim() > 2:
+                    z = torch.flatten(z, 1)
+                z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                logits = self.generalized_module(z_gm)
+
+                correct += (torch.argmax(logits, dim=1) == y).sum().item()
+                total += y.size(0)
+
+        self.f_ext.to("cpu")
+        self.generalized_module.to("cpu")
+        if self.generalized_adapter is not None:
+            self.generalized_adapter.to("cpu")
+        if device == "cuda":
+            torch.cuda.empty_cache()
+
+        if total == 0:
+            return None
+        return correct / total
+
+    # Backward-compatible alias
+    def evaluate_common_test_acc(self):
+        return self.evaluate_global_test_acc()
+
     @staticmethod
     def average_state_dicts(states):
         avg_state = {}
@@ -620,113 +769,201 @@ class FedCD(Server):
             avg_state[key] = sum(state[key] for state in states) / len(states)
         return avg_state
 
-    def aggregate_and_distill(self, received_pm_states):
-        print("Server: Distilling Knowledge from PM Ensemble to GM...")
+    def aggregate_and_distill(self, cluster_pm_states, cluster_counts):
+        print("Server: Distilling Knowledge from cluster PM+Combiner to GM+Global Combiner...")
+
+        if not cluster_pm_states:
+            return
 
         def _distill_once(device):
-            # GM (Student) 학습 준비 (f_ext는 frozen)
             self.global_model.to(device)
             self.f_ext.to(device)
             self.generalized_module.to(device)
+            self.global_combiner.to(device)
             self.f_ext.eval()
             self.generalized_module.train()
+            self.global_combiner.train()
             if self.generalized_adapter is not None:
                 self.generalized_adapter.to(device)
-            self.personalized_module.to(device)
-            self.personalized_module.eval()
-            if self.personalized_adapter is not None:
-                self.personalized_adapter.to(device)
-            gm_params = list(self.generalized_module.parameters())
+                self.generalized_adapter.train()
+
+            # Freeze a GM snapshot for stable teacher construction.
+            gm_ref_module = copy.deepcopy(self.generalized_module).to(device)
+            gm_ref_module.eval()
+            for p in gm_ref_module.parameters():
+                p.requires_grad = False
+            gm_ref_adapter = None
             if self.generalized_adapter is not None:
-                gm_params += list(self.generalized_adapter.parameters())
-            optimizer = torch.optim.SGD(gm_params, lr=0.01)
-            kl_loss = nn.KLDivLoss(reduction='batchmean')
+                gm_ref_adapter = copy.deepcopy(self.generalized_adapter).to(device)
+                gm_ref_adapter.eval()
+                for p in gm_ref_adapter.parameters():
+                    p.requires_grad = False
+
+            # Build per-cluster frozen teacher modules.
+            teacher_components = []
+            for cluster_id, state in cluster_pm_states.items():
+                weight = float(cluster_counts.get(cluster_id, 1))
+                if weight <= 0:
+                    continue
+
+                personalized_module_state = {
+                    k.replace("personalized_module.", ""): v.to(device)
+                    for k, v in state.items()
+                    if k.startswith("personalized_module.")
+                }
+                personalized_adapter_state = {
+                    k.replace("personalized_adapter.", ""): v.to(device)
+                    for k, v in state.items()
+                    if k.startswith("personalized_adapter.")
+                }
+                if not personalized_module_state:
+                    head_state = {
+                        k.replace("head.", ""): v.to(device)
+                        for k, v in state.items()
+                        if k.startswith("head.")
+                    }
+                    final_state = {
+                        k.replace("final.", ""): v.to(device)
+                        for k, v in state.items()
+                        if k.startswith("final.")
+                    }
+                    personalized_module_state = self._merge_legacy_module_state(
+                        self.personalized_module,
+                        head_state,
+                        final_state,
+                    )
+                    if not personalized_adapter_state:
+                        personalized_adapter_state = {
+                            k.replace("adapter.", ""): v.to(device)
+                            for k, v in state.items()
+                            if k.startswith("adapter.")
+                        }
+
+                if not personalized_module_state:
+                    continue
+
+                cluster_combiner_state = {
+                    k.replace("combiner.", ""): v.to(device)
+                    for k, v in state.items()
+                    if k.startswith("combiner.")
+                }
+
+                pm_module = copy.deepcopy(self.personalized_module).to(device)
+                pm_module.load_state_dict(personalized_module_state, strict=True)
+                pm_module.eval()
+                for p in pm_module.parameters():
+                    p.requires_grad = False
+
+                pm_adapter = None
+                if self.personalized_adapter is not None:
+                    pm_adapter = copy.deepcopy(self.personalized_adapter).to(device)
+                    if personalized_adapter_state:
+                        pm_adapter.load_state_dict(personalized_adapter_state, strict=True)
+                    pm_adapter.eval()
+                    for p in pm_adapter.parameters():
+                        p.requires_grad = False
+
+                cluster_combiner = copy.deepcopy(self.global_combiner).to(device)
+                if cluster_combiner_state:
+                    cluster_combiner.load_state_dict(cluster_combiner_state, strict=True)
+                cluster_combiner.eval()
+                for p in cluster_combiner.parameters():
+                    p.requires_grad = False
+
+                teacher_components.append((weight, pm_module, pm_adapter, cluster_combiner))
+
+            if not teacher_components:
+                print("[FedCD] No valid teacher components for distillation. Skipping.")
+                return
+
+            student_params = list(self.generalized_module.parameters()) + list(self.global_combiner.parameters())
+            if self.generalized_adapter is not None:
+                student_params += list(self.generalized_adapter.parameters())
+            optimizer = torch.optim.SGD(student_params, lr=self.distill_lr)
+            kl_loss_fn = nn.KLDivLoss(reduction='batchmean')
+            ce_loss_fn = nn.CrossEntropyLoss()
             use_amp = device == "cuda" and bool(getattr(self.args, "amp", False))
             scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+            temp = max(1e-6, self.distill_temp)
 
-            # Proxy Data로 증류 (예: 1 Epoch)
-            for x, _ in tqdm(self.proxy_data_loader, desc="Ensemble Distillation", leave=False):
+            for x, _ in tqdm(self.proxy_data_loader, desc="Cluster-to-GM Distillation", leave=False):
                 x = x.to(device, non_blocking=(device == "cuda"))
 
                 with torch.no_grad():
                     z = self.f_ext(x)
                     if z.dim() > 2:
                         z = torch.flatten(z, 1)
-                    z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                    z_gm_ref = gm_ref_adapter(z) if gm_ref_adapter is not None else z
+                    gm_ref_logits = gm_ref_module(z_gm_ref)
 
-                # Teacher Ensemble Logits (sequential to save memory)
-                with torch.no_grad():
-                    ensemble_logits = None
-                    for state in received_pm_states:
-                        personalized_module_state = {
-                            k.replace("personalized_module.", ""): v.to(device)
-                            for k, v in state.items()
-                            if k.startswith("personalized_module.")
-                        }
-                        personalized_adapter_state = {
-                            k.replace("personalized_adapter.", ""): v.to(device)
-                            for k, v in state.items()
-                            if k.startswith("personalized_adapter.")
-                        }
-
-                        if not personalized_module_state:
-                            head_state = {
-                                k.replace("head.", ""): v.to(device)
-                                for k, v in state.items()
-                                if k.startswith("head.")
-                            }
-                            final_state = {
-                                k.replace("final.", ""): v.to(device)
-                                for k, v in state.items()
-                                if k.startswith("final.")
-                            }
-                            personalized_module_state = self._merge_legacy_module_state(
-                                self.personalized_module,
-                                head_state,
-                                final_state,
-                            )
-                            if not personalized_adapter_state:
-                                personalized_adapter_state = {
-                                    k.replace("adapter.", ""): v.to(device)
-                                    for k, v in state.items()
-                                    if k.startswith("adapter.")
-                                }
-
-                        if personalized_module_state:
-                            self.personalized_module.load_state_dict(personalized_module_state, strict=True)
-                        if self.personalized_adapter is not None and personalized_adapter_state:
-                            self.personalized_adapter.load_state_dict(personalized_adapter_state, strict=True)
-
-                        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
-                        with torch.cuda.amp.autocast(enabled=use_amp):
-                            logits = self.personalized_module(z_pm)
-                        if ensemble_logits is None:
-                            ensemble_logits = logits
-                        else:
-                            ensemble_logits = ensemble_logits + logits
-                    ensemble_logits = ensemble_logits / len(received_pm_states)
-                    target_prob = torch.softmax(ensemble_logits, dim=1)
-                
-                # Student (GM) Logits
                 with torch.cuda.amp.autocast(enabled=use_amp):
-                    student_logits = self.generalized_module(z_gm)
-                    student_log_prob = torch.log_softmax(student_logits, dim=1)
-                    loss = kl_loss(student_log_prob, target_prob)
-                
+                    z_gm_student = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                    gm_student_logits = self.generalized_module(z_gm_student)
+
+                teacher_logits_sum = None
+                student_logits_sum = None
+                total_weight = 0.0
+
+                for weight, pm_module, pm_adapter, cluster_combiner in teacher_components:
+                    with torch.no_grad():
+                        z_pm = pm_adapter(z) if pm_adapter is not None else z
+                        pm_logits = pm_module(z_pm)
+                        teacher_input = torch.cat([gm_ref_logits, pm_logits], dim=1)
+                        teacher_logits = cluster_combiner(teacher_input)
+
+                    with torch.cuda.amp.autocast(enabled=use_amp):
+                        student_input = torch.cat([gm_student_logits, pm_logits.detach()], dim=1)
+                        student_logits = self.global_combiner(student_input)
+
+                    total_weight += weight
+                    if teacher_logits_sum is None:
+                        teacher_logits_sum = teacher_logits * weight
+                        student_logits_sum = student_logits * weight
+                    else:
+                        teacher_logits_sum += teacher_logits * weight
+                        student_logits_sum += student_logits * weight
+
+                if total_weight <= 0:
+                    continue
+
+                teacher_ensemble = teacher_logits_sum / total_weight
+                student_ensemble = student_logits_sum / total_weight
+
+                with torch.cuda.amp.autocast(enabled=use_amp):
+                    teacher_prob = torch.softmax(teacher_ensemble / temp, dim=1)
+                    student_log_prob = torch.log_softmax(student_ensemble / temp, dim=1)
+                    kd_loss = kl_loss_fn(student_log_prob, teacher_prob) * (temp * temp)
+                    ce_loss = student_ensemble.new_tensor(0.0)
+                    if self.distill_ce_weight > 0:
+                        pseudo_labels = torch.argmax(teacher_ensemble, dim=1)
+                        ce_loss = ce_loss_fn(student_ensemble, pseudo_labels)
+                    loss = self.distill_kl_weight * kd_loss + self.distill_ce_weight * ce_loss
+
+                if not torch.isfinite(loss):
+                    optimizer.zero_grad()
+                    continue
+
                 optimizer.zero_grad()
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
 
-            # Move back to CPU to reduce GPU memory pressure
+            # Move all server modules back to CPU.
+            for _, pm_module, pm_adapter, cluster_combiner in teacher_components:
+                pm_module.to("cpu")
+                if pm_adapter is not None:
+                    pm_adapter.to("cpu")
+                cluster_combiner.to("cpu")
+
+            gm_ref_module.to("cpu")
+            if gm_ref_adapter is not None:
+                gm_ref_adapter.to("cpu")
             self.global_model.to("cpu")
             self.f_ext.to("cpu")
             self.generalized_module.to("cpu")
+            self.global_combiner.to("cpu")
             if self.generalized_adapter is not None:
                 self.generalized_adapter.to("cpu")
-            self.personalized_module.to("cpu")
-            if self.personalized_adapter is not None:
-                self.personalized_adapter.to("cpu")
             if device == "cuda" and self.args.avoid_oom:
                 torch.cuda.empty_cache()
 

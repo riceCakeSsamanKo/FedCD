@@ -1,23 +1,43 @@
 # FedCD (Federated Clustered Distillation)
-FedCD는 클라이언트 간 데이터 분포 유사성을 기반으로 동적 클러스터링을 수행해, 개인화(Personalization)와 일반화(Generalization)를 함께 달성하는 연합학습 알고리즘이다.
+FedCD는 클라이언트 데이터 분포 유사도를 기반으로 클러스터를 동적으로 구성하고, 개인화 성능(PM)과 일반화 성능(GM)을 동시에 확보하는 연합학습 프레임워크입니다.
+
+## 최근 변경 사항
+1. **서버 distillation 구조 갱신**
+- Teacher: 각 클러스터의 `PM + cluster combiner`
+- Student: 서버의 `GM + global combiner`
+2. **Global Combiner 도입**
+- 클러스터별 combiner를 클러스터 client 수로 가중 FedAvg하여 서버 `global_combiner`를 갱신합니다.
+3. **브로드캐스트 payload 확장**
+- 서버가 클라이언트로 `GM + global_combiner`를 함께 배포합니다.
+4. **평가/로그 지표명 정리**
+- `test_acc` -> `local_test_acc`
+- `common_test_acc` -> `global_test_acc`
+- `gm_only_global_test_acc` 추가
 
 ## 핵심 아이디어
-1. **GM/PM 이원 구조**
-   - **Global Model (GM)**: 지식 저장소 역할을 하며 freeze된 backbone 특징 추출기로 사용된다.
-   - **Personalized Model (PM)**: 클라이언트/클러스터별 데이터 분포에 맞춰 학습되는 개인화 모델이다.
+1. **Generalized Module / Personalized Module 이원 구조**
+- `GM`: 서버에서 distillation으로 일반화 지식을 학습하는 모듈
+- `PM`: 클라이언트/클러스터 분포에 적응하는 개인화 모듈
 2. **ACT (Adaptive Clustering Threshold)**
-   - 최근 라운드 성능 추세를 선형 회귀로 추정해 임계값을 자동 조정한다.
-   - 성능 정체 또는 하락 시 방향을 반전하고 step을 감쇠해 임계값을 안정적으로 수렴시킨다.
-   - `cluster_period`와 동기화해 구조 변화가 과도해지는 문제를 줄인다.
+- 성능 추세 기반으로 클러스터 임계값을 자동 조정해 과도한 분할/병합을 완화합니다.
 3. **Feature Distribution 기반 클러스터링**
-   - 클라이언트는 임베딩 평균/분산 통계를 서버로 전송한다.
-   - 서버는 통계 벡터 정규화 후 코사인 유사도 기반 거리를 계산한다.
-   - Agglomerative Clustering (Ward linkage)로 분포 형상이 유사한 클라이언트를 묶는다.
-4. **서버 측 앙상블 증류**
-   - 클러스터별 PM 앙상블을 GM으로 distillation한다.
-   - 라벨 없는 TinyImageNet proxy 샘플을 사용해 프라이버시를 유지한다.
-5. **Zero-Uplink for GM**
-   - 클라이언트는 PM 가중치만 업링크하므로 통신 비용을 줄일 수 있다.
+- 클라이언트 통계(평균/분산)로 거리 행렬을 만들고 agglomerative clustering으로 그룹을 구성합니다.
+4. **GM 업링크 최소화**
+- 업링크는 `PM(+adapter)+combiner` 중심으로 수행하고, GM은 서버에서 유지/학습합니다.
+
+## 전체 학습 플로우
+1. 서버가 초기 `GM`, 클라이언트별 `PM`, combiner를 준비합니다.
+2. 선택된 클라이언트가 로컬에서 `PM + combiner`를 학습합니다.
+3. 클라이언트는 `PM(+adapter)+combiner`를 서버로 업로드합니다.
+4. 서버는 주기적으로 클라이언트를 재클러스터링합니다.
+5. 서버는 클러스터별 `PM(+adapter)+combiner` 평균을 계산해 클러스터 내에 재배포합니다.
+6. 서버는 클러스터별 combiner를 가중 평균해 `global_combiner`를 갱신합니다.
+7. 서버 distillation:
+- Teacher logits: `cluster PM + cluster combiner` (GM reference logits와 결합)
+- Student logits: `GM + global_combiner`
+- proxy 데이터(`TinyImagenet` 등)로 KL(+CE) distillation 수행
+8. 서버는 갱신된 `GM + global_combiner`를 전체 클라이언트에 배포합니다.
+9. 평가 시 `local_test_acc`, `global_test_acc`, `gm_only_global_test_acc`를 기록합니다.
 
 ## 빠른 시작 (FedCD)
 
@@ -29,12 +49,15 @@ conda activate pfllib
 ```
 
 ### 2) 데이터 준비
-`system/main.py`는 기본적으로 `<repo_root>/fl_data/<dataset_name>`을 읽는다.
+`system/main.py`는 기본적으로 `<repo_root>/fl_data/<dataset_name>`를 읽습니다.
 
-- 이 저장소에는 바로 실행 가능한 시나리오가 포함돼 있다.
-- 예: `Cifar10_pat_nc20`, `Cifar10_pat_nc50`, `Cifar10_dir0.1_nc20`, `Cifar10_dir0.5_nc50`
+예시 시나리오:
+- `Cifar10_pat_nc20`
+- `Cifar10_pat_nc50`
+- `Cifar10_dir0.1_nc20`
+- `Cifar10_dir0.5_nc50`
 
-### 3) 학습 실행 (ACT 예시)
+### 3) 학습 실행 (ACT + distillation 예시)
 ```bash
 cd FedCD-Core
 python system/main.py \
@@ -49,14 +72,18 @@ python system/main.py \
     --threshold_step 0.05 \
     --threshold_decay 0.9 \
     --act_window_size 5 \
-    --proxy_dataset TinyImagenet \
-    --proxy_samples 2000 \
-    --eval_common_global True \
-    --common_test_samples 2000 \
-    --common_eval_batch_size 256 \
     --cluster_period 2 \
     --pm_period 1 \
     --global_period 4 \
+    --proxy_dataset TinyImagenet \
+    --proxy_samples 2000 \
+    --fedcd_distill_lr 0.01 \
+    --fedcd_distill_temp 2.0 \
+    --fedcd_distill_kl_weight 1.0 \
+    --fedcd_distill_ce_weight 0.2 \
+    --eval_common_global True \
+    --global_test_samples 0 \
+    --common_eval_batch_size 256 \
     -dev cuda \
     -nw 0 \
     --amp True \
@@ -64,53 +91,51 @@ python system/main.py \
 ```
 
 ### 4) 배치 실행 스크립트
-- `cd FedCD-Core && bash run.sh`: pathological + Dirichlet 실험을 순차 실행
+- `cd FedCD-Core && bash run.sh`: pathological + Dirichlet 실험 순차 실행
 - `cd FedCD-Core && bash run_dir.sh`: Dirichlet 실험만 실행
 - `cd FedCD-Core && bash run_dir_fl_data.sh`: `fl_data` 기준 Dirichlet 실험 실행
 
 ## 주요 인자 (FedCD)
 
 ### 1) 클러스터링 / ACT
-- `--num_clusters`: `cluster_threshold <= 0`일 때 사용하는 기본 클러스터 수 (default: `5`)
-- `--cluster_threshold`: 동적 클러스터링 초기 임계값, `> 0`이면 threshold 기반 Agglomerative Clustering 사용 (default: `0.0`)
-- `--adaptive_threshold`: ACT 활성화 여부 (default: `False`)
-- `--threshold_step`: ACT 임계값 증감 보폭 (default: `0.05`)
+- `--num_clusters`: `cluster_threshold <= 0`일 때 기본 클러스터 수 (default: `5`)
+- `--cluster_threshold`: 초기 임계값. `> 0`이면 threshold 기반 clustering 사용 (default: `0.0`)
+- `--adaptive_threshold`: ACT 활성화 (default: `False`)
+- `--threshold_step`: ACT 증감 보폭 (default: `0.05`)
 - `--threshold_decay`: 방향 반전 시 보폭 감쇠 비율 (default: `0.9`)
-- `--act_window_size`: ACT 추세 분석 슬라이딩 윈도우 크기 (default: `5`)
-- `--act_min_slope`: ACT 정체/감속 판단 최소 기울기 (default: `0.0002`)
+- `--act_window_size`: ACT 추세 분석 윈도우 (default: `5`)
+- `--act_min_slope`: ACT 감속 판단 최소 기울기 (default: `0.0002`)
 - `--threshold_max`: ACT 임계값 상한 (default: `0.95`)
 - `--cluster_period`: 클러스터링 갱신 주기(round) (default: `2`)
-- `--cluster_sample_size`: 클러스터링 통계 추출 시 클라이언트당 샘플 수 (default: `512`)
-- `--threshold_inc_rate`, `--threshold_dec_rate`, `--ema_alpha`, `--tolerance_ratio`: 파서에는 정의되어 있으나 현재 `serverfedcd.py`의 ACT 구현에서는 직접 사용하지 않는 예약 인자
+- `--cluster_sample_size`: 클라이언트당 통계 샘플 수 (default: `512`)
 
-### 2) PM/GM 업데이트 주기 및 결합
-- `--pm_period`: 클러스터 대표 PM 집계/배포 주기(round) (default: `1`)
-- `--global_period`: PM 앙상블 증류 후 GM 갱신/배포 주기(round) (default: `4`)
-- `--fedcd_nc_weight`: GM-PM feature negative-correlation 정규화 가중치 (default: `0.0`)
-- `--fedcd_warmup_epochs`: GM 갱신 후 PM classifier warm-up epoch 수 (default: `0`)
+### 2) PM/GM 업데이트 주기
+- `--pm_period`: 클러스터 PM 집계/배포 주기(round) (default: `1`)
+- `--global_period`: 서버 distillation 및 GM 배포 주기(round) (default: `4`)
+- `--fedcd_nc_weight`: feature negative-correlation 가중치 (default: `0.0`)
+- `--fedcd_warmup_epochs`: GM 갱신 후 PM warm-up epoch (default: `0`)
 
-### 3) 모델 구조
-- `--gm_model`: GM 모델 이름 (default: `VGG16`)
-- `--pm_model`: PM 모델 이름 (default: `VGG8`)
-- `--fext_model`: 클러스터링/추론용 feature extractor 모델 이름 (default: `VGG16`)
-- `--fext_dim`: `SmallFExt` 사용 시 출력 차원 (default: `512`)
+### 3) 서버 distillation
+- `--proxy_dataset`: proxy dataset 이름 (default: `TinyImagenet`)
+- `--proxy_samples`: proxy 샘플 수 (default: `1000`)
+- `--fedcd_distill_lr`: 서버 distillation 학습률 (default: `0.01`)
+- `--fedcd_distill_temp`: temperature (default: `2.0`)
+- `--fedcd_distill_kl_weight`: KL loss 가중치 (default: `1.0`)
+- `--fedcd_distill_ce_weight`: pseudo-label CE 가중치 (default: `0.2`)
 
-### 4) 서버 증류 (Proxy KD)
-- `--proxy_dataset`: 서버 증류용 proxy dataset 이름 (default: `TinyImagenet`)
-- `--proxy_samples`: proxy dataset 샘플 수 (default: `1000`)
-
-### 5) 공통 테스트 평가
-- `--eval_common_global`: 개인화 평균 정확도 외에 공통 테스트셋 정확도도 함께 평가할지 여부 (default: `True`)
-- `--common_test_samples`: 공통 테스트셋 샘플 수, `0`이면 union 테스트셋 전체 사용 (default: `2000`)
-- `--common_eval_batch_size`: 공통 테스트 평가 batch size (default: `256`)
+### 4) 공통 테스트 평가
+- `--eval_common_global`: 공통 글로벌 테스트 평가 사용 여부 (default: `True`)
+- `--global_test_samples`: 글로벌 테스트 샘플 수, `0`이면 전체 union 사용 (default: `0`)
+- `--common_eval_batch_size`: 공통 테스트 batch size (default: `256`)
 
 ## 실험 결과 저장 구조
-로그 경로는 아래 형태로 저장되며, `[ACT] ...` 로그를 통해 임계값 업데이트 과정을 확인할 수 있다.
+로그 경로:
 
 `logs/FedCD/GM_{GM}_PM_{PM}_Fext_{Fext}/{partition}/{alpha(optional)}/NC_{NC}/date_{YYYYMMDD}/time_{HHMMSS}`
 
-- `acc.csv`: 라운드별 전체 지표 (`round,test_acc,common_test_acc,train_loss,uplink_mb,downlink_mb,total_mb`)
-- `cluster_acc.csv`: 클러스터별 성능 추이
+- `acc.csv`: 라운드별 지표  
+`round,local_test_acc,global_test_acc,gm_only_global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb`
+- `cluster_acc.csv`: 클러스터별 정확도 추이
 - `usage.csv`: 하드웨어 리소스/통신량 로그 (옵션)
 
 ---
