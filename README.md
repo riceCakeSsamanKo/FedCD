@@ -23,7 +23,7 @@ FedCD는 클라이언트 간 데이터 분포 유사성을 기반으로 동적 �
 
 ### 1) 환경 준비
 ```bash
-cd FedCD
+cd FedCD-Core
 conda env create -f env_cuda_latest.yaml
 conda activate pfllib
 ```
@@ -36,7 +36,7 @@ conda activate pfllib
 
 ### 3) 학습 실행 (ACT 예시)
 ```bash
-cd FedCD
+cd FedCD-Core
 python system/main.py \
     -data Cifar10_pat_nc50 \
     -algo FedCD \
@@ -64,9 +64,9 @@ python system/main.py \
 ```
 
 ### 4) 배치 실행 스크립트
-- `cd FedCD && bash run.sh`: pathological + Dirichlet 실험을 순차 실행
-- `cd FedCD && bash run_dir.sh`: Dirichlet 실험만 실행
-- `cd FedCD && bash run_dir_fl_data.sh`: `fl_data` 기준 Dirichlet 실험 실행
+- `cd FedCD-Core && bash run.sh`: pathological + Dirichlet 실험을 순차 실행
+- `cd FedCD-Core && bash run_dir.sh`: Dirichlet 실험만 실행
+- `cd FedCD-Core && bash run_dir_fl_data.sh`: `fl_data` 기준 Dirichlet 실험 실행
 
 ## 주요 인자 (FedCD)
 

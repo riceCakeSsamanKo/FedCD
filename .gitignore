@@ -1,11 +1,11 @@
 .DS_Store
 /fl_data
-/FedCD/results
-/FedCD/system/models
+/FedCD-Core/results
+/FedCD-Core/system/models
 *__pycache__*
-/FedCD/dataset/Cifar10
-/FedCD/dataset/TinyImagenet
-/FedCD/Cifar10
+/FedCD-Core/dataset/Cifar10
+/FedCD-Core/dataset/TinyImagenet
+/FedCD-Core/Cifar10
 /FedCD-Baseline/dataset/MNIST
 .DS_Store
 fl_data.zip
