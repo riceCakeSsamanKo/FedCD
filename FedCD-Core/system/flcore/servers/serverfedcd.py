@@ -465,7 +465,7 @@ class FedCD(Server):
                     self._log_usage(i, "post_pm", wall_start, cpu_start)
 
             # 4. 서버 측 앙상블 증류 (Server-side Ensemble Distillation)
-            if i % self.global_period == 0 and cluster_pms:
+            if i > 0 and i % self.global_period == 0 and cluster_pms:
                 cluster_counts = self._get_cluster_client_counts(received_pms)
                 cluster_gm_states = self.aggregate_and_distill(cluster_pms, cluster_counts)
                 # Distilled cluster GM을 각 클러스터 클라이언트에 배포

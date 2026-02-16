@@ -101,7 +101,7 @@ echo "============================================================"
                 --prefetch_factor 2 \
                 --amp True \
                 --tf32 True \
-                --gpu_batch_mult 32 \
+                --gpu_batch_mult 1 \
                 --gpu_batch_max 0 \
                 --log_usage True \
                 --avoid_oom $AVOID_OOM \
@@ -170,7 +170,7 @@ echo "============================================================"
                     --prefetch_factor 2 \
                     --amp True \
                     --tf32 True \
-                    --gpu_batch_mult 32 \
+                    --gpu_batch_mult 1 \
                     --gpu_batch_max 0 \
                     --log_usage True \
                     --avoid_oom $AVOID_OOM \
