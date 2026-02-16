@@ -3,6 +3,7 @@ import time
 import subprocess
 import shutil
 import os
+import random
 import torch
 import torch.nn as nn
 import numpy as np
@@ -44,6 +45,10 @@ class FedCD(Server):
         self.log_cluster_path = os.path.join(os.path.dirname(self.log_usage_path), "cluster_acc.csv")
         self._usage_header_written = False
         self._cluster_header_written = False
+        self.eval_common_global = bool(getattr(args, "eval_common_global", True))
+        self.common_test_samples = int(getattr(args, "common_test_samples", 2000))
+        self.common_eval_batch_size = int(getattr(args, "common_eval_batch_size", 256))
+        self.common_test_loader = self._build_common_test_loader() if self.eval_common_global else None
         self.f_ext = self._build_f_ext(args)
         self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
         self.gm_head, self.gm_final = self._split_classifier(self.global_model)
@@ -143,36 +148,49 @@ class FedCD(Server):
         util, mem_used, mem_total = parts
         return util, mem_used, mem_total
 
-    def _log_usage(self, round_idx, stage, wall_start, cpu_start, test_acc=None, train_loss=None, uplink=0, downlink=0):
+    def _log_usage(
+        self,
+        round_idx,
+        stage,
+        wall_start,
+        cpu_start,
+        test_acc=None,
+        train_loss=None,
+        uplink=0,
+        downlink=0,
+        common_test_acc=None,
+    ):
         wall_delta = time.time() - wall_start
         # cpu_delta = time.process_time() - cpu_start
         # cpu_pct = (cpu_delta / wall_delta * 100.0) if wall_delta > 0 else 0.0
 
         acc_str = f"acc={test_acc:.4f}" if test_acc is not None else ""
+        common_acc_str = f"common_acc={common_test_acc:.4f}" if common_test_acc is not None else ""
         loss_str = f"loss={train_loss:.4f}" if train_loss is not None else ""
         msg = (
             f"[FedCD] Round {round_idx} | {stage} | "
             f"wall={wall_delta:.2f}s "
-            + f"{acc_str} {loss_str}"
+            + f"{acc_str} {common_acc_str} {loss_str}"
         )
         # print(msg)
-        self._append_usage_csv(round_idx, test_acc, train_loss, uplink, downlink)
+        self._append_usage_csv(round_idx, test_acc, common_test_acc, train_loss, uplink, downlink)
 
-    def _append_usage_csv(self, round_idx, test_acc, train_loss, uplink, downlink):
+    def _append_usage_csv(self, round_idx, test_acc, common_test_acc, train_loss, uplink, downlink):
         path = self.log_usage_path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        header = "round,test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n"
+        header = "round,test_acc,common_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n"
         
         # Only log rows that have metrics (evaluation stage)
-        if test_acc is None and train_loss is None:
+        if test_acc is None and common_test_acc is None and train_loss is None:
             return
 
         t_acc = f"{test_acc:.4f}" if test_acc is not None else ""
+        common_acc = f"{common_test_acc:.4f}" if common_test_acc is not None else ""
         t_loss = f"{train_loss:.4f}" if train_loss is not None else ""
         uplink_mb = uplink / (1024**2)
         downlink_mb = downlink / (1024**2)
         total_mb = uplink_mb + downlink_mb
-        line = f"{round_idx},{t_acc},{t_loss},{uplink_mb:.4f},{downlink_mb:.4f},{total_mb:.4f}\n"
+        line = f"{round_idx},{t_acc},{common_acc},{t_loss},{uplink_mb:.4f},{downlink_mb:.4f},{total_mb:.4f}\n"
         
         if not self._usage_header_written:
             need_header = not os.path.exists(path)
@@ -317,15 +335,18 @@ class FedCD(Server):
         # stats_train: ids, num_samples, losses
         _, num_samples_train, losses = stats_train
         
-        # 전체 평균 정확도 및 손실 계산
+        # 전체 평균 정확도 및 손실 계산 (개별 클라이언트 로컬 테스트셋)
         total_samples = sum(num_samples)
         total_samples_train = sum(num_samples_train)
         
         avg_acc = sum(tot_correct) / total_samples if total_samples > 0 else 0.0
         avg_auc = sum(tot_auc) / total_samples if total_samples > 0 else 0.0
         avg_loss = sum(losses) / total_samples_train if total_samples_train > 0 else 0.0
+        common_test_acc = self.evaluate_common_test_acc()
             
-        print(f"Server: Overall Averaged Test Accuracy: {avg_acc:.4f}")
+        print(f"Server: Overall Averaged Personalized Test Accuracy: {avg_acc:.4f}")
+        if common_test_acc is not None:
+            print(f"Server: Common Global Test Accuracy: {common_test_acc:.4f}")
         print(f"Server: Overall Averaged Test AUC: {avg_auc:.4f}")
         print(f"Server: Overall Averaged Train Loss: {avg_loss:.4f}")
 
@@ -343,7 +364,17 @@ class FedCD(Server):
 
         # CSV 로그에 기록
         if self.log_usage:
-            self._log_usage(round_idx, "evaluation", wall_start, cpu_start, test_acc=avg_acc, train_loss=avg_loss, uplink=uplink, downlink=downlink)
+            self._log_usage(
+                round_idx,
+                "evaluation",
+                wall_start,
+                cpu_start,
+                test_acc=avg_acc,
+                common_test_acc=common_test_acc,
+                train_loss=avg_loss,
+                uplink=uplink,
+                downlink=downlink,
+            )
 
         # 클러스터별 정확도 계산 및 출력, 로깅
         cluster_stats = {}
@@ -501,6 +532,74 @@ class FedCD(Server):
             labels = kmeans.fit_predict(X)
 
         return {cid: int(label) for cid, label in zip(client_ids, labels)}
+
+    def _build_common_test_loader(self):
+        # Build one shared test subset so all clients are evaluated on exactly the same data.
+        shared_test_data = []
+        for client_id in range(self.num_clients):
+            shared_test_data.extend(read_client_data(self.dataset, client_id, is_train=False))
+
+        if len(shared_test_data) == 0:
+            print("[FedCD] Common global test set is empty. Skipping shared evaluation.")
+            return None
+
+        if self.common_test_samples > 0 and self.common_test_samples < len(shared_test_data):
+            rng = random.Random(0)
+            sample_indices = rng.sample(range(len(shared_test_data)), self.common_test_samples)
+            shared_test_data = [shared_test_data[idx] for idx in sample_indices]
+
+        num_workers = int(getattr(self.args, "num_workers", 0))
+        pin_memory = bool(getattr(self.args, "pin_memory", False)) and self.device == "cuda"
+        loader_kwargs = {
+            "batch_size": self.common_eval_batch_size,
+            "shuffle": False,
+            "drop_last": False,
+            "num_workers": num_workers,
+            "pin_memory": pin_memory,
+        }
+        if num_workers > 0:
+            loader_kwargs["persistent_workers"] = True
+            loader_kwargs["prefetch_factor"] = int(getattr(self.args, "prefetch_factor", 2))
+
+        print(f"[FedCD] Common Global Test Set Size: {len(shared_test_data)}")
+        return torch.utils.data.DataLoader(shared_test_data, **loader_kwargs)
+
+    def evaluate_common_test_acc(self):
+        if not self.eval_common_global or self.common_test_loader is None:
+            return None
+
+        acc_sum = 0.0
+        valid_clients = 0
+        device = self.device
+        use_non_blocking = device == "cuda" and bool(getattr(self.args, "pin_memory", False))
+
+        for client in self.clients:
+            client.model.to(device)
+            client.model.eval()
+
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for x, y in self.common_test_loader:
+                    if type(x) == type([]):
+                        x = x[0]
+                    x = x.to(device, non_blocking=use_non_blocking)
+                    y = y.to(device, non_blocking=use_non_blocking)
+                    output = client.model(x)
+                    correct += (torch.argmax(output, dim=1) == y).sum().item()
+                    total += y.size(0)
+
+            client.model.to("cpu")
+            if total > 0:
+                acc_sum += correct / total
+                valid_clients += 1
+
+        if device == "cuda":
+            torch.cuda.empty_cache()
+
+        if valid_clients == 0:
+            return None
+        return acc_sum / valid_clients
 
     @staticmethod
     def average_state_dicts(states):

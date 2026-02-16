@@ -30,26 +30,50 @@ FedCD는 클라이언트 간의 데이터 분포 유사성을 기반으로 **동
 python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 \
     --adaptive_threshold True --cluster_threshold 0.1 --threshold_step 0.05 --threshold_decay 0.9 --act_window_size 5 \
     --proxy_dataset TinyImagenet --proxy_samples 2000 \
+    --eval_common_global True --common_test_samples 2000 --common_eval_batch_size 256 \
     --cluster_period 2 --pm_period 1 --global_period 4 \
     -dev cuda -nw 0 --amp True --avoid_oom True
 ```
 
-## 주요 Argument 설명 (FedCD & ACT)
-- `--cluster_threshold`: 동적 클러스터링의 초기 임계값. (default: `0.0`)
-- `--adaptive_threshold`: **ACT 활성화 여부**. (default: `False`)
-- `--threshold_step`: 임계값 조절의 기본 보폭. (default: `0.05`)
-- `--threshold_decay`: 방향 반전 시 보폭 감쇠 비율. (예: `0.9` = 10% 감소)
-- `--act_window_size`: 회귀 분석을 위한 슬라이딩 윈도우 크기. (default: `5`)
-- `--act_min_slope`: '정체'를 판단하는 최소 기울기 임계값. (default: `0.0002`)
-- `--threshold_max`: 임계값의 최대 제한치. (default: `0.95`)
-- `--proxy_dataset`: 서버 증류용 데이터셋 이름. (default: `TinyImagenet`)
-- `--proxy_samples`: Proxy 데이터셋에서 추출할 무작위 샘플 수. (default: `1000`)
-- `--gm_model` / `--pm_model`: 각각 글로벌 및 개인화 모델 구조. (VGG16, VGG8, ResNet 등)
-- `--cluster_period`: 클러스터링 및 ACT 조절 주기. (default: `2`)
+## 주요 Argument 설명 (FedCD)
+
+### 1) 클러스터링 / ACT
+- `--num_clusters`: `cluster_threshold <= 0`일 때 사용할 기본 클러스터 개수. (default: `5`)
+- `--cluster_threshold`: 동적 클러스터링 초기 임계값. `> 0`이면 Agglomerative Clustering threshold로 사용. (default: `0.0`)
+- `--adaptive_threshold`: ACT(Adaptive Clustering Threshold) 활성화 여부. (default: `False`)
+- `--threshold_step`: ACT 임계값 증감 보폭. (default: `0.05`)
+- `--threshold_decay`: 방향 반전 시 보폭 감쇠 비율. (default: `0.9`)
+- `--act_window_size`: ACT 추세 분석 슬라이딩 윈도우 크기. (default: `5`)
+- `--act_min_slope`: ACT에서 정체/감속 판단 시 사용되는 최소 기울기. (default: `0.0002`)
+- `--threshold_max`: ACT 임계값 상한. (default: `0.95`)
+- `--cluster_period`: 클러스터링 갱신 주기(round). (default: `2`)
+- `--cluster_sample_size`: 클러스터링용 특징 통계 추출 시 클라이언트당 샘플 수. (default: `512`)
+- `--threshold_inc_rate`, `--threshold_dec_rate`, `--ema_alpha`, `--tolerance_ratio`: 파서에는 정의되어 있으나 현재 `serverfedcd.py` ACT 구현에서는 직접 사용하지 않음(확장용 예약 인자).
+
+### 2) PM/GM 업데이트 주기 및 결합
+- `--pm_period`: 클러스터 대표 PM 집계/배포 주기(round). (default: `1`)
+- `--global_period`: 서버 측 PM 앙상블 증류 후 GM 갱신/배포 주기(round). (default: `4`)
+- `--fedcd_nc_weight`: GM-PM feature negative-correlation 정규화 가중치. (default: `0.0`)
+- `--fedcd_warmup_epochs`: GM 갱신 후 PM classifier warm-up epoch 수. (default: `0`)
+
+### 3) 모델 구조 관련
+- `--gm_model`: GM 모델 구조 이름. (default: `VGG16`)
+- `--pm_model`: PM 모델 구조 이름. (default: `VGG8`)
+- `--fext_model`: 클러스터링/추론에 사용하는 feature extractor 구조 이름. (default: `VGG16`)
+- `--fext_dim`: `SmallFExt` 사용 시 출력 차원. (default: `512`)
+
+### 4) 서버 증류(Proxy KD)
+- `--proxy_dataset`: 서버 측 증류용 프록시 데이터셋 이름. (default: `TinyImagenet`)
+- `--proxy_samples`: 프록시 데이터셋에서 샘플링할 데이터 개수. (default: `1000`)
+
+### 5) 공통 테스트 평가 (신규)
+- `--eval_common_global`: 개인화 평균 정확도와 별도로, 모든 클라이언트를 동일한 공통 테스트셋에서 평가할지 여부. (default: `True`)
+- `--common_test_samples`: 공통 테스트셋 샘플 수. `0`이면 전체 union 테스트셋 사용. (default: `2000`)
+- `--common_eval_batch_size`: 공통 테스트 평가 batch size. (default: `256`)
 
 ## 실험 결과 저장 구조 (Updated)
 로그는 `logs/FedCD/GM_{GM}_PM_{PM}_Fext_{Fext}/...` 경로에 저장되며, **ACT** 동작 로그(`[ACT] ...`)를 통해 임계값 변화를 실시간으로 확인할 수 있습니다.
-- `acc.csv`: 라운드별 전체 정확도
+- `acc.csv`: 라운드별 전체 성능 로그 (`round,test_acc,common_test_acc,train_loss,uplink_mb,downlink_mb,total_mb`)
 - `cluster_acc.csv`: 클러스터별 성능 추이
 - `usage.csv`: 하드웨어 리소스 및 통신량 (옵션)
 

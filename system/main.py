@@ -498,6 +498,12 @@ if __name__ == "__main__":
                         help="Dataset name for server-side proxy data (e.g. TinyImagenet)")
     parser.add_argument('--proxy_samples', type=int, default=1000,
                         help="Number of random samples to use as proxy data")
+    parser.add_argument('--eval_common_global', type=str2bool, default=True,
+                        help="Evaluate personalized models on the same shared global test subset.")
+    parser.add_argument('--common_test_samples', type=int, default=2000,
+                        help="Number of samples for shared global test evaluation (0 = full union).")
+    parser.add_argument('--common_eval_batch_size', type=int, default=256,
+                        help="Batch size for shared global test evaluation.")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,

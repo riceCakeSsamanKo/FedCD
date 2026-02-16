@@ -10,6 +10,10 @@ ALGO="FedCD"
 DATASET="Cifar10"
 TOTAL_DATA=50000
 AVOID_OOM=True
+# Common global evaluation settings
+EVAL_COMMON_GLOBAL=True
+COMMON_TEST_SAMPLES=2000
+COMMON_EVAL_BATCH_SIZE=256
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 0.5 1.0) # (0.1 0.5 1.0)
@@ -21,6 +25,7 @@ echo "============================================================"
 echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
 echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
+echo "Common Global Eval: ${EVAL_COMMON_GLOBAL} (samples=${COMMON_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
 echo "============================================================"
 
     for THRESHOLD in "${THRESHOLDS[@]}"
@@ -77,6 +82,9 @@ echo "============================================================"
                 --gpu_batch_max 0 \
                 --log_usage True \
                 --avoid_oom $AVOID_OOM \
+                --eval_common_global $EVAL_COMMON_GLOBAL \
+                --common_test_samples $COMMON_TEST_SAMPLES \
+                --common_eval_batch_size $COMMON_EVAL_BATCH_SIZE \
                 --local_epochs 1 \
                 --proxy_dataset TinyImagenet --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
@@ -134,6 +142,9 @@ echo "============================================================"
                     --gpu_batch_max 0 \
                     --log_usage True \
                     --avoid_oom $AVOID_OOM \
+                    --eval_common_global $EVAL_COMMON_GLOBAL \
+                    --common_test_samples $COMMON_TEST_SAMPLES \
+                    --common_eval_batch_size $COMMON_EVAL_BATCH_SIZE \
                     --local_epochs 1 \
                     --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
                 ELAPSED_TIME=$(($SECONDS - $START_TIME))
