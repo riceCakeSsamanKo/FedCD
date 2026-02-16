@@ -1167,53 +1167,91 @@ class FedCD(Server):
         return cluster_gm_states
             
     def load_proxy_data(self):
-        # [수정] Proxy Data로 TinyImageNet을 사용하거나 N개의 임의 샘플을 추출하도록 개선
         proxy_dataset_name = getattr(self.args, "proxy_dataset", "TinyImagenet")
+        proxy_dataset_key = str(proxy_dataset_name).lower()
         proxy_samples = int(getattr(self.args, "proxy_samples", 1000))
-        
+
         print(f"[FedCD] Loading Proxy Data: {proxy_dataset_name} (Samples: {proxy_samples})")
 
-        # TinyImageNet 경로 설정
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         tiny_path = os.path.join(base_dir, "dataset", "TinyImagenet", "rawdata", "tiny-imagenet-200", "train")
+        cifar100_root = os.path.join(base_dir, "dataset", "Cifar100", "rawdata")
 
-        if proxy_dataset_name == "TinyImagenet" and os.path.exists(tiny_path):
+        if proxy_dataset_key in {"tinyimagenet", "tiny-imagenet"} and os.path.exists(tiny_path):
             from torchvision.datasets import ImageFolder
             import torchvision.transforms as transforms
             from torch.utils.data import Subset
             import random
 
             transform = transforms.Compose([
-                transforms.Resize((64, 64)), # TinyImageNet default size
+                transforms.Resize((64, 64)),
                 transforms.ToTensor(),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
             ])
-            
-            # 흑백 이미지일 경우 3채널로 변환하는 transform 추가 (필요시)
             full_dataset = ImageFolder(root=tiny_path, transform=transform)
-            
-            # 전체 데이터셋 중 임의로 N장 선택 (라벨은 무시됨)
-            if proxy_samples < len(full_dataset):
+            if proxy_samples > 0 and proxy_samples < len(full_dataset):
                 indices = random.sample(range(len(full_dataset)), proxy_samples)
                 proxy_dataset = Subset(full_dataset, indices)
             else:
                 proxy_dataset = full_dataset
-            
             print(f"[FedCD] Successfully loaded {len(proxy_dataset)} samples from TinyImageNet.")
+
+        elif proxy_dataset_key in {"cifar100", "cifar-100"}:
+            from torchvision.datasets import CIFAR100
+            import torchvision.transforms as transforms
+            from torch.utils.data import Subset
+            import random
+
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            ])
+            try:
+                try:
+                    full_dataset = CIFAR100(
+                        root=cifar100_root, train=True, download=False, transform=transform
+                    )
+                except RuntimeError:
+                    print(f"[Warn] CIFAR-100 cache not found at {cifar100_root}. Trying download...")
+                    full_dataset = CIFAR100(
+                        root=cifar100_root, train=True, download=True, transform=transform
+                    )
+
+                if proxy_samples > 0 and proxy_samples < len(full_dataset):
+                    indices = random.sample(range(len(full_dataset)), proxy_samples)
+                    proxy_dataset = Subset(full_dataset, indices)
+                else:
+                    proxy_dataset = full_dataset
+                print(f"[FedCD] Successfully loaded {len(proxy_dataset)} samples from CIFAR-100.")
+            except Exception as err:
+                print(f"[Warn] Failed to load CIFAR-100 proxy ({err}). Fallback to union test data.")
+                from utils.data_utils import read_client_data
+                test_data = []
+                for cid in range(self.num_clients):
+                    test_data.extend(read_client_data(self.args.dataset, cid, is_train=False))
+                if proxy_samples > 0 and proxy_samples < len(test_data):
+                    proxy_dataset = random.sample(test_data, proxy_samples)
+                else:
+                    proxy_dataset = test_data
+                print(f"[FedCD] Fallback proxy samples loaded: {len(proxy_dataset)}")
+
         else:
-            # Fallback: 기존 방식 (첫 번째 클라이언트의 테스트 데이터 사용)
-            if proxy_dataset_name == "TinyImagenet":
-                print(f"[Warn] TinyImageNet raw data not found at {tiny_path}. Fallback to client test data.")
-            
+            if proxy_dataset_key in {"tinyimagenet", "tiny-imagenet"}:
+                print(
+                    f"[Warn] TinyImageNet raw data not found at {tiny_path}. "
+                    "Fallback to union of all clients' test data."
+                )
+
             from utils.data_utils import read_client_data
-            test_data = read_client_data(self.args.dataset, 0, is_train=False)
-            
-            # N개 샘플링
-            if proxy_samples < len(test_data):
-                import random
+            import random
+            test_data = []
+            for cid in range(self.num_clients):
+                test_data.extend(read_client_data(self.args.dataset, cid, is_train=False))
+            if proxy_samples > 0 and proxy_samples < len(test_data):
                 proxy_dataset = random.sample(test_data, proxy_samples)
             else:
                 proxy_dataset = test_data
+            print(f"[FedCD] Fallback proxy samples loaded: {len(proxy_dataset)}")
 
         num_workers = int(getattr(self.args, "num_workers", 0))
         pin_memory = bool(getattr(self.args, "pin_memory", False)) and self.device == "cuda"
@@ -1226,5 +1264,5 @@ class FedCD(Server):
         if num_workers > 0:
             loader_kwargs["persistent_workers"] = True
             loader_kwargs["prefetch_factor"] = int(getattr(self.args, "prefetch_factor", 2))
-        
+
         return torch.utils.data.DataLoader(proxy_dataset, **loader_kwargs)

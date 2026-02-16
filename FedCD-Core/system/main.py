@@ -512,7 +512,7 @@ if __name__ == "__main__":
     parser.add_argument('--fext_dim', type=int, default=512,
                         help="FedCD feature extractor output dimension")
     parser.add_argument('--proxy_dataset', type=str, default="TinyImagenet",
-                        help="Dataset name for server-side proxy data (e.g. TinyImagenet)")
+                        help="Dataset name for server-side proxy data (e.g. TinyImagenet, Cifar100)")
     parser.add_argument('--proxy_samples', type=int, default=1000,
                         help="Number of random samples to use as proxy data")
     parser.add_argument('--eval_common_global', type=str2bool, default=True,
