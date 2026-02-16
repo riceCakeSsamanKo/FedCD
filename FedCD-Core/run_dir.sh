@@ -25,6 +25,9 @@ AVOID_OOM=True
 EVAL_COMMON_GLOBAL=True
 GLOBAL_TEST_SAMPLES=0
 COMMON_EVAL_BATCH_SIZE=256
+FEDCD_FUSION_WEIGHT=1.0
+FEDCD_PM_LOGITS_WEIGHT=0.5
+FEDCD_PM_ONLY_WEIGHT=1.5
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 1.0) # (0.1 0.5 1.0)
@@ -83,6 +86,7 @@ do
                 --pm_period 1 \
                 --global_period 4 \
                 --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
+                --max_dynamic_clusters 5 \
                 -dev $GPU_DEVICE \
                 -nw 0 \
                 --pin_memory True \
@@ -96,6 +100,10 @@ do
                 --eval_common_global $EVAL_COMMON_GLOBAL \
                 --global_test_samples $GLOBAL_TEST_SAMPLES \
                 --common_eval_batch_size $COMMON_EVAL_BATCH_SIZE \
+                --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
+                --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
+                --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
+                --broadcast_global_combiner False \
                 --local_epochs 1 \
                 --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))

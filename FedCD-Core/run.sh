@@ -26,11 +26,14 @@ EVAL_COMMON_GLOBAL=True
 GLOBAL_TEST_SAMPLES=0
 COMMON_EVAL_BATCH_SIZE=256
 
-# Server distillation settings (GM + Global Combiner)
+# Server distillation settings
 FEDCD_DISTILL_LR=0.01
 FEDCD_DISTILL_TEMP=2.0
 FEDCD_DISTILL_KL_WEIGHT=1.0
 FEDCD_DISTILL_CE_WEIGHT=0.2
+FEDCD_FUSION_WEIGHT=1.0
+FEDCD_PM_LOGITS_WEIGHT=0.5
+FEDCD_PM_ONLY_WEIGHT=1.5
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 0.5 1.0) # (0.1 0.5 1.0)
@@ -44,6 +47,7 @@ echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Global Test Eval: ${EVAL_COMMON_GLOBAL} (samples=${GLOBAL_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
 echo "Distill: lr=${FEDCD_DISTILL_LR}, temp=${FEDCD_DISTILL_TEMP}, kl=${FEDCD_DISTILL_KL_WEIGHT}, ce=${FEDCD_DISTILL_CE_WEIGHT}"
+echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}"
 echo "============================================================"
 
     for THRESHOLD in "${THRESHOLDS[@]}"
@@ -90,6 +94,7 @@ echo "============================================================"
                 --pm_period 1 \
                 --global_period 4 \
                 --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
+                --max_dynamic_clusters 5 \
                 -dev $GPU_DEVICE \
                 -nw 0 \
                 --pin_memory True \
@@ -107,6 +112,10 @@ echo "============================================================"
                 --fedcd_distill_temp $FEDCD_DISTILL_TEMP \
                 --fedcd_distill_kl_weight $FEDCD_DISTILL_KL_WEIGHT \
                 --fedcd_distill_ce_weight $FEDCD_DISTILL_CE_WEIGHT \
+                --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
+                --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
+                --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
+                --broadcast_global_combiner False \
                 --local_epochs 1 \
                 --proxy_dataset TinyImagenet --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
@@ -154,6 +163,7 @@ echo "============================================================"
                     --pm_period 1 \
                     --global_period 4 \
                     --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
+                    --max_dynamic_clusters 5 \
                     -dev $GPU_DEVICE \
                     -nw 0 \
                     --pin_memory True \
@@ -171,6 +181,10 @@ echo "============================================================"
                     --fedcd_distill_temp $FEDCD_DISTILL_TEMP \
                     --fedcd_distill_kl_weight $FEDCD_DISTILL_KL_WEIGHT \
                     --fedcd_distill_ce_weight $FEDCD_DISTILL_CE_WEIGHT \
+                    --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
+                    --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
+                    --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
+                    --broadcast_global_combiner False \
                     --local_epochs 1 \
                     --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
                 ELAPSED_TIME=$(($SECONDS - $START_TIME))

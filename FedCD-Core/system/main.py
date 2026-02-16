@@ -482,10 +482,21 @@ if __name__ == "__main__":
                         help="PM aggregation/broadcast period (global rounds)")
     parser.add_argument('--global_period', type=int, default=4)
     parser.add_argument('--cluster_sample_size', type=int, default=512)
+    parser.add_argument('--max_dynamic_clusters', type=int, default=5,
+                        help="Maximum number of clusters allowed in threshold-based dynamic clustering (0 disables cap).")
     parser.add_argument('--fedcd_nc_weight', type=float, default=0.0)
+    parser.add_argument('--fedcd_fusion_weight', type=float, default=1.0,
+                        help="Main CE loss weight for fused logits (GM+PM+combiner).")
+    parser.add_argument('--fedcd_pm_logits_weight', type=float, default=0.5,
+                        help="Auxiliary CE loss weight for PM logits branch during local training.")
+    parser.add_argument('--fedcd_pm_only_weight', '--fedcd_pm_combiner_weight',
+                        dest='fedcd_pm_only_weight', type=float, default=1.5,
+                        help="Auxiliary CE loss weight for PM-only combiner branch during local training.")
     parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
+    parser.add_argument('--broadcast_global_combiner', type=str2bool, default=False,
+                        help="Broadcast distilled global combiner to clients together with GM.")
     parser.add_argument('--fedcd_distill_lr', type=float, default=0.01,
-                        help="Server distillation learning rate for GM+global combiner.")
+                        help="Server distillation learning rate for cluster-wise GM updates.")
     parser.add_argument('--fedcd_distill_temp', type=float, default=2.0,
                         help="Temperature for server distillation.")
     parser.add_argument('--fedcd_distill_kl_weight', type=float, default=1.0,

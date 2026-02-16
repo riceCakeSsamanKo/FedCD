@@ -2,14 +2,16 @@
 FedCD는 클라이언트 데이터 분포 유사도를 기반으로 클러스터를 동적으로 구성하고, 개인화 성능(PM)과 일반화 성능(GM)을 동시에 확보하는 연합학습 프레임워크입니다.
 
 ## 최근 변경 사항
-1. **서버 distillation 구조 갱신**
-- Teacher: 각 클러스터의 `PM + cluster combiner`
-- Student: 서버의 `GM + global combiner`
-2. **Global Combiner 도입**
-- 클러스터별 combiner를 클러스터 client 수로 가중 FedAvg하여 서버 `global_combiner`를 갱신합니다.
-3. **브로드캐스트 payload 확장**
-- 서버가 클라이언트로 `GM + global_combiner`를 함께 배포합니다.
-4. **평가/로그 지표명 정리**
+1. **로컬 학습 loss 보강**
+- 기본 fusion loss(`GM+PM+combiner`)에 더해 `PM logits` CE와 `PM-only combiner` CE를 함께 최적화합니다.
+2. **클러스터별 GM distillation**
+- 각 클러스터 `k`에 대해 `combiner_k`는 고정하고, `GM_k`만 서버에서 distillation으로 학습합니다.
+- Teacher ensemble은 `combiner_i + PM_i`(모든 클러스터 i)의 가중 평균 logits를 사용합니다.
+3. **클러스터별 GM 배포**
+- 서버가 단일 GM이 아니라 `GM_k`를 해당 클러스터 클라이언트에게 배포합니다.
+4. **Global combiner 브로드캐스트 옵션화**
+- `--broadcast_global_combiner`가 `False`(default)면 GM만 배포하고, `True`일 때만 global combiner를 추가 배포합니다.
+5. **평가/로그 지표명 정리**
 - `test_acc` -> `local_test_acc`
 - `common_test_acc` -> `global_test_acc`
 - `gm_only_global_test_acc` 추가
@@ -26,17 +28,19 @@ FedCD는 클라이언트 데이터 분포 유사도를 기반으로 클러스터
 - 업링크는 `PM(+adapter)+combiner` 중심으로 수행하고, GM은 서버에서 유지/학습합니다.
 
 ## 전체 학습 플로우
-1. 서버가 초기 `GM`, 클라이언트별 `PM`, combiner를 준비합니다.
-2. 선택된 클라이언트가 로컬에서 `PM + combiner`를 학습합니다.
+1. 서버가 초기 `GM`과 클러스터별 `GM_k` 상태를 준비하고, 클라이언트는 `PM + combiner`를 가집니다.
+2. 선택된 클라이언트가 로컬에서 multi-loss로 학습합니다.
+- 기본 loss: `combiner([GM logits, PM logits])`
+- 보조 loss: `PM logits`, `combiner([0, PM logits])`
 3. 클라이언트는 `PM(+adapter)+combiner`를 서버로 업로드합니다.
 4. 서버는 주기적으로 클라이언트를 재클러스터링합니다.
 5. 서버는 클러스터별 `PM(+adapter)+combiner` 평균을 계산해 클러스터 내에 재배포합니다.
-6. 서버는 클러스터별 combiner를 가중 평균해 `global_combiner`를 갱신합니다.
-7. 서버 distillation:
-- Teacher logits: `cluster PM + cluster combiner` (GM reference logits와 결합)
-- Student logits: `GM + global_combiner`
-- proxy 데이터(`TinyImagenet` 등)로 KL(+CE) distillation 수행
-8. 서버는 갱신된 `GM + global_combiner`를 전체 클라이언트에 배포합니다.
+6. 서버는 각 클러스터 `k`에 대해 distillation을 수행해 `GM_k`를 학습합니다.
+- Teacher: 모든 클러스터의 `combiner_i([0, PM_i])` ensemble
+- Student: `combiner_k([GM_k, PM_k])` (`combiner_k` 고정)
+- 최적화 대상: `GM_k`(및 GM adapter)
+7. 서버는 학습된 `GM_k`를 해당 클러스터 클라이언트에게 배포합니다.
+8. 옵션(`--broadcast_global_combiner True`)일 때만 global combiner를 추가 배포합니다.
 9. 평가 시 `local_test_acc`, `global_test_acc`, `gm_only_global_test_acc`를 기록합니다.
 
 ## 빠른 시작 (FedCD)
@@ -75,12 +79,17 @@ python system/main.py \
     --cluster_period 2 \
     --pm_period 1 \
     --global_period 4 \
+    --max_dynamic_clusters 5 \
     --proxy_dataset TinyImagenet \
     --proxy_samples 2000 \
+    --fedcd_fusion_weight 1.0 \
+    --fedcd_pm_logits_weight 0.5 \
+    --fedcd_pm_only_weight 1.5 \
     --fedcd_distill_lr 0.01 \
     --fedcd_distill_temp 2.0 \
     --fedcd_distill_kl_weight 1.0 \
     --fedcd_distill_ce_weight 0.2 \
+    --broadcast_global_combiner False \
     --eval_common_global True \
     --global_test_samples 0 \
     --common_eval_batch_size 256 \
@@ -108,11 +117,16 @@ python system/main.py \
 - `--threshold_max`: ACT 임계값 상한 (default: `0.95`)
 - `--cluster_period`: 클러스터링 갱신 주기(round) (default: `2`)
 - `--cluster_sample_size`: 클라이언트당 통계 샘플 수 (default: `512`)
+- `--max_dynamic_clusters`: threshold 기반 동적 클러스터링의 최대 클러스터 수 cap (default: `5`, `0`이면 cap 비활성)
 
 ### 2) PM/GM 업데이트 주기
 - `--pm_period`: 클러스터 PM 집계/배포 주기(round) (default: `1`)
 - `--global_period`: 서버 distillation 및 GM 배포 주기(round) (default: `4`)
 - `--fedcd_nc_weight`: feature negative-correlation 가중치 (default: `0.0`)
+- `--fedcd_fusion_weight`: 로컬 fusion CE loss 가중치 (default: `1.0`)
+- `--fedcd_pm_logits_weight`: 로컬 PM logits CE 보조 loss 가중치 (default: `0.5`)
+- `--fedcd_pm_only_weight`: 로컬 PM-only combiner CE 보조 loss 가중치 (default: `1.5`)
+  (`--fedcd_pm_combiner_weight`는 하위호환 alias)
 - `--fedcd_warmup_epochs`: GM 갱신 후 PM warm-up epoch (default: `0`)
 
 ### 3) 서버 distillation
@@ -122,6 +136,7 @@ python system/main.py \
 - `--fedcd_distill_temp`: temperature (default: `2.0`)
 - `--fedcd_distill_kl_weight`: KL loss 가중치 (default: `1.0`)
 - `--fedcd_distill_ce_weight`: pseudo-label CE 가중치 (default: `0.2`)
+- `--broadcast_global_combiner`: GM 배포 시 global combiner를 함께 보낼지 여부 (default: `False`)
 
 ### 4) 공통 테스트 평가
 - `--eval_common_global`: 공통 글로벌 테스트 평가 사용 여부 (default: `True`)

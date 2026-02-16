@@ -21,6 +21,9 @@ ALGO="FedCD"
 DATASET="Cifar10"
 TOTAL_DATA=50000
 AVOID_OOM=True
+FEDCD_FUSION_WEIGHT=1.0
+FEDCD_PM_LOGITS_WEIGHT=0.5
+FEDCD_PM_ONLY_WEIGHT=1.5
 
 # List of Dirichlet alpha values to test
 ALPHAS=(1.0) # (0.1 0.5 1.0)
@@ -78,6 +81,7 @@ do
                 --pm_period 1 \
                 --global_period 4 \
                 --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
+                --max_dynamic_clusters 5 \
                 -dev $GPU_DEVICE \
                 -nw 0 \
                 --pin_memory True \
@@ -88,6 +92,10 @@ do
                 --gpu_batch_max 0 \
                 --log_usage True \
                 --avoid_oom $AVOID_OOM \
+                --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
+                --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
+                --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
+                --broadcast_global_combiner False \
                 --local_epochs 1 \
                 --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))

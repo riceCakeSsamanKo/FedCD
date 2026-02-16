@@ -57,6 +57,16 @@ class clientFedCD(Client):
 
         self.loss_func = nn.CrossEntropyLoss()
         self.nc_weight = float(getattr(args, "fedcd_nc_weight", 0.0))
+        self.fusion_weight = float(getattr(args, "fedcd_fusion_weight", 1.0))
+        self.pm_logits_weight = float(getattr(args, "fedcd_pm_logits_weight", 0.5))
+        # New name: pm_only_weight (alias of previous pm_combiner_weight)
+        self.pm_only_weight = float(
+            getattr(
+                args,
+                "fedcd_pm_only_weight",
+                getattr(args, "fedcd_pm_combiner_weight", 1.5),
+            )
+        )
         self.warmup_epochs = int(getattr(args, "fedcd_warmup_epochs", 0))
         self.generalized_module = self._extract_module(self.gm)
         self.personalized_module = self._extract_module(self.pm)
@@ -270,7 +280,13 @@ class clientFedCD(Client):
                         fused_logits = self.combiner(torch.cat([logits_gm, logits_pm], dim=1))
 
                         # 3. Loss 계산 (Task Loss + Feature-wise Negative Correlation)
-                        loss = self.loss_func(fused_logits, y)
+                        loss = self.fusion_weight * self.loss_func(fused_logits, y)
+                        if self.pm_logits_weight > 0:
+                            loss = loss + self.pm_logits_weight * self.loss_func(logits_pm, y)
+                        if self.pm_only_weight > 0:
+                            gm_zeros = torch.zeros_like(logits_gm)
+                            pm_only_fused_logits = self.combiner(torch.cat([gm_zeros, logits_pm], dim=1))
+                            loss = loss + self.pm_only_weight * self.loss_func(pm_only_fused_logits, y)
                         if self.nc_weight > 0:
                             fused = (gm_feat + pm_feat) / 2.0
                             nc_term = (gm_feat - fused) * (pm_feat - fused)
