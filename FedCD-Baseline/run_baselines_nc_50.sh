@@ -3,8 +3,8 @@
 # Experiment settings
 MODEL="VGG16"
 GR=100
-LR=0.01
-LBS=10
+LR=0.005
+LBS=128
 LS=1
 DEVICE="cuda"
 DEVICE_ID="0"
@@ -32,6 +32,15 @@ for algo in "${algorithms[@]}"; do
         fi
         
         GOAL="${algo}_${scenario}"
+        EXTRA_ARGS=()
+        case "$algo" in
+            FedProx)
+                EXTRA_ARGS+=(-mu 1.0)
+                ;;
+            FedKD)
+                EXTRA_ARGS+=(-mlr 0.005 -Ts 0.95 -Te 0.98)
+                ;;
+        esac
         echo "=========================================================="
         echo "Running $algo for Scenario: $scenario (Clients: $nc)"
         echo "=========================================================="
@@ -49,7 +58,8 @@ for algo in "${algorithms[@]}"; do
             -jr "$JOIN_RATIO" \
             -go "$GOAL" \
             -dev "$DEVICE" \
-            -did "$DEVICE_ID"
+            -did "$DEVICE_ID" \
+            "${EXTRA_ARGS[@]}"
         
         # No need to move usage.csv anymore
     done

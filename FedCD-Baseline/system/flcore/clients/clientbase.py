@@ -56,7 +56,7 @@ class Client(object):
         if batch_size == None:
             batch_size = self.batch_size
         train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
-        return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
+        return DataLoader(train_data, batch_size, drop_last=False, shuffle=True)
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:
@@ -155,20 +155,36 @@ class Client(object):
 
         train_num = 0
         losses = 0
+        invalid_values_found = False
         with torch.no_grad():
             for x, y in trainloader:
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
+                    if torch.is_floating_point(x[0]) and not torch.isfinite(x[0]).all():
+                        x[0] = torch.nan_to_num(x[0], nan=0.0, posinf=1.0, neginf=0.0)
+                        invalid_values_found = True
                 else:
                     x = x.to(self.device)
+                    if torch.is_floating_point(x) and not torch.isfinite(x).all():
+                        x = torch.nan_to_num(x, nan=0.0, posinf=1.0, neginf=0.0)
+                        invalid_values_found = True
                 y = y.to(self.device)
                 output = self.model(x)
+                if not torch.isfinite(output).all():
+                    output = torch.nan_to_num(output, nan=0.0, posinf=1e6, neginf=-1e6)
+                    invalid_values_found = True
                 loss = self.loss(output, y)
+                if not torch.isfinite(loss):
+                    invalid_values_found = True
+                    continue
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
 
         self.model.cpu()
         # self.save_model(self.model, 'model')
+
+        if invalid_values_found:
+            print(f"Warning: non-finite values detected during train-metric eval on client {self.id}; invalid batches skipped.")
 
         return losses, train_num
 

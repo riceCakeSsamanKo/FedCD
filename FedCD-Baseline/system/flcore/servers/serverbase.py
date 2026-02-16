@@ -239,11 +239,25 @@ class Server(object):
         stats = self.test_metrics()
         stats_train = self.train_metrics()
 
-        test_acc = sum(stats[2])*1.0 / sum(stats[1])
-        test_auc = sum(stats[3])*1.0 / sum(stats[1])
-        train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
-        accs = [a / n for a, n in zip(stats[2], stats[1])]
-        aucs = [a / n for a, n in zip(stats[3], stats[1])]
+        total_test_samples = sum(stats[1])
+        total_train_samples = sum(stats_train[1])
+
+        if total_test_samples > 0:
+            test_acc = sum(stats[2]) * 1.0 / total_test_samples
+            test_auc = sum(stats[3]) * 1.0 / total_test_samples
+        else:
+            test_acc = 0.0
+            test_auc = 0.0
+
+        if total_train_samples > 0:
+            train_loss = sum(stats_train[2]) * 1.0 / total_train_samples
+        else:
+            train_loss = 0.0
+
+        accs = [a / n for a, n in zip(stats[2], stats[1]) if n > 0]
+        aucs = [a / n for a, n in zip(stats[3], stats[1]) if n > 0]
+        std_acc = float(np.std(accs)) if len(accs) > 0 else 0.0
+        std_auc = float(np.std(aucs)) if len(aucs) > 0 else 0.0
         
         if acc == None:
             self.rs_test_acc.append(test_acc)
@@ -259,8 +273,8 @@ class Server(object):
         print("Averaged Test Accuracy: {:.4f}".format(test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
         # self.print_(test_acc, train_acc, train_loss)
-        print("Std Test Accuracy: {:.4f}".format(np.std(accs)))
-        print("Std Test AUC: {:.4f}".format(np.std(aucs)))
+        print("Std Test Accuracy: {:.4f}".format(std_acc))
+        print("Std Test AUC: {:.4f}".format(std_auc))
 
         self.log_usage(test_acc, train_loss)
 

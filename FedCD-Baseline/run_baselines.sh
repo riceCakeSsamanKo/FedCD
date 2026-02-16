@@ -29,54 +29,22 @@ for algo in "${algorithms[@]}"; do
         
         GOAL="${algo}_${scenario}"
 
-        # Method-specific hyperparameters from each paper.
-        # Heterogeneity scenarios (dataset split and client count) are kept unchanged.
+        # Common hyperparameters aligned with FedCD defaults.
         GR=100
-        LR=0.01
-        LBS=10
+        LR=0.005
+        LBS=128
         LS=1
         JOIN_RATIO=1.0
         EXTRA_ARGS=()
 
         case "$algo" in
-            Local)
-                # Local training baseline: use the same CIFAR-10 optimizer setting as FedAvg.
-                # (FedAvg paper setting on CIFAR-10: E=5, B=50, lr decay 0.99)
-                LR=0.15
-                LBS=50
-                LS=5
-                EXTRA_ARGS+=(-ld True -ldg 0.99)
-                ;;
-            FedAvg)
-                # McMahan et al. (AISTATS'17, CIFAR-10): C=0.1, E=5, B=50.
-                # FedAvg learning-rate sweep includes {0.05, 0.15, 0.25}; use 0.15.
-                LR=0.15
-                LBS=50
-                LS=5
-                EXTRA_ARGS+=(-ld True -ldg 0.99)
-                ;;
             FedProx)
-                # FedProx (MLSys'20): SGD local solver, batch size 10, tune mu in {0.001,0.01,0.1,1}.
-                # For this benchmark, join ratio is fixed to 1.0 across all methods.
-                LR=0.15
-                LBS=10
-                LS=20
+                # Keep method-specific proximal regularization.
                 EXTRA_ARGS+=(-mu 1.0)
                 ;;
             FedKD)
-                # FedKD (Nature Communications'22) parameters used by this implementation:
-                # mentor lr, mentee lr, and dynamic SVD thresholds.
-                LR=0.005
-                LBS=10
-                LS=1
+                # FedKD-specific defaults in this codebase.
                 EXTRA_ARGS+=(-mlr 0.005 -Ts 0.95 -Te 0.98)
-                ;;
-            FedAS)
-                # FedAS paper setting with global rounds aligned to this benchmark.
-                GR=100
-                LR=0.005
-                LBS=16
-                LS=5
                 ;;
         esac
 

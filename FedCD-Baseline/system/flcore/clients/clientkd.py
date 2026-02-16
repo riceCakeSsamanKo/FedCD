@@ -124,24 +124,43 @@ class clientKD(Client):
 
         train_num = 0
         losses = 0
+        invalid_values_found = False
         with torch.no_grad():
             for x, y in trainloader:
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
+                    if torch.is_floating_point(x[0]) and not torch.isfinite(x[0]).all():
+                        x[0] = torch.nan_to_num(x[0], nan=0.0, posinf=1.0, neginf=0.0)
+                        invalid_values_found = True
                 else:
                     x = x.to(self.device)
+                    if torch.is_floating_point(x) and not torch.isfinite(x).all():
+                        x = torch.nan_to_num(x, nan=0.0, posinf=1.0, neginf=0.0)
+                        invalid_values_found = True
                 y = y.to(self.device)
                 rep = self.model.base(x)
                 rep_g = self.global_model.base(x)
                 output = self.model.head(rep)
                 output_g = self.global_model.head(rep_g)
+                if not torch.isfinite(output).all() or not torch.isfinite(output_g).all():
+                    invalid_values_found = True
+                    continue
 
                 CE_loss = self.loss(output, y)
                 CE_loss_g = self.loss(output_g, y)
+                if not torch.isfinite(CE_loss) or not torch.isfinite(CE_loss_g):
+                    invalid_values_found = True
+                    continue
                 L_d = self.KL(F.log_softmax(output, dim=1), F.softmax(output_g, dim=1)) / (CE_loss + CE_loss_g)
                 L_h = self.MSE(rep, self.W_h(rep_g)) / (CE_loss + CE_loss_g)
+                if not torch.isfinite(L_d) or not torch.isfinite(L_h):
+                    invalid_values_found = True
+                    continue
 
                 loss = CE_loss + L_d + L_h
+                if not torch.isfinite(loss):
+                    invalid_values_found = True
+                    continue
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
 
@@ -149,6 +168,9 @@ class clientKD(Client):
         self.global_model.cpu()
         self.W_h.cpu()
         # self.save_model(self.model, 'model')
+
+        if invalid_values_found:
+            print(f"Warning: non-finite values detected during train-metric eval on client {self.id}; invalid batches skipped.")
 
         return losses, train_num
     

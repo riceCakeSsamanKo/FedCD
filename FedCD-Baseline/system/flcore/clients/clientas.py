@@ -6,6 +6,7 @@ import time
 import copy
 from flcore.clients.clientbase import Client
 from torch.autograd import grad
+from torch.nn.utils import clip_grad_norm_
 
 
 
@@ -34,16 +35,36 @@ class clientAS(Client):
                 for i, (x, y) in enumerate(trainloader):
                     if type(x) == type([]):
                         x[0] = x[0].to(self.device)
+                        if torch.is_floating_point(x[0]) and not torch.isfinite(x[0]).all():
+                            x[0] = torch.nan_to_num(x[0], nan=0.0, posinf=1.0, neginf=0.0)
                     else:
                         x = x.to(self.device)
+                        if torch.is_floating_point(x) and not torch.isfinite(x).all():
+                            x = torch.nan_to_num(x, nan=0.0, posinf=1.0, neginf=0.0)
                     y = y.to(self.device)
                     if self.train_slow:
                         time.sleep(0.1 * np.abs(np.random.rand()))
                     output = self.model(x)
+                    if not torch.isfinite(output).all():
+                        continue
                     loss = self.loss(output, y)
+                    if not torch.isfinite(loss):
+                        continue
                     self.optimizer.zero_grad()
                     loss.backward()
+                    clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                    grad_is_finite = True
+                    for p in self.model.parameters():
+                        if p.grad is not None and not torch.isfinite(p.grad).all():
+                            grad_is_finite = False
+                            break
+                    if not grad_is_finite:
+                        self.optimizer.zero_grad()
+                        continue
                     self.optimizer.step()
+                    for p in self.model.parameters():
+                        if not torch.isfinite(p.data).all():
+                            p.data = torch.nan_to_num(p.data, nan=0.0, posinf=1e4, neginf=-1e4)
 
             if self.learning_rate_decay:
                 self.learning_rate_scheduler.step()
@@ -62,8 +83,12 @@ class clientAS(Client):
                 x = x.to(self.device)
                 y = y.to(self.device)
                 outputs = self.model(x)
+                if not torch.isfinite(outputs).all():
+                    continue
                 # Negative log likelihood as our loss
                 nll = -torch.nn.functional.log_softmax(outputs, dim=1)[range(len(y)), y].mean()
+                if not torch.isfinite(nll):
+                    continue
 
                 # Compute gradient of the negative log likelihood w.r.t. model parameters
                 grads = grad(nll, self.model.parameters())
@@ -85,8 +110,12 @@ class clientAS(Client):
                 x = x.to(self.device)
                 y = y.to(self.device)
                 outputs = self.model(x)
+                if not torch.isfinite(outputs).all():
+                    continue
                 # Negative log likelihood as our loss
                 nll = -torch.nn.functional.log_softmax(outputs, dim=1)[range(len(y)), y].mean()
+                if not torch.isfinite(nll):
+                    continue
 
                 # Compute gradient of the negative log likelihood w.r.t. model parameters
                 grads = grad(nll, self.model.parameters())
@@ -170,6 +199,8 @@ class clientAS(Client):
                 x_batch = x_batch.to(self.device)
                 y_batch = y_batch.to(self.device)
                 global_proto_batch = model.base(x_batch)
+                if not torch.isfinite(global_proto_batch).all():
+                    continue
                 loss = 0
                 total_samples = len(y_batch)
                 for label in y_batch.unique():
@@ -179,6 +210,7 @@ class clientAS(Client):
                         loss += class_loss * (class_samples / total_samples)
                 alignment_optimizer.zero_grad()
                 loss.backward()
+                clip_grad_norm_(model.base.parameters(), max_norm=10.0)
                 alignment_optimizer.step()
 
         # Substitute the parameters of the base, enabling personalization
@@ -190,4 +222,3 @@ class clientAS(Client):
 
 
         # end
-
