@@ -94,7 +94,7 @@ echo "============================================================"
                 --pm_period 1 \
                 --global_period 4 \
                 --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
-                --max_dynamic_clusters 5 \
+                --max_dynamic_clusters 0 \
                 -dev $GPU_DEVICE \
                 -nw 0 \
                 --pin_memory True \
