@@ -5,8 +5,6 @@ import argparse
 import os
 import time
 import json
-import subprocess
-import json
 import warnings
 import numpy as np
 import torchvision
@@ -637,22 +635,19 @@ if __name__ == "__main__":
     with open(os.path.join(exp_dir, "config.json"), "w") as f:
         json.dump(vars(args), f, indent=4)
 
-    # Auto-generate dataset if client files are missing
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    dataset_root = os.path.join(repo_root, "dataset", args.dataset)
+    # Validate dataset files in fl_data (read_client_data reads from ../fl_data only).
+    fl_data_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "fl_data"))
+    dataset_root = os.path.join(fl_data_root, args.dataset)
     train_file = os.path.join(dataset_root, "train", f"{args.num_clients - 1}.npz")
     test_file = os.path.join(dataset_root, "test", f"{args.num_clients - 1}.npz")
-    if args.dataset == "Cifar10" and (not os.path.exists(train_file) or not os.path.exists(test_file)):
-        print(f"\n[Info] Generating {args.dataset} with num_clients={args.num_clients} ...\n")
-        generate_cmd = [
-            "python",
-            os.path.join(repo_root, "dataset", "generate_Cifar10.py"),
-            "noniid",
-            "-",
-            "dir",
-            str(args.num_clients),
-        ]
-        subprocess.run(generate_cmd, check=True)
+    if not (os.path.exists(train_file) and os.path.exists(test_file)):
+        raise FileNotFoundError(
+            "Dataset files not found in fl_data.\n"
+            f"  dataset: {args.dataset}\n"
+            f"  expected train: {train_file}\n"
+            f"  expected test: {test_file}\n"
+            "Please generate/copy this scenario under ../fl_data before running."
+        )
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device_id
 
