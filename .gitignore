@@ -7,6 +7,8 @@
 /FedCD-Core/dataset/TinyImagenet
 /FedCD/dataset/Cifar10
 /FedCD/dataset/TinyImagenet
+/dataset/Cifar10
+/dataset/TinyImagenet
 /FedCD-Core/Cifar10
 /FedCD-Baseline/dataset/MNIST
 .DS_Store
