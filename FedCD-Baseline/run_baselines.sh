@@ -53,19 +53,15 @@ for algo in "${algorithms[@]}"; do
                 LR=0.15
                 LBS=50
                 LS=5
-                JOIN_RATIO=0.1
                 EXTRA_ARGS+=(-ld True -ldg 0.99)
                 ;;
             FedProx)
                 # FedProx (MLSys'20): SGD local solver, batch size 10, tune mu in {0.001,0.01,0.1,1}.
-                # For CV-style setting, use mu=1.0 and keep 10 participating clients per round.
+                # For this benchmark, join ratio is fixed to 1.0 across all methods.
                 LR=0.15
                 LBS=10
                 LS=20
                 EXTRA_ARGS+=(-mu 1.0)
-                if (( nc > 10 )); then
-                    JOIN_RATIO=$(awk "BEGIN { printf \"%.6f\", 10 / $nc }")
-                fi
                 ;;
             FedKD)
                 # FedKD (Nature Communications'22) parameters used by this implementation:

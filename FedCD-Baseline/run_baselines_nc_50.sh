@@ -8,6 +8,7 @@ LBS=10
 LS=1
 DEVICE="cuda"
 DEVICE_ID="0"
+JOIN_RATIO="1.0"
 
 # Algorithms to test
 algorithms=("FedAvg" "FedProx" "FedAS" "Local" "FedKD")
@@ -45,6 +46,7 @@ for algo in "${algorithms[@]}"; do
             -lbs "$LBS" \
             -ls "$LS" \
             -nc "$nc" \
+            -jr "$JOIN_RATIO" \
             -go "$GOAL" \
             -dev "$DEVICE" \
             -did "$DEVICE_ID"

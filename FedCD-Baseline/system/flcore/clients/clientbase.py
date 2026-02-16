@@ -87,15 +87,25 @@ class Client(object):
         test_num = 0
         y_prob = []
         y_true = []
+        invalid_values_found = False
         
         with torch.no_grad():
             for x, y in testloaderfull:
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
+                    if torch.is_floating_point(x[0]) and not torch.isfinite(x[0]).all():
+                        x[0] = torch.nan_to_num(x[0], nan=0.0, posinf=1.0, neginf=0.0)
+                        invalid_values_found = True
                 else:
                     x = x.to(self.device)
+                    if torch.is_floating_point(x) and not torch.isfinite(x).all():
+                        x = torch.nan_to_num(x, nan=0.0, posinf=1.0, neginf=0.0)
+                        invalid_values_found = True
                 y = y.to(self.device)
                 output = self.model(x)
+                if not torch.isfinite(output).all():
+                    output = torch.nan_to_num(output, nan=0.0, posinf=1e6, neginf=-1e6)
+                    invalid_values_found = True
 
                 test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
                 test_num += y.shape[0]
@@ -112,10 +122,28 @@ class Client(object):
         self.model.cpu()
         # self.save_model(self.model, 'model')
 
+        if len(y_prob) == 0 or len(y_true) == 0:
+            return test_acc, test_num, 0.0
+
         y_prob = np.concatenate(y_prob, axis=0)
         y_true = np.concatenate(y_true, axis=0)
 
-        auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
+        # AUC expects finite scores; convert non-finite values and normalize logits.
+        y_prob = np.nan_to_num(y_prob, nan=0.0, posinf=1e6, neginf=-1e6)
+        if y_prob.ndim == 2 and y_prob.shape[1] > 1:
+            y_prob = y_prob - np.max(y_prob, axis=1, keepdims=True)
+            y_prob = np.exp(y_prob)
+            denom = np.sum(y_prob, axis=1, keepdims=True)
+            denom[denom == 0] = 1.0
+            y_prob = y_prob / denom
+
+        try:
+            auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
+        except ValueError:
+            auc = 0.0
+
+        if invalid_values_found:
+            print(f"Warning: non-finite values detected during evaluation on client {self.id}; sanitized for AUC.")
         
         return test_acc, test_num, auc
 
