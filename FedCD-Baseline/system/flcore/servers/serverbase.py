@@ -67,6 +67,11 @@ class Server(object):
         self.model_size_MB = sum(p.numel() for p in self.global_model.parameters()) * 4 / (1024 * 1024)
         self.uplink_MB = 0
         self.downlink_MB = 0
+        self.eval_common_global = bool(getattr(args, "eval_common_global", True))
+        self.common_test_samples = int(getattr(args, "common_test_samples", 2000))
+        self.common_eval_batch_size = int(getattr(args, "common_eval_batch_size", 256))
+        self.common_test_loader = self._build_common_test_loader() if self.eval_common_global else None
+        self.rs_common_test_acc = []
 
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
@@ -192,6 +197,8 @@ class Server(object):
                 hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
                 hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
+                if len(self.rs_common_test_acc) > 0:
+                    hf.create_dataset('rs_common_test_acc', data=self.rs_common_test_acc)
 
     def save_item(self, item, item_name):
         if not os.path.exists(self.save_folder_name):
@@ -218,6 +225,65 @@ class Server(object):
         ids = [c.id for c in self.clients]
 
         return ids, num_samples, tot_correct, tot_auc
+
+    def _build_common_test_loader(self):
+        shared_test_data = []
+        for client_id in range(self.num_clients):
+            shared_test_data.extend(
+                read_client_data(self.dataset, client_id, is_train=False, few_shot=self.few_shot)
+            )
+
+        if len(shared_test_data) == 0:
+            print("[Baseline] Common global test set is empty. Skipping shared evaluation.")
+            return None
+
+        if 0 < self.common_test_samples < len(shared_test_data):
+            rng = random.Random(0)
+            sampled_idx = rng.sample(range(len(shared_test_data)), self.common_test_samples)
+            shared_test_data = [shared_test_data[idx] for idx in sampled_idx]
+
+        print(f"[Baseline] Common Global Test Set Size: {len(shared_test_data)}")
+        return torch.utils.data.DataLoader(
+            shared_test_data,
+            batch_size=self.common_eval_batch_size,
+            shuffle=False,
+            drop_last=False,
+        )
+
+    def evaluate_common_test_acc(self):
+        if not self.eval_common_global or self.common_test_loader is None:
+            return None
+
+        acc_sum = 0.0
+        valid_clients = 0
+
+        for client in self.clients:
+            client.model.to(self.device)
+            client.model.eval()
+
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for x, y in self.common_test_loader:
+                    if type(x) == type([]):
+                        x = x[0]
+                    x = x.to(self.device)
+                    y = y.to(self.device)
+                    output = client.model(x)
+                    correct += (torch.argmax(output, dim=1) == y).sum().item()
+                    total += y.size(0)
+
+            client.model.to("cpu")
+            if total > 0:
+                acc_sum += correct / total
+                valid_clients += 1
+
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
+
+        if valid_clients == 0:
+            return None
+        return acc_sum / valid_clients
 
     def train_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -253,6 +319,7 @@ class Server(object):
             train_loss = sum(stats_train[2]) * 1.0 / total_train_samples
         else:
             train_loss = 0.0
+        common_test_acc = self.evaluate_common_test_acc()
 
         accs = [a / n for a, n in zip(stats[2], stats[1]) if n > 0]
         aucs = [a / n for a, n in zip(stats[3], stats[1]) if n > 0]
@@ -271,24 +338,30 @@ class Server(object):
 
         print("Averaged Train Loss: {:.4f}".format(train_loss))
         print("Averaged Test Accuracy: {:.4f}".format(test_acc))
+        if common_test_acc is not None:
+            print("Averaged Common Global Test Accuracy: {:.4f}".format(common_test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
         # self.print_(test_acc, train_acc, train_loss)
         print("Std Test Accuracy: {:.4f}".format(std_acc))
         print("Std Test AUC: {:.4f}".format(std_auc))
 
-        self.log_usage(test_acc, train_loss)
+        if acc == None and common_test_acc is not None:
+            self.rs_common_test_acc.append(common_test_acc)
 
-    def log_usage(self, test_acc, train_loss):
+        self.log_usage(test_acc, train_loss, common_test_acc)
+
+    def log_usage(self, test_acc, train_loss, common_test_acc=None):
         file_path = getattr(self.args, "log_path", "usage.csv")
         if not os.path.exists(file_path):
             with open(file_path, "w") as f:
-                f.write("round,test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n")
+                f.write("round,test_acc,common_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n")
         
         round_num = len(self.rs_test_acc)
         total_mb = self.uplink_MB + self.downlink_MB
+        common_str = f"{common_test_acc:.4f}" if common_test_acc is not None else ""
         with open(file_path, "a") as f:
             f.write(
-                f"{round_num},{test_acc:.4f},{train_loss:.4f},"
+                f"{round_num},{test_acc:.4f},{common_str},{train_loss:.4f},"
                 f"{self.uplink_MB:.2f},{self.downlink_MB:.2f},{total_mb:.2f}\n"
             )
 

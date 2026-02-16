@@ -69,6 +69,17 @@ warnings.simplefilter("ignore")
 torch.manual_seed(0)
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    v = str(v).strip().lower()
+    if v in ("true", "1", "yes", "y", "t"):
+        return True
+    if v in ("false", "0", "no", "n", "f"):
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {v}")
+
+
 def split_model(model):
     if hasattr(model, 'fc'):
         head = copy.deepcopy(model.fc)
@@ -398,6 +409,12 @@ if __name__ == "__main__":
                         help="Running times")
     parser.add_argument('-eg', "--eval_gap", type=int, default=1,
                         help="Rounds gap for evaluation")
+    parser.add_argument('--eval_common_global', type=str2bool, default=True,
+                        help="Evaluate each client model on one shared common global test subset.")
+    parser.add_argument('--common_test_samples', type=int, default=2000,
+                        help="Number of samples for common global test evaluation (0 = full union).")
+    parser.add_argument('--common_eval_batch_size', type=int, default=256,
+                        help="Batch size for common global test evaluation.")
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
     parser.add_argument('-ab', "--auto_break", type=bool, default=False)
     parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)
