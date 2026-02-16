@@ -1,82 +1,117 @@
-@ -1,559 +0,0 @@
 # FedCD (Federated Clustered Distillation)
-FedCD는 클라이언트 간의 데이터 분포 유사성을 기반으로 **동적 클러스터링**을 수행하고, **개인화(Personalization)**와 **일반화(Generalization)**를 동시에 달성하는 연합학습 알고리즘입니다.
+FedCD는 클라이언트 간 데이터 분포 유사성을 기반으로 동적 클러스터링을 수행해, 개인화(Personalization)와 일반화(Generalization)를 함께 달성하는 연합학습 알고리즘이다.
 
-### 🌟 핵심 기능 (Core Features)
-1. **Tiered Architecture**: 
-   - **Global Model (GM)**: 지식 저장소 역할을 하며 영구적으로 Freeze되어 Backbone 특징 추출기로 사용됩니다.
-   - **Personalized Model (PM)**: 각 클라이언트/클러스터의 고유한 데이터 분포에 맞춰 학습되는 Trainable 모듈입니다.
-2. **ACT (Adaptive Clustering Threshold)**: 
-   - **Regression-based Zig-Zag Convergence**: 전역 성능의 추세(Trend)를 분석하여 임계값을 최적화합니다.
-   - **Trend Analysis**: 최근 $N$개 라운드의 정확도를 바탕으로 **선형 회귀(Linear Regression)**를 수행하여 기울기(Slope)를 계산합니다.
-   - **Zig-Zag Control**: 기울기가 정체(Slope < 0.0002)되거나 하락하면 즉시 방향을 반전시키고 보폭(Step)을 감쇠시켜 최적 임계값으로 수렴합니다.
-   - **Sync with Period**: 클러스터링 주기(`cluster_period`)와 동기화되어 안정적인 구조 변화를 유도합니다.
-3. **Clustering Strategy (Feature Distribution Analysis)**:
-   - **Feature Statistics**: 각 클라이언트는 로컬 데이터의 Feature Embedding($z$)에 대한 **평균(Mean)**과 **분산(Variance)**을 추출하여 서버로 전송합니다.
-   - **Distance Metric**: 서버는 통계 벡터를 **L2 Normalization**하여 크기 영향을 제거한 뒤, 사실상 **코사인 유사도(Cosine Similarity)**를 기반으로 클라이언트 간 거리를 측정합니다.
-   - **Clustering Algorithm**: **Agglomerative Clustering (Hierarchical)** 및 **Ward Linkage**를 사용하여, 특징 분포의 형상(Shape)이 유사한 클라이언트들을 하나의 클러스터로 묶습니다.
-4. **Server-side Ensemble Distillation**: 
-   - 서버는 클러스터별 PM들의 앙상블로부터 지식을 추출하여 GM에 증류(Distillation)합니다.
-   - **Proxy Data**: TinyImageNet의 $N$장 이미지(라벨 미사용)를 활용하여 데이터 프라이버시를 유지하면서 지식을 전이합니다.
-5. **Zero-Uplink for GM**: 클라이언트는 오직 PM의 가중치만 서버로 전송하여 통신 비용을 대폭 절감합니다.
+## 핵심 아이디어
+1. **GM/PM 이원 구조**
+   - **Global Model (GM)**: 지식 저장소 역할을 하며 freeze된 backbone 특징 추출기로 사용된다.
+   - **Personalized Model (PM)**: 클라이언트/클러스터별 데이터 분포에 맞춰 학습되는 개인화 모델이다.
+2. **ACT (Adaptive Clustering Threshold)**
+   - 최근 라운드 성능 추세를 선형 회귀로 추정해 임계값을 자동 조정한다.
+   - 성능 정체 또는 하락 시 방향을 반전하고 step을 감쇠해 임계값을 안정적으로 수렴시킨다.
+   - `cluster_period`와 동기화해 구조 변화가 과도해지는 문제를 줄인다.
+3. **Feature Distribution 기반 클러스터링**
+   - 클라이언트는 임베딩 평균/분산 통계를 서버로 전송한다.
+   - 서버는 통계 벡터 정규화 후 코사인 유사도 기반 거리를 계산한다.
+   - Agglomerative Clustering (Ward linkage)로 분포 형상이 유사한 클라이언트를 묶는다.
+4. **서버 측 앙상블 증류**
+   - 클러스터별 PM 앙상블을 GM으로 distillation한다.
+   - 라벨 없는 TinyImageNet proxy 샘플을 사용해 프라이버시를 유지한다.
+5. **Zero-Uplink for GM**
+   - 클라이언트는 PM 가중치만 업링크하므로 통신 비용을 줄일 수 있다.
 
-## 데이터셋 생성 (Cifar10 예시)
-- `cd dataset`
-- `python generate_Cifar10.py noniid balance pat 50`
-- `python generate_Cifar10.py noniid - dir 50`
-- **Proxy용 TinyImageNet 생성**: `python generate_TinyImagenet.py noniid - -`
+## 빠른 시작 (FedCD)
 
-## FedCD 학습 실행 (ACT 적용 예시)
-```powershell
-python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VGG8 -gr 100 -nc 50 \
-    --adaptive_threshold True --cluster_threshold 0.1 --threshold_step 0.05 --threshold_decay 0.9 --act_window_size 5 \
-    --proxy_dataset TinyImagenet --proxy_samples 2000 \
-    --eval_common_global True --common_test_samples 2000 --common_eval_batch_size 256 \
-    --cluster_period 2 --pm_period 1 --global_period 4 \
-    -dev cuda -nw 0 --amp True --avoid_oom True
+### 1) 환경 준비
+```bash
+cd FedCD
+conda env create -f env_cuda_latest.yaml
+conda activate pfllib
 ```
 
-## 주요 Argument 설명 (FedCD)
+### 2) 데이터 준비
+`system/main.py`는 기본적으로 `<repo_root>/fl_data/<dataset_name>`을 읽는다.
+
+- 이 저장소에는 바로 실행 가능한 시나리오가 포함돼 있다.
+- 예: `Cifar10_pat_nc20`, `Cifar10_pat_nc50`, `Cifar10_dir0.1_nc20`, `Cifar10_dir0.5_nc50`
+
+### 3) 학습 실행 (ACT 예시)
+```bash
+cd FedCD
+python system/main.py \
+    -data Cifar10_pat_nc50 \
+    -algo FedCD \
+    --gm_model VGG16 \
+    --pm_model VGG8 \
+    -gr 100 \
+    -nc 50 \
+    --adaptive_threshold True \
+    --cluster_threshold 0.1 \
+    --threshold_step 0.05 \
+    --threshold_decay 0.9 \
+    --act_window_size 5 \
+    --proxy_dataset TinyImagenet \
+    --proxy_samples 2000 \
+    --eval_common_global True \
+    --common_test_samples 2000 \
+    --common_eval_batch_size 256 \
+    --cluster_period 2 \
+    --pm_period 1 \
+    --global_period 4 \
+    -dev cuda \
+    -nw 0 \
+    --amp True \
+    --avoid_oom True
+```
+
+### 4) 배치 실행 스크립트
+- `cd FedCD && bash run.sh`: pathological + Dirichlet 실험을 순차 실행
+- `cd FedCD && bash run_dir.sh`: Dirichlet 실험만 실행
+- `cd FedCD && bash run_dir_fl_data.sh`: `fl_data` 기준 Dirichlet 실험 실행
+
+## 주요 인자 (FedCD)
 
 ### 1) 클러스터링 / ACT
-- `--num_clusters`: `cluster_threshold <= 0`일 때 사용할 기본 클러스터 개수. (default: `5`)
-- `--cluster_threshold`: 동적 클러스터링 초기 임계값. `> 0`이면 Agglomerative Clustering threshold로 사용. (default: `0.0`)
-- `--adaptive_threshold`: ACT(Adaptive Clustering Threshold) 활성화 여부. (default: `False`)
-- `--threshold_step`: ACT 임계값 증감 보폭. (default: `0.05`)
-- `--threshold_decay`: 방향 반전 시 보폭 감쇠 비율. (default: `0.9`)
-- `--act_window_size`: ACT 추세 분석 슬라이딩 윈도우 크기. (default: `5`)
-- `--act_min_slope`: ACT에서 정체/감속 판단 시 사용되는 최소 기울기. (default: `0.0002`)
-- `--threshold_max`: ACT 임계값 상한. (default: `0.95`)
-- `--cluster_period`: 클러스터링 갱신 주기(round). (default: `2`)
-- `--cluster_sample_size`: 클러스터링용 특징 통계 추출 시 클라이언트당 샘플 수. (default: `512`)
-- `--threshold_inc_rate`, `--threshold_dec_rate`, `--ema_alpha`, `--tolerance_ratio`: 파서에는 정의되어 있으나 현재 `serverfedcd.py` ACT 구현에서는 직접 사용하지 않음(확장용 예약 인자).
+- `--num_clusters`: `cluster_threshold <= 0`일 때 사용하는 기본 클러스터 수 (default: `5`)
+- `--cluster_threshold`: 동적 클러스터링 초기 임계값, `> 0`이면 threshold 기반 Agglomerative Clustering 사용 (default: `0.0`)
+- `--adaptive_threshold`: ACT 활성화 여부 (default: `False`)
+- `--threshold_step`: ACT 임계값 증감 보폭 (default: `0.05`)
+- `--threshold_decay`: 방향 반전 시 보폭 감쇠 비율 (default: `0.9`)
+- `--act_window_size`: ACT 추세 분석 슬라이딩 윈도우 크기 (default: `5`)
+- `--act_min_slope`: ACT 정체/감속 판단 최소 기울기 (default: `0.0002`)
+- `--threshold_max`: ACT 임계값 상한 (default: `0.95`)
+- `--cluster_period`: 클러스터링 갱신 주기(round) (default: `2`)
+- `--cluster_sample_size`: 클러스터링 통계 추출 시 클라이언트당 샘플 수 (default: `512`)
+- `--threshold_inc_rate`, `--threshold_dec_rate`, `--ema_alpha`, `--tolerance_ratio`: 파서에는 정의되어 있으나 현재 `serverfedcd.py`의 ACT 구현에서는 직접 사용하지 않는 예약 인자
 
 ### 2) PM/GM 업데이트 주기 및 결합
-- `--pm_period`: 클러스터 대표 PM 집계/배포 주기(round). (default: `1`)
-- `--global_period`: 서버 측 PM 앙상블 증류 후 GM 갱신/배포 주기(round). (default: `4`)
-- `--fedcd_nc_weight`: GM-PM feature negative-correlation 정규화 가중치. (default: `0.0`)
-- `--fedcd_warmup_epochs`: GM 갱신 후 PM classifier warm-up epoch 수. (default: `0`)
+- `--pm_period`: 클러스터 대표 PM 집계/배포 주기(round) (default: `1`)
+- `--global_period`: PM 앙상블 증류 후 GM 갱신/배포 주기(round) (default: `4`)
+- `--fedcd_nc_weight`: GM-PM feature negative-correlation 정규화 가중치 (default: `0.0`)
+- `--fedcd_warmup_epochs`: GM 갱신 후 PM classifier warm-up epoch 수 (default: `0`)
 
-### 3) 모델 구조 관련
-- `--gm_model`: GM 모델 구조 이름. (default: `VGG16`)
-- `--pm_model`: PM 모델 구조 이름. (default: `VGG8`)
-- `--fext_model`: 클러스터링/추론에 사용하는 feature extractor 구조 이름. (default: `VGG16`)
-- `--fext_dim`: `SmallFExt` 사용 시 출력 차원. (default: `512`)
+### 3) 모델 구조
+- `--gm_model`: GM 모델 이름 (default: `VGG16`)
+- `--pm_model`: PM 모델 이름 (default: `VGG8`)
+- `--fext_model`: 클러스터링/추론용 feature extractor 모델 이름 (default: `VGG16`)
+- `--fext_dim`: `SmallFExt` 사용 시 출력 차원 (default: `512`)
 
-### 4) 서버 증류(Proxy KD)
-- `--proxy_dataset`: 서버 측 증류용 프록시 데이터셋 이름. (default: `TinyImagenet`)
-- `--proxy_samples`: 프록시 데이터셋에서 샘플링할 데이터 개수. (default: `1000`)
+### 4) 서버 증류 (Proxy KD)
+- `--proxy_dataset`: 서버 증류용 proxy dataset 이름 (default: `TinyImagenet`)
+- `--proxy_samples`: proxy dataset 샘플 수 (default: `1000`)
 
-### 5) 공통 테스트 평가 (신규)
-- `--eval_common_global`: 개인화 평균 정확도와 별도로, 모든 클라이언트를 동일한 공통 테스트셋에서 평가할지 여부. (default: `True`)
-- `--common_test_samples`: 공통 테스트셋 샘플 수. `0`이면 전체 union 테스트셋 사용. (default: `2000`)
-- `--common_eval_batch_size`: 공통 테스트 평가 batch size. (default: `256`)
+### 5) 공통 테스트 평가
+- `--eval_common_global`: 개인화 평균 정확도 외에 공통 테스트셋 정확도도 함께 평가할지 여부 (default: `True`)
+- `--common_test_samples`: 공통 테스트셋 샘플 수, `0`이면 union 테스트셋 전체 사용 (default: `2000`)
+- `--common_eval_batch_size`: 공통 테스트 평가 batch size (default: `256`)
 
-## 실험 결과 저장 구조 (Updated)
-로그는 `logs/FedCD/GM_{GM}_PM_{PM}_Fext_{Fext}/...` 경로에 저장되며, **ACT** 동작 로그(`[ACT] ...`)를 통해 임계값 변화를 실시간으로 확인할 수 있습니다.
-- `acc.csv`: 라운드별 전체 성능 로그 (`round,test_acc,common_test_acc,train_loss,uplink_mb,downlink_mb,total_mb`)
+## 실험 결과 저장 구조
+로그 경로는 아래 형태로 저장되며, `[ACT] ...` 로그를 통해 임계값 업데이트 과정을 확인할 수 있다.
+
+`logs/FedCD/GM_{GM}_PM_{PM}_Fext_{Fext}/{partition}/{alpha(optional)}/NC_{NC}/date_{YYYYMMDD}/time_{HHMMSS}`
+
+- `acc.csv`: 라운드별 전체 지표 (`round,test_acc,common_test_acc,train_loss,uplink_mb,downlink_mb,total_mb`)
 - `cluster_acc.csv`: 클러스터별 성능 추이
-- `usage.csv`: 하드웨어 리소스 및 통신량 (옵션)
+- `usage.csv`: 하드웨어 리소스/통신량 로그 (옵션)
 
 ---
 
@@ -85,7 +120,7 @@ python .\system\main.py -data Cifar10 -algo FedCD --gm_model VGG16 --pm_model VG
 
 🎯*We built a beginner-friendly federated learning (FL) library and benchmark: **master FL in 2 hours—run it on your PC!** [Contribute](#easy-to-extend) your algorithms, datasets, and metrics to grow the FL community.*
 
-👏 The **[official website](http://www.pfllib.com)** and **[leaderboard](http://www.pfllib.com/benchmark.html)** is live! Our methods—[FedCP](https://github.com/TsingZ0/FedCP), [GPFL](https://github.com/TsingZ0/GPFL), and [FedDBE](https://github.com/TsingZ0/DBE)—lead the way. Notably, **FedDBE** stands out with robust performance across varying data heterogeneity levels.
+👏 The **[official website](http://www.pfllib.com)** and **[leaderboard](http://www.pfllib.com/benchmark.html)** are live! Our methods—[FedCP](https://github.com/TsingZ0/FedCP), [GPFL](https://github.com/TsingZ0/GPFL), and [FedDBE](https://github.com/TsingZ0/DBE)—lead the way. Notably, **FedDBE** stands out with robust performance across varying data heterogeneity levels.
 
 [![JMLR](https://img.shields.io/badge/JMLR-Published-blue)](https://www.jmlr.org/papers/v26/23-1634.html)
 [![arXiv](https://img.shields.io/badge/arXiv-2312.04992-b31b1b.svg)](https://arxiv.org/abs/2312.04992)
@@ -121,7 +156,7 @@ Figure 1: An Example for FedAvg. You can create a scenario using `generate_DATA.
 
 - Real-machine deployment: [HtFL-OnDevice](https://github.com/TsingZ0//HtFL-OnDevice).
 
-- Some **experimental results** are avalible in its [paper](https://arxiv.org/abs/2312.04992) and [here](#experimental-results). 
+- Some **experimental results** are available in its [paper](https://arxiv.org/abs/2312.04992) and [here](#experimental-results). 
 
 - Refer to [examples](#how-to-start-simulating-examples-for-fedavg) to learn how to use it.
 
@@ -129,7 +164,7 @@ Figure 1: An Example for FedAvg. You can create a scenario using `generate_DATA.
 
 - The benchmark platform can simulate scenarios using the 4-layer CNN on Cifar100 for **500 clients** on **one NVIDIA GeForce RTX 3090 GPU card** with only **5.08GB GPU memory** cost.
 
-- We provide [privacy evaluation](#privacy-evaluation) and [systematical research support](#systematical-research-support). 
+- We provide [privacy evaluation](#privacy-evaluation) and [systematic research support](#systematic-research-support). 
 
 - You can now train on some clients and evaluate performance on new clients by setting `args.num_new_clients` in `./system/main.py`. Please note that not all tFL/pFL algorithms support this feature.
 
@@ -141,7 +176,7 @@ Figure 1: An Example for FedAvg. You can create a scenario using `generate_DATA.
 
 - When submitting pull requests, please provide sufficient *instructions* and *examples* in the comment box. 
 
-The origin of the **data heterogeneity** phenomenon is the characteristics of users, who generate non-IID (not Independent and Identically Distributed) and unbalanced data. With data heterogeneity existing in the FL scenario, a myriad of approaches have been proposed to crack this hard nut. In contrast, the personalized FL (pFL) may take advantage of the statistically heterogeneous data to learn the personalized model for each user. 
+The origin of **data heterogeneity** lies in user characteristics, which produce non-IID (not independent and identically distributed) and unbalanced data. With heterogeneity present in FL scenarios, many approaches have been proposed to address this challenge. In contrast, personalized FL (pFL) can leverage statistically heterogeneous data to learn a personalized model for each user.
 
 
 ## Algorithms with code (updating)
@@ -227,7 +262,7 @@ The origin of the **data heterogeneity** phenomenon is the characteristics of us
 
 ## Datasets and scenarios (updating)
 
-We support 3 types of scenarios with various datasets and move the common dataset splitting code into `./dataset/utils` for easy extension. If you need another data set, just write another code to download it and then use the [utils](https://github.com/TsingZ0/PFLlib/tree/master/dataset/utils).
+We support 3 types of scenarios with various datasets and move the common dataset splitting code into `./dataset/utils` for easy extension. If you need another dataset, just write additional code to download it and then use the [utils](https://github.com/TsingZ0/PFLlib/tree/master/dataset/utils).
 
 ### ***label skew*** scenario
 
@@ -501,7 +536,7 @@ You can use the following privacy evaluation methods to assess the privacy-prese
 - **PSNR (Peak Signal-to-Noise Ratio)**: an objective metric for image evaluation, defined as the logarithm of the ratio of the squared maximum value of RGB image fluctuations to the Mean Squared Error (MSE) between two images. A lower PSNR score indicates better privacy-preserving capabilities.
 
 
-## Systematical research support
+## Systematic research support
 
 To simulate Federated Learning (FL) under practical conditions, such as **client dropout**, **slow trainers**, **slow senders**, and **network TTL (Time-To-Live)**, you can adjust the following parameters:
 
