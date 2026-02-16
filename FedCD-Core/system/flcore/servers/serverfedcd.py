@@ -51,16 +51,13 @@ class FedCD(Server):
         self.common_test_loader = self._build_common_test_loader() if self.eval_common_global else None
         self.f_ext = self._build_f_ext(args)
         self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
-        self.gm_head, self.gm_final = self._split_classifier(self.global_model)
-        self.gm_adapter = self._build_adapter(self.gm_head, self.gm_final)
+        self.generalized_module = self._extract_module(self.global_model)
+        self.generalized_adapter = self._build_adapter(self.generalized_module)
         pm_model = getattr(args, "pm_model", None)
-        if pm_model is not None:
-            self.pm_head, self.pm_final = self._split_classifier(pm_model)
-            self.pm_adapter = self._build_adapter(self.pm_head, self.pm_final)
-        else:
-            self.pm_head = None
-            self.pm_final = None
-            self.pm_adapter = None
+        if pm_model is None:
+            pm_model = copy.deepcopy(self.global_model)
+        self.personalized_module = self._extract_module(pm_model)
+        self.personalized_adapter = self._build_adapter(self.personalized_module)
 
         # [ACT] Adaptive Clustering Threshold Initialization
         self.adaptive_threshold = bool(getattr(args, "adaptive_threshold", False))
@@ -97,16 +94,12 @@ class FedCD(Server):
         f_ext.eval()
         return f_ext
 
-    def _split_classifier(self, model):
+    def _extract_module(self, model):
         if hasattr(model, "classifier") and isinstance(model.classifier, nn.Module):
-            if isinstance(model.classifier, nn.Sequential) and len(model.classifier) > 1:
-                head = nn.Sequential(*list(model.classifier.children())[:-1])
-                final = list(model.classifier.children())[-1]
-                return head, final
-            return nn.Identity(), model.classifier
+            return model.classifier
         if hasattr(model, "fc") and isinstance(model.fc, nn.Module):
-            return nn.Identity(), model.fc
-        return nn.Identity(), nn.Identity()
+            return model.fc
+        return nn.Identity()
 
     @staticmethod
     def _first_linear_in_features(module):
@@ -115,24 +108,41 @@ class FedCD(Server):
                 return layer.in_features
         return None
 
-    def _build_adapter(self, head, final):
+    def _build_adapter(self, module):
         f_ext_dim = self.f_ext_dim
-        pm_in_dim = self._first_linear_in_features(head)
-        if pm_in_dim is None:
-            pm_in_dim = self._first_linear_in_features(final)
+        pm_in_dim = self._first_linear_in_features(module)
         if f_ext_dim is None or pm_in_dim is None:
             return None
         if f_ext_dim == pm_in_dim:
             return None
         return nn.Linear(f_ext_dim, pm_in_dim)
 
+    @staticmethod
+    def _merge_legacy_module_state(module, head_state, final_state):
+        if not head_state and not final_state:
+            return {}
+        merged_state = dict(head_state)
+        if final_state:
+            if isinstance(module, nn.Sequential) and len(module) > 0:
+                last_idx = str(len(module) - 1)
+                for key, value in final_state.items():
+                    merged_state[f"{last_idx}.{key}"] = value
+            else:
+                merged_state.update(final_state)
+        return merged_state
+
     def _build_gm_broadcast_parts(self):
-        # Broadcast only GM classifier-related modules used on clients.
+        # Broadcast only GM components used on clients.
         parts = {}
-        parts.update({f"head.{k}": v.detach().cpu() for k, v in self.gm_head.state_dict().items()})
-        parts.update({f"final.{k}": v.detach().cpu() for k, v in self.gm_final.state_dict().items()})
-        if self.gm_adapter is not None:
-            parts.update({f"adapter.{k}": v.detach().cpu() for k, v in self.gm_adapter.state_dict().items()})
+        parts.update({
+            f"generalized_module.{k}": v.detach().cpu()
+            for k, v in self.generalized_module.state_dict().items()
+        })
+        if self.generalized_adapter is not None:
+            parts.update({
+                f"generalized_adapter.{k}": v.detach().cpu()
+                for k, v in self.generalized_adapter.state_dict().items()
+            })
         return parts
 
     def _read_gpu_util(self):
@@ -234,10 +244,10 @@ class FedCD(Server):
         gm_parts = self._build_gm_broadcast_parts()
         payload = {"gm_parts": gm_parts}
         
-        # [Info] Calculate and print Broadcast GM Size (head/final/adapter only)
+        # [Info] Calculate and print Broadcast GM Size (Generalized Module only)
         total_bytes = sum(v.numel() * v.element_size() for v in gm_parts.values())
         
-        print(f"[FedCD] Broadcast GM(Classifier) Size: {total_bytes / (1024**2):.2f} MB per client")
+        print(f"[FedCD] Broadcast Generalized Module Size: {total_bytes / (1024**2):.2f} MB per client")
         
         broadcast_bytes = total_bytes * len(self.clients)
 
@@ -313,10 +323,10 @@ class FedCD(Server):
                 downlink_bytes = self.send_models()
                 round_downlink += downlink_bytes
                 print(f"[FedCD] Round {i}: Server-side distillation and GM update done")
-                # Warm-up classifier after GM update
+                # Warm-up Personalized Module after GM update
                 if getattr(self.args, "fedcd_warmup_epochs", 0) > 0:
-                    for client in tqdm(self.selected_clients, desc=f"Round {i} Classifier Warm-up", leave=False):
-                        client.warmup_classifier()
+                    for client in tqdm(self.selected_clients, desc=f"Round {i} PM Warm-up", leave=False):
+                        client.warmup_personalized_module()
                 if self.log_usage and i % self.log_usage_every == 0:
                     self._log_usage(i, "post_gm", wall_start, cpu_start)
             
@@ -617,22 +627,18 @@ class FedCD(Server):
             # GM (Student) 학습 준비 (f_ext는 frozen)
             self.global_model.to(device)
             self.f_ext.to(device)
-            self.gm_head.to(device)
-            self.gm_final.to(device)
+            self.generalized_module.to(device)
             self.f_ext.eval()
-            self.gm_head.train()
-            self.gm_final.train()
-            if self.gm_adapter is not None:
-                self.gm_adapter.to(device)
-            if self.pm_head is not None:
-                self.pm_head.to(device)
-            if self.pm_final is not None:
-                self.pm_final.to(device)
-            if self.pm_adapter is not None:
-                self.pm_adapter.to(device)
-            gm_params = list(self.gm_head.parameters()) + list(self.gm_final.parameters())
-            if self.gm_adapter is not None:
-                gm_params += list(self.gm_adapter.parameters())
+            self.generalized_module.train()
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to(device)
+            self.personalized_module.to(device)
+            self.personalized_module.eval()
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to(device)
+            gm_params = list(self.generalized_module.parameters())
+            if self.generalized_adapter is not None:
+                gm_params += list(self.generalized_adapter.parameters())
             optimizer = torch.optim.SGD(gm_params, lr=0.01)
             kl_loss = nn.KLDivLoss(reduction='batchmean')
             use_amp = device == "cuda" and bool(getattr(self.args, "amp", False))
@@ -646,26 +652,54 @@ class FedCD(Server):
                     z = self.f_ext(x)
                     if z.dim() > 2:
                         z = torch.flatten(z, 1)
-                    z_gm = self.gm_adapter(z) if self.gm_adapter is not None else z
+                    z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
 
                 # Teacher Ensemble Logits (sequential to save memory)
                 with torch.no_grad():
                     ensemble_logits = None
                     for state in received_pm_states:
-                        head_state = {k.replace("head.", ""): v.to(device) for k, v in state.items() if k.startswith("head.")}
-                        final_state = {k.replace("final.", ""): v.to(device) for k, v in state.items() if k.startswith("final.")}
-                        adapter_state = {k.replace("adapter.", ""): v.to(device) for k, v in state.items() if k.startswith("adapter.")}
+                        personalized_module_state = {
+                            k.replace("personalized_module.", ""): v.to(device)
+                            for k, v in state.items()
+                            if k.startswith("personalized_module.")
+                        }
+                        personalized_adapter_state = {
+                            k.replace("personalized_adapter.", ""): v.to(device)
+                            for k, v in state.items()
+                            if k.startswith("personalized_adapter.")
+                        }
 
-                        if self.pm_head is not None and head_state:
-                            self.pm_head.load_state_dict(head_state, strict=True)
-                        if self.pm_final is not None and final_state:
-                            self.pm_final.load_state_dict(final_state, strict=True)
-                        if self.pm_adapter is not None and adapter_state:
-                            self.pm_adapter.load_state_dict(adapter_state, strict=True)
+                        if not personalized_module_state:
+                            head_state = {
+                                k.replace("head.", ""): v.to(device)
+                                for k, v in state.items()
+                                if k.startswith("head.")
+                            }
+                            final_state = {
+                                k.replace("final.", ""): v.to(device)
+                                for k, v in state.items()
+                                if k.startswith("final.")
+                            }
+                            personalized_module_state = self._merge_legacy_module_state(
+                                self.personalized_module,
+                                head_state,
+                                final_state,
+                            )
+                            if not personalized_adapter_state:
+                                personalized_adapter_state = {
+                                    k.replace("adapter.", ""): v.to(device)
+                                    for k, v in state.items()
+                                    if k.startswith("adapter.")
+                                }
 
-                        z_pm = self.pm_adapter(z) if self.pm_adapter is not None else z
+                        if personalized_module_state:
+                            self.personalized_module.load_state_dict(personalized_module_state, strict=True)
+                        if self.personalized_adapter is not None and personalized_adapter_state:
+                            self.personalized_adapter.load_state_dict(personalized_adapter_state, strict=True)
+
+                        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
                         with torch.cuda.amp.autocast(enabled=use_amp):
-                            logits = self.pm_final(self.pm_head(z_pm))
+                            logits = self.personalized_module(z_pm)
                         if ensemble_logits is None:
                             ensemble_logits = logits
                         else:
@@ -675,7 +709,7 @@ class FedCD(Server):
                 
                 # Student (GM) Logits
                 with torch.cuda.amp.autocast(enabled=use_amp):
-                    student_logits = self.gm_final(self.gm_head(z_gm))
+                    student_logits = self.generalized_module(z_gm)
                     student_log_prob = torch.log_softmax(student_logits, dim=1)
                     loss = kl_loss(student_log_prob, target_prob)
                 
@@ -687,16 +721,12 @@ class FedCD(Server):
             # Move back to CPU to reduce GPU memory pressure
             self.global_model.to("cpu")
             self.f_ext.to("cpu")
-            self.gm_head.to("cpu")
-            self.gm_final.to("cpu")
-            if self.gm_adapter is not None:
-                self.gm_adapter.to("cpu")
-            if self.pm_head is not None:
-                self.pm_head.to("cpu")
-            if self.pm_final is not None:
-                self.pm_final.to("cpu")
-            if self.pm_adapter is not None:
-                self.pm_adapter.to("cpu")
+            self.generalized_module.to("cpu")
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to("cpu")
+            self.personalized_module.to("cpu")
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to("cpu")
             if device == "cuda" and self.args.avoid_oom:
                 torch.cuda.empty_cache()
 

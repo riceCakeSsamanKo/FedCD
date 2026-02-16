@@ -7,26 +7,31 @@ from flcore.clients.clientbase import Client
 from flcore.trainmodel.models import SmallFExt
 
 class PMWrapper(nn.Module):
-    def __init__(self, f_ext, gm_head, gm_final, pm_head, pm_final, combiner, gm_adapter=None, pm_adapter=None):
+    def __init__(
+        self,
+        f_ext,
+        generalized_module,
+        personalized_module,
+        combiner,
+        generalized_adapter=None,
+        personalized_adapter=None,
+    ):
         super().__init__()
         self.f_ext = f_ext
-        self.gm_head = gm_head
-        self.gm_final = gm_final
-        self.pm_head = pm_head
-        self.pm_final = pm_final
+        self.generalized_module = generalized_module
+        self.personalized_module = personalized_module
         self.combiner = combiner
-        self.gm_adapter = gm_adapter
-        self.pm_adapter = pm_adapter
+        self.generalized_adapter = generalized_adapter
+        self.personalized_adapter = personalized_adapter
 
     def forward(self, x):
         z = self.f_ext(x)
         if z.dim() > 2:
             z = torch.flatten(z, 1)
-        z_gm = self.gm_adapter(z) if self.gm_adapter is not None else z
-        gm_logits = self.gm_final(self.gm_head(z_gm))
-        if self.pm_adapter is not None:
-            z = self.pm_adapter(z)
-        pm_logits = self.pm_final(self.pm_head(z))
+        z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+        gm_logits = self.generalized_module(z_gm)
+        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+        pm_logits = self.personalized_module(z_pm)
         fused = torch.cat([gm_logits, pm_logits], dim=1)
         return self.combiner(fused)
 
@@ -53,27 +58,25 @@ class clientFedCD(Client):
         self.loss_func = nn.CrossEntropyLoss()
         self.nc_weight = float(getattr(args, "fedcd_nc_weight", 0.0))
         self.warmup_epochs = int(getattr(args, "fedcd_warmup_epochs", 0))
-        self.gm_head, self.gm_final = self._split_classifier(self.gm)
-        self.pm_head, self.pm_final = self._split_classifier(self.pm)
+        self.generalized_module = self._extract_module(self.gm)
+        self.personalized_module = self._extract_module(self.pm)
         self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
-        self.gm_adapter = self._build_adapter(self.gm_head, self.gm_final)
-        self.pm_adapter = self._build_adapter(self.pm_head, self.pm_final)
+        self.generalized_adapter = self._build_adapter(self.generalized_module)
+        self.personalized_adapter = self._build_adapter(self.personalized_module)
         self.combiner = nn.Linear(self.num_classes * 2, self.num_classes)
         self.model = PMWrapper(
             self.f_ext,
-            self.gm_head,
-            self.gm_final,
-            self.pm_head,
-            self.pm_final,
+            self.generalized_module,
+            self.personalized_module,
             self.combiner,
-            self.gm_adapter,
-            self.pm_adapter,
+            self.generalized_adapter,
+            self.personalized_adapter,
         )
 
-        # Optimizer는 PM head(+adapter)만 관리
-        pm_params = list(self.pm_head.parameters()) + list(self.pm_final.parameters()) + list(self.combiner.parameters())
-        if self.pm_adapter is not None:
-            pm_params += list(self.pm_adapter.parameters())
+        # Optimizer는 Personalized Module(+adapter)만 관리
+        pm_params = list(self.personalized_module.parameters()) + list(self.combiner.parameters())
+        if self.personalized_adapter is not None:
+            pm_params += list(self.personalized_adapter.parameters())
         self.optimizer = torch.optim.SGD(pm_params, lr=self.learning_rate)
 
         # [Info] Print Model Stats for Client 0
@@ -128,16 +131,12 @@ class clientFedCD(Client):
         f_ext.eval()
         return f_ext
 
-    def _split_classifier(self, model):
+    def _extract_module(self, model):
         if hasattr(model, "classifier") and isinstance(model.classifier, nn.Module):
-            if isinstance(model.classifier, nn.Sequential) and len(model.classifier) > 1:
-                head = nn.Sequential(*list(model.classifier.children())[:-1])
-                final = list(model.classifier.children())[-1]
-                return head, final
-            return nn.Identity(), model.classifier
+            return model.classifier
         if hasattr(model, "fc") and isinstance(model.fc, nn.Module):
-            return nn.Identity(), model.fc
-        return nn.Identity(), nn.Identity()
+            return model.fc
+        return nn.Identity()
 
     @staticmethod
     def _first_linear_in_features(module):
@@ -146,21 +145,36 @@ class clientFedCD(Client):
                 return layer.in_features
         return None
 
-    def _build_adapter(self, head, final):
+    def _build_adapter(self, module):
         f_ext_dim = self.f_ext_dim
-        pm_in_dim = self._first_linear_in_features(head)
-        if pm_in_dim is None:
-            pm_in_dim = self._first_linear_in_features(final)
+        pm_in_dim = self._first_linear_in_features(module)
         if f_ext_dim is None or pm_in_dim is None:
             return None
         if f_ext_dim == pm_in_dim:
             return None
         return nn.Linear(f_ext_dim, pm_in_dim)
 
-    def _forward_shared(self, z, head, final):
-        feat = head(z)
-        logits = final(feat)
-        return feat, logits
+    def _forward_module_with_feature(self, z, module):
+        if isinstance(module, nn.Sequential) and len(module) > 1:
+            feat = module[:-1](z)
+            logits = module[-1](feat)
+            return feat, logits
+        logits = module(z)
+        return z, logits
+
+    @staticmethod
+    def _merge_legacy_module_state(module, head_state, final_state):
+        if not head_state and not final_state:
+            return {}
+        merged_state = dict(head_state)
+        if final_state:
+            if isinstance(module, nn.Sequential) and len(module) > 0:
+                last_idx = str(len(module) - 1)
+                for key, value in final_state.items():
+                    merged_state[f"{last_idx}.{key}"] = value
+            else:
+                merged_state.update(final_state)
+        return merged_state
 
     def _sync_feature_extractor(self, target_model):
         # Copy shared extractor weights (GM backbone) into target model
@@ -217,17 +231,16 @@ class clientFedCD(Client):
             # Move models to GPU only during training to reduce memory usage
             self.f_ext.to(device)
             self.gm.to(device)
-            self.pm_head.to(device)
-            self.pm_final.to(device)
+            self.generalized_module.to(device)
+            self.personalized_module.to(device)
             self.combiner.to(device)
-            if self.gm_adapter is not None:
-                self.gm_adapter.to(device)
-            if self.pm_adapter is not None:
-                self.pm_adapter.to(device)
-            self.pm_head.train()
-            self.pm_final.train()
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to(device)
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to(device)
+            self.personalized_module.train()
             self.combiner.train()
-            self.gm.eval() # [중요] BN 통계량 고정
+            self.generalized_module.eval()
             use_amp = device == "cuda" and self.use_amp
             scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
@@ -248,12 +261,12 @@ class clientFedCD(Client):
 
                         # 1. GM의 지식 (Reference)
                         with torch.no_grad():
-                            z_gm = self.gm_adapter(z) if self.gm_adapter is not None else z
-                            gm_feat, logits_gm = self._forward_shared(z_gm, self.gm_head, self.gm_final)
+                            z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                            gm_feat, logits_gm = self._forward_module_with_feature(z_gm, self.generalized_module)
 
                         # 2. PM의 예측
-                        z_pm = self.pm_adapter(z) if self.pm_adapter is not None else z
-                        pm_feat, logits_pm = self._forward_shared(z_pm, self.pm_head, self.pm_final)
+                        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+                        pm_feat, logits_pm = self._forward_module_with_feature(z_pm, self.personalized_module)
                         fused_logits = self.combiner(torch.cat([logits_gm, logits_pm], dim=1))
 
                         # 3. Loss 계산 (Task Loss + Feature-wise Negative Correlation)
@@ -275,13 +288,13 @@ class clientFedCD(Client):
                 self.f_ext.to("cpu")
                 self.gm.to("cpu")
                 self.pm.to("cpu")
-                self.pm_head.to("cpu")
-                self.pm_final.to("cpu")
+                self.generalized_module.to("cpu")
+                self.personalized_module.to("cpu")
                 self.combiner.to("cpu")
-                if self.gm_adapter is not None:
-                    self.gm_adapter.to("cpu")
-                if self.pm_adapter is not None:
-                    self.pm_adapter.to("cpu")
+                if self.generalized_adapter is not None:
+                    self.generalized_adapter.to("cpu")
+                if self.personalized_adapter is not None:
+                    self.personalized_adapter.to("cpu")
                 self.model.to("cpu")
                 if device == "cuda":
                     torch.cuda.empty_cache()
@@ -321,30 +334,26 @@ class clientFedCD(Client):
                 return
             raise
 
-    def warmup_classifier(self):
+    def warmup_personalized_module(self):
         if self.warmup_epochs <= 0:
             return
 
         def _warmup_once(device, batch_size):
             self.f_ext.to(device)
-            self.gm_head.to(device)
-            self.gm_final.to(device)
+            self.generalized_module.to(device)
             self.f_ext.eval()
-            self.pm_head.to(device)
-            self.pm_final.to(device)
+            self.personalized_module.to(device)
             self.combiner.to(device)
-            if self.gm_adapter is not None:
-                self.gm_adapter.to(device)
-            if self.pm_adapter is not None:
-                self.pm_adapter.to(device)
-            self.pm_head.train()
-            self.pm_final.train()
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to(device)
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to(device)
+            self.personalized_module.train()
             self.combiner.train()
             optimizer = torch.optim.SGD(
-                list(self.pm_head.parameters()) +
-                list(self.pm_final.parameters()) +
+                list(self.personalized_module.parameters()) +
                 list(self.combiner.parameters()) +
-                (list(self.pm_adapter.parameters()) if self.pm_adapter is not None else []),
+                (list(self.personalized_adapter.parameters()) if self.personalized_adapter is not None else []),
                 lr=self.learning_rate
             )
             trainloader = self.load_train_data(batch_size=batch_size)
@@ -362,10 +371,10 @@ class clientFedCD(Client):
                         z = self.f_ext(x)
                         if z.dim() > 2:
                             z = torch.flatten(z, 1)
-                        z_pm = self.pm_adapter(z) if self.pm_adapter is not None else z
-                        logits_pm = self.pm_final(self.pm_head(z_pm))
-                        z_gm = self.gm_adapter(z) if self.gm_adapter is not None else z
-                        logits_gm = self.gm_final(self.gm_head(z_gm))
+                        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+                        logits_pm = self.personalized_module(z_pm)
+                        z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                        logits_gm = self.generalized_module(z_gm)
                         logits = self.combiner(torch.cat([logits_gm, logits_pm], dim=1))
                         loss = self.loss_func(logits, y)
                     scaler.scale(loss).backward()
@@ -376,15 +385,13 @@ class clientFedCD(Client):
             # [수정] avoid_oom이 True일 때만 CPU로 내림.
             if self.args.avoid_oom:
                 self.f_ext.to("cpu")
-                self.gm_head.to("cpu")
-                self.gm_final.to("cpu")
-                self.pm_head.to("cpu")
-                self.pm_final.to("cpu")
+                self.generalized_module.to("cpu")
+                self.personalized_module.to("cpu")
                 self.combiner.to("cpu")
-                if self.gm_adapter is not None:
-                    self.gm_adapter.to("cpu")
-                if self.pm_adapter is not None:
-                    self.pm_adapter.to("cpu")
+                if self.generalized_adapter is not None:
+                    self.generalized_adapter.to("cpu")
+                if self.personalized_adapter is not None:
+                    self.personalized_adapter.to("cpu")
                 self.model.to("cpu")
                 if device == "cuda":
                     torch.cuda.empty_cache()
@@ -403,17 +410,20 @@ class clientFedCD(Client):
                 torch.cuda.empty_cache()
                 # OOM 시 강제 정리
                 self.f_ext.to("cpu")
-                self.gm_head.to("cpu")
-                self.gm_final.to("cpu")
-                self.pm_head.to("cpu")
+                self.generalized_module.to("cpu")
+                self.personalized_module.to("cpu")
                 self.model.to("cpu")
                 _warmup_once("cpu", max(1, batch_size // 2))
                 return
             raise
 
-    # [핵심] 서버로 보낼 때: GM은 안 보내고 PM만 보냄 (Zero-Uplink for GM)
+    def warmup_classifier(self):
+        # Backward compatibility for existing call sites.
+        self.warmup_personalized_module()
+
+    # [핵심] 서버에서 Generalized Module 파트를 받아 적용
     def set_parameters(self, model):
-        # 서버에서 받은 GM classifier 관련 파라미터를 로드
+        # 서버에서 받은 Generalized Module 관련 파라미터를 로드
         if isinstance(model, dict):
             gm_parts = model.get("gm_parts", None)
             gm_state = model.get("gm_state", {})
@@ -423,51 +433,99 @@ class clientFedCD(Client):
             gm_state = model.state_dict()
             gm_adapter_state = None
 
-        # New lightweight payload path: gm_parts (head/final/adapter only)
+        # New lightweight payload path: generalized_module/generalized_adapter
         if gm_parts is not None:
             if gm_parts and next(iter(gm_parts.values())).is_cuda:
                 gm_parts = {k: v.detach().cpu() for k, v in gm_parts.items()}
-            head_state = {k.replace("head.", ""): v for k, v in gm_parts.items() if k.startswith("head.")}
-            final_state = {k.replace("final.", ""): v for k, v in gm_parts.items() if k.startswith("final.")}
-            adapter_state = {k.replace("adapter.", ""): v for k, v in gm_parts.items() if k.startswith("adapter.")}
-            if head_state:
-                self.gm_head.load_state_dict(head_state, strict=True)
-            if final_state:
-                self.gm_final.load_state_dict(final_state, strict=True)
-            if self.gm_adapter is not None and adapter_state:
-                self.gm_adapter.load_state_dict(adapter_state, strict=True)
+            generalized_module_state = {
+                k.replace("generalized_module.", ""): v
+                for k, v in gm_parts.items()
+                if k.startswith("generalized_module.")
+            }
+            generalized_adapter_state = {
+                k.replace("generalized_adapter.", ""): v
+                for k, v in gm_parts.items()
+                if k.startswith("generalized_adapter.")
+            }
+
+            # Backward compatibility for old "head/final/adapter" payload
+            if not generalized_module_state:
+                head_state = {k.replace("head.", ""): v for k, v in gm_parts.items() if k.startswith("head.")}
+                final_state = {k.replace("final.", ""): v for k, v in gm_parts.items() if k.startswith("final.")}
+                generalized_module_state = self._merge_legacy_module_state(
+                    self.generalized_module,
+                    head_state,
+                    final_state,
+                )
+                if not generalized_adapter_state:
+                    generalized_adapter_state = {
+                        k.replace("adapter.", ""): v for k, v in gm_parts.items() if k.startswith("adapter.")
+                    }
+
+            if generalized_module_state:
+                self.generalized_module.load_state_dict(generalized_module_state, strict=True)
+            if self.generalized_adapter is not None and generalized_adapter_state:
+                self.generalized_adapter.load_state_dict(generalized_adapter_state, strict=True)
         else:
             # Backward compatibility: full gm_state payload
             if gm_state and next(iter(gm_state.values())).is_cuda:
                 gm_state = {k: v.detach().cpu() for k, v in gm_state.items()}
             if gm_state:
-                self.gm.load_state_dict(gm_state, strict=True)
-            if gm_adapter_state is not None and self.gm_adapter is not None:
-                self.gm_adapter.load_state_dict(gm_adapter_state, strict=True)
+                if any(k.startswith("generalized_module.") for k in gm_state.keys()):
+                    generalized_module_state = {
+                        k.replace("generalized_module.", ""): v
+                        for k, v in gm_state.items()
+                        if k.startswith("generalized_module.")
+                    }
+                    if generalized_module_state:
+                        self.generalized_module.load_state_dict(generalized_module_state, strict=True)
+                else:
+                    self.gm.load_state_dict(gm_state, strict=True)
+            if gm_adapter_state is not None and self.generalized_adapter is not None:
+                self.generalized_adapter.load_state_dict(gm_adapter_state, strict=True)
 
-        self.model.gm_head = self.gm_head
-        self.model.gm_final = self.gm_final
-        if self.gm_adapter is not None:
-            self.model.gm_adapter = self.gm_adapter
+        self.model.generalized_module = self.generalized_module
+        if self.generalized_adapter is not None:
+            self.model.generalized_adapter = self.generalized_adapter
         
         # PM은 GM과 너무 멀어지지 않게 살짝 당겨주거나(Regularization), 
         # 혹은 그대로 둡니다(Pure Personalization). 연구 의도에 따라 선택.
         # 여기서는 일단 PM은 그대로 유지하는 것으로 둡니다.
 
     def set_personalized_parameters(self, pm_state):
-        # 서버에서 받은 클러스터 대표 PM을 내 PM에 업데이트
+        # 서버에서 받은 클러스터 대표 Personalized Module을 업데이트
         state = pm_state
         if next(iter(state.values())).is_cuda:
             state = {k: v.detach().cpu() for k, v in state.items()}
-        head_state = {k.replace("head.", ""): v for k, v in state.items() if k.startswith("head.")}
-        final_state = {k.replace("final.", ""): v for k, v in state.items() if k.startswith("final.")}
-        adapter_state = {k.replace("adapter.", ""): v for k, v in state.items() if k.startswith("adapter.")}
-        if head_state:
-            self.pm_head.load_state_dict(head_state, strict=True)
-        if final_state:
-            self.pm_final.load_state_dict(final_state, strict=True)
-        if self.pm_adapter is not None and adapter_state:
-            self.pm_adapter.load_state_dict(adapter_state, strict=True)
+        personalized_module_state = {
+            k.replace("personalized_module.", ""): v
+            for k, v in state.items()
+            if k.startswith("personalized_module.")
+        }
+        personalized_adapter_state = {
+            k.replace("personalized_adapter.", ""): v
+            for k, v in state.items()
+            if k.startswith("personalized_adapter.")
+        }
+
+        # Backward compatibility for old "head/final/adapter" payload
+        if not personalized_module_state:
+            head_state = {k.replace("head.", ""): v for k, v in state.items() if k.startswith("head.")}
+            final_state = {k.replace("final.", ""): v for k, v in state.items() if k.startswith("final.")}
+            personalized_module_state = self._merge_legacy_module_state(
+                self.personalized_module,
+                head_state,
+                final_state,
+            )
+            if not personalized_adapter_state:
+                personalized_adapter_state = {
+                    k.replace("adapter.", ""): v for k, v in state.items() if k.startswith("adapter.")
+                }
+
+        if personalized_module_state:
+            self.personalized_module.load_state_dict(personalized_module_state, strict=True)
+        if self.personalized_adapter is not None and personalized_adapter_state:
+            self.personalized_adapter.load_state_dict(personalized_adapter_state, strict=True)
         combiner_state = {k.replace("combiner.", ""): v for k, v in state.items() if k.startswith("combiner.")}
         if combiner_state:
             self.combiner.load_state_dict(combiner_state, strict=True)
@@ -478,17 +536,22 @@ class clientFedCD(Client):
         self._reset_optimizer()
 
     def _reset_optimizer(self):
-        pm_params = list(self.pm_head.parameters()) + list(self.pm_final.parameters()) + list(self.combiner.parameters())
-        if self.pm_adapter is not None:
-            pm_params += list(self.pm_adapter.parameters())
+        pm_params = list(self.personalized_module.parameters()) + list(self.combiner.parameters())
+        if self.personalized_adapter is not None:
+            pm_params += list(self.personalized_adapter.parameters())
         self.optimizer = torch.optim.SGD(pm_params, lr=self.learning_rate)
 
     def upload_parameters(self):
-        # 업링크 비용 절감: PM만 전송
+        # 업링크 비용 절감: Personalized Module만 전송
         state = {}
-        state.update({f"head.{k}": v.detach().cpu() for k, v in self.pm_head.state_dict().items()})
-        state.update({f"final.{k}": v.detach().cpu() for k, v in self.pm_final.state_dict().items()})
-        if self.pm_adapter is not None:
-            state.update({f"adapter.{k}": v.detach().cpu() for k, v in self.pm_adapter.state_dict().items()})
+        state.update({
+            f"personalized_module.{k}": v.detach().cpu()
+            for k, v in self.personalized_module.state_dict().items()
+        })
+        if self.personalized_adapter is not None:
+            state.update({
+                f"personalized_adapter.{k}": v.detach().cpu()
+                for k, v in self.personalized_adapter.state_dict().items()
+            })
         state.update({f"combiner.{k}": v.detach().cpu() for k, v in self.combiner.state_dict().items()})
         return state
