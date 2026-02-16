@@ -21,9 +21,13 @@ ALGO="FedCD"
 DATASET="Cifar10"
 TOTAL_DATA=50000
 AVOID_OOM=True
+FEDCD_DISTILL_LR=0.01
+FEDCD_DISTILL_TEMP=3.0
+FEDCD_DISTILL_KL_WEIGHT=1.0
+FEDCD_DISTILL_CE_WEIGHT=0.05
 FEDCD_FUSION_WEIGHT=1.0
-FEDCD_PM_LOGITS_WEIGHT=0.5
-FEDCD_PM_ONLY_WEIGHT=1.5
+FEDCD_PM_LOGITS_WEIGHT=0.3
+FEDCD_PM_ONLY_WEIGHT=0.8
 
 # List of Dirichlet alpha values to test
 ALPHAS=(1.0) # (0.1 0.5 1.0)
@@ -35,6 +39,8 @@ echo "============================================================"
 echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
 echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
+echo "Distill: lr=${FEDCD_DISTILL_LR}, temp=${FEDCD_DISTILL_TEMP}, kl=${FEDCD_DISTILL_KL_WEIGHT}, ce=${FEDCD_DISTILL_CE_WEIGHT}"
+echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}"
 echo "============================================================"
 
 for ALPHA in "${ALPHAS[@]}"
@@ -81,23 +87,27 @@ do
                 --pm_period 1 \
                 --global_period 4 \
                 --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
-                --max_dynamic_clusters 5 \
+                --max_dynamic_clusters 0 \
                 -dev $GPU_DEVICE \
                 -nw 0 \
                 --pin_memory True \
                 --prefetch_factor 2 \
                 --amp True \
                 --tf32 True \
-                --gpu_batch_mult 32 \
+                --gpu_batch_mult 1 \
                 --gpu_batch_max 0 \
                 --log_usage True \
                 --avoid_oom $AVOID_OOM \
+                --fedcd_distill_lr $FEDCD_DISTILL_LR \
+                --fedcd_distill_temp $FEDCD_DISTILL_TEMP \
+                --fedcd_distill_kl_weight $FEDCD_DISTILL_KL_WEIGHT \
+                --fedcd_distill_ce_weight $FEDCD_DISTILL_CE_WEIGHT \
                 --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
                 --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
                 --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
                 --broadcast_global_combiner False \
                 --local_epochs 1 \
-                --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
+                --proxy_dataset Cifar100 --proxy_samples 2000 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
             # Copy dataset config to the latest log directory from fl_data

@@ -28,12 +28,12 @@ COMMON_EVAL_BATCH_SIZE=256
 
 # Server distillation settings
 FEDCD_DISTILL_LR=0.01
-FEDCD_DISTILL_TEMP=2.0
+FEDCD_DISTILL_TEMP=3.0
 FEDCD_DISTILL_KL_WEIGHT=1.0
-FEDCD_DISTILL_CE_WEIGHT=0.2
+FEDCD_DISTILL_CE_WEIGHT=0.05
 FEDCD_FUSION_WEIGHT=1.0
-FEDCD_PM_LOGITS_WEIGHT=0.5
-FEDCD_PM_ONLY_WEIGHT=1.5
+FEDCD_PM_LOGITS_WEIGHT=0.3
+FEDCD_PM_ONLY_WEIGHT=0.8
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 0.5 1.0) # (0.1 0.5 1.0)
@@ -92,7 +92,7 @@ echo "============================================================"
                 --act_window_size 5 \
                 --cluster_period 2 \
                 --pm_period 1 \
-                --global_period 2 \
+                --global_period 4 \
                 --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
                 --max_dynamic_clusters 0 \
                 -dev $GPU_DEVICE \
@@ -117,7 +117,7 @@ echo "============================================================"
                 --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
                 --broadcast_global_combiner False \
                 --local_epochs 1 \
-                --proxy_dataset TinyImagenet --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
+                --proxy_dataset Cifar100 --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
             # Copy dataset config to the latest log directory from fl_data
@@ -163,7 +163,7 @@ echo "============================================================"
                     --pm_period 1 \
                     --global_period 4 \
                     --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
-                    --max_dynamic_clusters 5 \
+                    --max_dynamic_clusters 0 \
                     -dev $GPU_DEVICE \
                     -nw 0 \
                     --pin_memory True \
@@ -186,7 +186,7 @@ echo "============================================================"
                     --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
                     --broadcast_global_combiner False \
                     --local_epochs 1 \
-                    --proxy_dataset TinyImagenet --proxy_samples 2000|| echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
+                    --proxy_dataset Cifar100 --proxy_samples 2000 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
                 ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
                 # Copy dataset config to the latest log directory from fl_data
