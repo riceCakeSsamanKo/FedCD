@@ -5,6 +5,8 @@
 *__pycache__*
 /FedCD-Core/dataset/Cifar10
 /FedCD-Core/dataset/TinyImagenet
+/FedCD/dataset/Cifar10
+/FedCD/dataset/TinyImagenet
 /FedCD-Core/Cifar10
 /FedCD-Baseline/dataset/MNIST
 .DS_Store
