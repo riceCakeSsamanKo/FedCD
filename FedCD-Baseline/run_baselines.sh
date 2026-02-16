@@ -6,7 +6,7 @@ DEVICE="cuda"
 DEVICE_ID="0"
 
 # Algorithms to test
-algorithms=("Local" "FedProx" "FedKD" "FedAS" "FedAvg")
+algorithms=("Local" "FedProx" "FedKD" "FedAS" "FedAvg") 
 
 # Scenarios available in fl_data
 scenarios=(
