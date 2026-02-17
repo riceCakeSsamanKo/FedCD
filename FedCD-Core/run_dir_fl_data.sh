@@ -26,13 +26,21 @@ FEDCD_GM_LOGITS_WEIGHT=1.0
 FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=0.8
 FEDCD_GM_LR_SCALE=0.1
-FEDCD_GM_UPDATE_MODE="local"
+FEDCD_GM_UPDATE_MODE="server_pm_teacher"
 FEDCD_PM_TEACHER_LR=0.01
 FEDCD_PM_TEACHER_TEMP=2.0
 FEDCD_PM_TEACHER_KL_WEIGHT=1.0
-FEDCD_PM_TEACHER_CE_WEIGHT=0.2
+FEDCD_PM_TEACHER_CE_WEIGHT=0.0
 FEDCD_PM_TEACHER_SAMPLES=2000
 FEDCD_PM_TEACHER_BATCH_SIZE=256
+FEDCD_PM_TEACHER_PROXY_DATASET="Cifar100"
+FEDCD_PM_TEACHER_PROXY_ROOT=""
+FEDCD_PM_TEACHER_PROXY_SPLIT="train"
+FEDCD_PM_TEACHER_PROXY_DOWNLOAD=False
+FEDCD_PM_TEACHER_ALLOW_TEST_FALLBACK=False
+FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT=True
+FEDCD_PM_TEACHER_CONFIDENCE_MIN=0.05
+FEDCD_PM_TEACHER_CONFIDENCE_POWER=1.0
 FEDCD_ENTROPY_TEMP_PM=1.0
 FEDCD_ENTROPY_TEMP_GM=1.0
 FEDCD_ENTROPY_MIN_PM_WEIGHT=0.1
@@ -49,7 +57,7 @@ echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
 echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}, gm_lr_scale=${FEDCD_GM_LR_SCALE}"
-echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE})"
+echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE}, proxy=${FEDCD_PM_TEACHER_PROXY_DATASET}/${FEDCD_PM_TEACHER_PROXY_SPLIT}, conf_w=${FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT})"
 echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}]"
 echo "============================================================"
 
@@ -120,6 +128,14 @@ do
                 --fedcd_pm_teacher_ce_weight $FEDCD_PM_TEACHER_CE_WEIGHT \
                 --fedcd_pm_teacher_samples $FEDCD_PM_TEACHER_SAMPLES \
                 --fedcd_pm_teacher_batch_size $FEDCD_PM_TEACHER_BATCH_SIZE \
+                --fedcd_pm_teacher_proxy_dataset $FEDCD_PM_TEACHER_PROXY_DATASET \
+                --fedcd_pm_teacher_proxy_root "$FEDCD_PM_TEACHER_PROXY_ROOT" \
+                --fedcd_pm_teacher_proxy_split $FEDCD_PM_TEACHER_PROXY_SPLIT \
+                --fedcd_pm_teacher_proxy_download $FEDCD_PM_TEACHER_PROXY_DOWNLOAD \
+                --fedcd_pm_teacher_allow_test_fallback $FEDCD_PM_TEACHER_ALLOW_TEST_FALLBACK \
+                --fedcd_pm_teacher_confidence_weight $FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT \
+                --fedcd_pm_teacher_confidence_min $FEDCD_PM_TEACHER_CONFIDENCE_MIN \
+                --fedcd_pm_teacher_confidence_power $FEDCD_PM_TEACHER_CONFIDENCE_POWER \
                 --fedcd_entropy_temp_pm $FEDCD_ENTROPY_TEMP_PM \
                 --fedcd_entropy_temp_gm $FEDCD_ENTROPY_TEMP_GM \
                 --fedcd_entropy_min_pm_weight $FEDCD_ENTROPY_MIN_PM_WEIGHT \

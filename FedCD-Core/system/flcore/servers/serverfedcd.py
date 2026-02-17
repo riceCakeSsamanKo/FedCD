@@ -4,6 +4,7 @@ import os
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 import torchvision
@@ -69,6 +70,16 @@ class FedCD(Server):
         self.pm_teacher_ce_weight = float(getattr(args, "fedcd_pm_teacher_ce_weight", 0.2))
         self.pm_teacher_samples = int(getattr(args, "fedcd_pm_teacher_samples", 2000))
         self.pm_teacher_batch_size = int(getattr(args, "fedcd_pm_teacher_batch_size", 256))
+        self.pm_teacher_proxy_dataset = str(getattr(args, "fedcd_pm_teacher_proxy_dataset", "Cifar100"))
+        self.pm_teacher_proxy_root = str(getattr(args, "fedcd_pm_teacher_proxy_root", ""))
+        self.pm_teacher_proxy_split = str(getattr(args, "fedcd_pm_teacher_proxy_split", "train"))
+        self.pm_teacher_proxy_download = bool(getattr(args, "fedcd_pm_teacher_proxy_download", False))
+        self.pm_teacher_allow_test_fallback = bool(getattr(args, "fedcd_pm_teacher_allow_test_fallback", False))
+        self.pm_teacher_confidence_weight = bool(getattr(args, "fedcd_pm_teacher_confidence_weight", True))
+        self.pm_teacher_confidence_min = float(getattr(args, "fedcd_pm_teacher_confidence_min", 0.05))
+        self.pm_teacher_confidence_min = min(max(self.pm_teacher_confidence_min, 0.0), 1.0)
+        self.pm_teacher_confidence_power = float(getattr(args, "fedcd_pm_teacher_confidence_power", 1.0))
+        self.pm_teacher_confidence_power = max(self.pm_teacher_confidence_power, 1e-6)
         self.pm_teacher_loader = None
         if self.gm_update_mode == "server_pm_teacher":
             self.pm_teacher_loader = self._build_pm_teacher_loader()
@@ -641,7 +652,6 @@ class FedCD(Server):
             self.f_ext.eval()
             use_amp = device == "cuda" and bool(getattr(self.args, "amp", False))
             temp = max(1e-6, self.pm_teacher_temp)
-            kl_loss_fn = nn.KLDivLoss(reduction="batchmean")
             ce_loss_fn = nn.CrossEntropyLoss()
 
             teacher_components = []
@@ -694,7 +704,8 @@ class FedCD(Server):
                 if type(x) == type([]):
                     x = x[0]
                 x = x.to(device, non_blocking=(device == "cuda"))
-                y = y.to(device, non_blocking=(device == "cuda")).long()
+                if self.pm_teacher_ce_weight > 0:
+                    y = y.to(device, non_blocking=(device == "cuda")).long()
 
                 with torch.no_grad():
                     z = self.f_ext(x)
@@ -720,7 +731,20 @@ class FedCD(Server):
                     z_gm = gm_adapter(z) if gm_adapter is not None else z
                     gm_logits = gm_module(z_gm)
                     student_log_prob = torch.log_softmax(gm_logits / temp, dim=1)
-                    kd_loss = kl_loss_fn(student_log_prob, teacher_prob) * (temp * temp)
+                    kd_per_sample = F.kl_div(
+                        student_log_prob,
+                        teacher_prob,
+                        reduction="none",
+                    ).sum(dim=1) * (temp * temp)
+                    if self.pm_teacher_confidence_weight:
+                        teacher_conf = self._teacher_confidence(teacher_prob)
+                        # Down-weight uncertain teacher samples under proxy-target domain mismatch.
+                        kd_weight = self.pm_teacher_confidence_min + (
+                            1.0 - self.pm_teacher_confidence_min
+                        ) * teacher_conf.pow(self.pm_teacher_confidence_power)
+                        kd_loss = (kd_per_sample * kd_weight).sum() / kd_weight.sum().clamp_min(1e-12)
+                    else:
+                        kd_loss = kd_per_sample.mean()
                     ce_loss = gm_logits.new_tensor(0.0)
                     if self.pm_teacher_ce_weight > 0:
                         ce_loss = ce_loss_fn(gm_logits, y)
@@ -990,10 +1014,26 @@ class FedCD(Server):
         return torch.utils.data.DataLoader(shared_test_data, **loader_kwargs)
 
     def _build_pm_teacher_loader(self):
-        # Build server-side distillation set from union of client test data.
-        distill_data = []
-        for client_id in range(self.num_clients):
-            distill_data.extend(read_client_data(self.dataset, client_id, is_train=False))
+        distill_data = None
+        distill_source = ""
+
+        try:
+            distill_data, distill_source = self._build_proxy_distill_data()
+        except Exception as err:
+            print(f"[FedCD] Failed to build proxy distill data: {err}")
+            distill_data = None
+
+        if distill_data is None:
+            if not self.pm_teacher_allow_test_fallback:
+                print(
+                    "[FedCD] PM-teacher distillation set is unavailable and test fallback is disabled. "
+                    "Skipping server distillation."
+                )
+                return None
+            distill_data = []
+            for client_id in range(self.num_clients):
+                distill_data.extend(read_client_data(self.dataset, client_id, is_train=False))
+            distill_source = "client_test_union_fallback"
 
         if len(distill_data) == 0:
             print("[FedCD] PM-teacher distillation set is empty. Skipping server distillation.")
@@ -1002,7 +1042,11 @@ class FedCD(Server):
         if self.pm_teacher_samples > 0 and self.pm_teacher_samples < len(distill_data):
             rng = random.Random(0)
             sample_indices = rng.sample(range(len(distill_data)), self.pm_teacher_samples)
-            distill_data = [distill_data[idx] for idx in sample_indices]
+            distill_data = (
+                [distill_data[idx] for idx in sample_indices]
+                if isinstance(distill_data, list)
+                else torch.utils.data.Subset(distill_data, sample_indices)
+            )
 
         num_workers = int(getattr(self.args, "num_workers", 0))
         pin_memory = bool(getattr(self.args, "pin_memory", False)) and self.device == "cuda"
@@ -1017,8 +1061,126 @@ class FedCD(Server):
             loader_kwargs["persistent_workers"] = True
             loader_kwargs["prefetch_factor"] = int(getattr(self.args, "prefetch_factor", 2))
 
+        print(f"[FedCD] PM-teacher Distill Source: {distill_source}")
         print(f"[FedCD] PM-teacher Distill Set Size: {len(distill_data)}")
         return torch.utils.data.DataLoader(distill_data, **loader_kwargs)
+
+    @staticmethod
+    def _teacher_confidence(prob):
+        eps = 1e-12
+        num_classes = prob.size(1)
+        entropy = -(prob * torch.log(prob.clamp_min(eps))).sum(dim=1)
+        max_entropy = torch.log(torch.tensor(float(num_classes), device=prob.device)).clamp_min(eps)
+        confidence = 1.0 - (entropy / max_entropy)
+        return confidence.clamp(0.0, 1.0)
+
+    def _core_root(self):
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+    def _default_proxy_root(self, proxy_dataset):
+        core_root = self._core_root()
+        name = proxy_dataset.lower()
+        if name in {"cifar100", "cifar-100"}:
+            return os.path.join(core_root, "dataset", "Cifar100", "rawdata")
+        if name in {"cifar10", "cifar-10"}:
+            return os.path.join(core_root, "dataset", "Cifar10", "rawdata")
+        if name in {"tinyimagenet", "tiny-imagenet", "tiny_imagenet"}:
+            return os.path.join(core_root, "dataset", "TinyImagenet", "rawdata", "tiny-imagenet-200", "train")
+        return ""
+
+    def _build_proxy_distill_data(self):
+        proxy_name = self.pm_teacher_proxy_dataset.strip()
+        if not proxy_name or proxy_name.lower() in {"none", "off", "disabled"}:
+            return None, ""
+
+        proxy_split = self.pm_teacher_proxy_split.strip().lower()
+        if proxy_split not in {"train", "test", "all"}:
+            raise ValueError(
+                f"Invalid fedcd_pm_teacher_proxy_split={self.pm_teacher_proxy_split}. "
+                "Use one of: train, test, all."
+            )
+
+        proxy_root = self.pm_teacher_proxy_root.strip() or self._default_proxy_root(proxy_name)
+        if not proxy_root:
+            raise ValueError(f"Unknown proxy dataset: {proxy_name}")
+
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        ])
+
+        name = proxy_name.lower()
+        if name in {"cifar100", "cifar-100"}:
+            splits = []
+            if proxy_split in {"train", "all"}:
+                splits.append(
+                    torchvision.datasets.CIFAR100(
+                        root=proxy_root,
+                        train=True,
+                        download=self.pm_teacher_proxy_download,
+                        transform=transform,
+                    )
+                )
+            if proxy_split in {"test", "all"}:
+                splits.append(
+                    torchvision.datasets.CIFAR100(
+                        root=proxy_root,
+                        train=False,
+                        download=self.pm_teacher_proxy_download,
+                        transform=transform,
+                    )
+                )
+            if len(splits) == 1:
+                return splits[0], f"proxy:CIFAR100:{proxy_split}"
+            return torch.utils.data.ConcatDataset(splits), f"proxy:CIFAR100:{proxy_split}"
+
+        if name in {"cifar10", "cifar-10"}:
+            splits = []
+            if proxy_split in {"train", "all"}:
+                splits.append(
+                    torchvision.datasets.CIFAR10(
+                        root=proxy_root,
+                        train=True,
+                        download=self.pm_teacher_proxy_download,
+                        transform=transform,
+                    )
+                )
+            if proxy_split in {"test", "all"}:
+                splits.append(
+                    torchvision.datasets.CIFAR10(
+                        root=proxy_root,
+                        train=False,
+                        download=self.pm_teacher_proxy_download,
+                        transform=transform,
+                    )
+                )
+            if len(splits) == 1:
+                return splits[0], f"proxy:CIFAR10:{proxy_split}"
+            return torch.utils.data.ConcatDataset(splits), f"proxy:CIFAR10:{proxy_split}"
+
+        if name in {"tinyimagenet", "tiny-imagenet", "tiny_imagenet"}:
+            train_root = proxy_root
+            if os.path.basename(os.path.normpath(train_root)) == "train":
+                tiny_root = os.path.dirname(train_root)
+            else:
+                tiny_root = train_root
+                train_root = os.path.join(tiny_root, "train")
+            val_root = os.path.join(tiny_root, "val")
+            image_root = train_root
+            if proxy_split == "test":
+                image_root = val_root
+            if proxy_split == "all":
+                train_ds = torchvision.datasets.ImageFolder(root=train_root, transform=transform)
+                val_ds = torchvision.datasets.ImageFolder(root=val_root, transform=transform)
+                return (
+                    torch.utils.data.ConcatDataset([train_ds, val_ds]),
+                    "proxy:TinyImagenet:all",
+                )
+            if not os.path.isdir(image_root):
+                raise FileNotFoundError(f"TinyImagenet split path not found: {image_root}")
+            return torchvision.datasets.ImageFolder(root=image_root, transform=transform), f"proxy:TinyImagenet:{proxy_split}"
+
+        raise ValueError(f"Unsupported proxy dataset: {proxy_name}")
 
     # Backward-compatible alias
     def _build_common_test_loader(self):

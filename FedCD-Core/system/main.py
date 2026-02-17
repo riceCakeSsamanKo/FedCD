@@ -515,9 +515,25 @@ if __name__ == "__main__":
     parser.add_argument('--fedcd_pm_teacher_ce_weight', type=float, default=0.2,
                         help="CE loss weight (with labels) for server PM-teacher distillation.")
     parser.add_argument('--fedcd_pm_teacher_samples', type=int, default=2000,
-                        help="Number of samples for server PM-teacher distillation (0 = full union test set).")
+                        help="Number of samples for server PM-teacher distillation (0 = full proxy dataset).")
     parser.add_argument('--fedcd_pm_teacher_batch_size', type=int, default=256,
                         help="Batch size for server PM-teacher distillation.")
+    parser.add_argument('--fedcd_pm_teacher_proxy_dataset', type=str, default="Cifar100",
+                        help="Proxy dataset for PM-teacher distillation (e.g., Cifar100, TinyImagenet).")
+    parser.add_argument('--fedcd_pm_teacher_proxy_root', type=str, default="",
+                        help="Root path for proxy dataset. Empty uses built-in default path.")
+    parser.add_argument('--fedcd_pm_teacher_proxy_split', type=str, default="train",
+                        help="Proxy split: train | test | all.")
+    parser.add_argument('--fedcd_pm_teacher_proxy_download', type=str2bool, default=False,
+                        help="Download proxy dataset when supported (CIFAR10/100).")
+    parser.add_argument('--fedcd_pm_teacher_allow_test_fallback', type=str2bool, default=False,
+                        help="Allow fallback to target test-union distill set if proxy cannot be loaded.")
+    parser.add_argument('--fedcd_pm_teacher_confidence_weight', type=str2bool, default=True,
+                        help="Enable teacher-confidence weighting for KL distillation.")
+    parser.add_argument('--fedcd_pm_teacher_confidence_min', type=float, default=0.05,
+                        help="Minimum per-sample KL weight when confidence weighting is enabled.")
+    parser.add_argument('--fedcd_pm_teacher_confidence_power', type=float, default=1.0,
+                        help="Exponent for teacher confidence shaping in KL weighting.")
     parser.add_argument('--gm_model', type=str, default="VGG16",
                         help="FedCD GM model name")
     parser.add_argument('--pm_model', type=str, default="VGG8",
