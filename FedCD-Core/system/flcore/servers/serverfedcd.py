@@ -97,6 +97,11 @@ class FedCD(Server):
         self.proto_teacher_noise_scale = float(getattr(args, "fedcd_proto_teacher_noise_scale", 1.0))
         self.proto_teacher_min_count = float(getattr(args, "fedcd_proto_teacher_min_count", 1.0))
         self.proto_teacher_client_samples = int(getattr(args, "fedcd_proto_teacher_client_samples", 0))
+        self.proto_teacher_confidence_weight = bool(getattr(args, "fedcd_proto_teacher_confidence_weight", True))
+        self.proto_teacher_confidence_min = float(getattr(args, "fedcd_proto_teacher_confidence_min", 0.05))
+        self.proto_teacher_confidence_min = min(max(self.proto_teacher_confidence_min, 0.0), 1.0)
+        self.proto_teacher_confidence_power = float(getattr(args, "fedcd_proto_teacher_confidence_power", 1.0))
+        self.proto_teacher_confidence_power = max(self.proto_teacher_confidence_power, 1e-6)
         self.pm_teacher_loader = None
         if self.gm_update_mode == "server_pm_teacher":
             self.pm_teacher_loader = self._build_pm_teacher_loader()
@@ -660,60 +665,91 @@ class FedCD(Server):
                 avg_state[key] = acc
         return avg_state
 
-    def _aggregate_pm_prototypes(self, received_protos):
-        if not received_protos:
-            return None
-        agg = None
+    def _collect_pm_prototype_components(self, received_protos):
+        """
+        Build multimodal prototype components from client PM uploads.
+        Each (client, class) pair becomes one component to avoid collapsing
+        heterogeneous class modes into a single global mean.
+        """
+        components = []
+        skipped = 0
+        expected_classes = None
+        expected_feat_dim = None
+
         for _, state in received_protos:
             if not state:
                 continue
-            if agg is None:
-                agg = {k: v.detach().cpu().float().clone() for k, v in state.items()}
-            else:
-                for key, value in state.items():
-                    if key not in agg:
-                        agg[key] = value.detach().cpu().float().clone()
-                    else:
-                        agg[key] += value.detach().cpu().float()
-        return agg
+            required = {"counts", "feat_sum", "feat_sq_sum", "logit_sum"}
+            if not required.issubset(set(state.keys())):
+                skipped += 1
+                continue
+
+            counts = state["counts"].detach().cpu().float()
+            feat_sum = state["feat_sum"].detach().cpu().float()
+            feat_sq_sum = state["feat_sq_sum"].detach().cpu().float()
+            logit_sum = state["logit_sum"].detach().cpu().float()
+
+            if counts.dim() != 1 or feat_sum.dim() != 2 or feat_sq_sum.dim() != 2 or logit_sum.dim() != 2:
+                skipped += 1
+                continue
+            num_classes = counts.numel()
+            if feat_sum.size(0) != num_classes or feat_sq_sum.size(0) != num_classes:
+                skipped += 1
+                continue
+            if logit_sum.size(0) != num_classes or logit_sum.size(1) != num_classes:
+                skipped += 1
+                continue
+
+            feat_dim = feat_sum.size(1)
+            if expected_classes is None:
+                expected_classes = num_classes
+                expected_feat_dim = feat_dim
+            elif expected_classes != num_classes or expected_feat_dim != feat_dim:
+                skipped += 1
+                continue
+
+            for cls_id in range(num_classes):
+                cnt = float(counts[cls_id].item())
+                if cnt < float(self.proto_teacher_min_count):
+                    continue
+                denom = max(cnt, 1e-12)
+                mu = feat_sum[cls_id] / denom
+                var = (feat_sq_sum[cls_id] / denom) - mu.pow(2)
+                var = var.clamp_min(1e-6)
+                logits = logit_sum[cls_id] / denom
+                components.append({
+                    "class_id": cls_id,
+                    "count": cnt,
+                    "feat_mean": mu,
+                    "feat_var": var,
+                    "teacher_logits": logits,
+                })
+
+        if skipped > 0:
+            print(f"[FedCD] Skipped {skipped} invalid PM prototype payload(s).")
+        return components, expected_classes, expected_feat_dim
 
     def update_gm_from_pm_prototypes(self, received_protos):
-        proto = self._aggregate_pm_prototypes(received_protos)
-        if proto is None:
+        if not received_protos:
             return None
 
-        required = {"counts", "feat_sum", "feat_sq_sum", "logit_sum"}
-        if not required.issubset(set(proto.keys())):
-            print("[FedCD] Incomplete PM prototype payload. Skip prototype GM update.")
+        components, num_classes, feat_dim = self._collect_pm_prototype_components(received_protos)
+        if not components:
+            print("[FedCD] No valid PM prototype components. Skip prototype GM update.")
             return None
 
-        counts = proto["counts"].float()
-        feat_sum = proto["feat_sum"].float()
-        feat_sq_sum = proto["feat_sq_sum"].float()
-        logit_sum = proto["logit_sum"].float()
+        comp_labels = torch.tensor([c["class_id"] for c in components], dtype=torch.long)
+        comp_weights = torch.tensor([c["count"] for c in components], dtype=torch.float32)
+        comp_weights = comp_weights / comp_weights.sum().clamp_min(1e-12)
+        feat_mean = torch.stack([c["feat_mean"] for c in components], dim=0).float()
+        feat_var = torch.stack([c["feat_var"] for c in components], dim=0).float()
+        teacher_logits = torch.stack([c["teacher_logits"] for c in components], dim=0).float()
 
-        if counts.numel() == 0:
-            print("[FedCD] Empty PM prototype counts. Skip prototype GM update.")
-            return None
-        if feat_sum.dim() != 2 or feat_sq_sum.dim() != 2 or logit_sum.dim() != 2:
-            print("[FedCD] Invalid PM prototype tensor shapes. Skip prototype GM update.")
-            return None
-
-        valid = counts >= float(self.proto_teacher_min_count)
-        if int(valid.sum().item()) == 0:
-            print("[FedCD] No class has enough PM prototype samples. Skip prototype GM update.")
-            return None
-
-        denom = counts.unsqueeze(1).clamp_min(1e-12)
-        feat_mean = feat_sum / denom
-        feat_var = (feat_sq_sum / denom) - feat_mean.pow(2)
-        feat_var = feat_var.clamp_min(1e-6)
-        teacher_logits_mean = logit_sum / denom
-
-        valid_classes = int(valid.sum().item())
-        total_proto_samples = float(counts.sum().item())
+        valid_classes = int(comp_labels.unique().numel())
+        total_proto_samples = float(sum(c["count"] for c in components))
         print(
-            f"[FedCD] Prototype GM update: valid_classes={valid_classes}/{counts.numel()}, "
+            f"[FedCD] Prototype GM update (multimodal): components={len(components)}, "
+            f"valid_classes={valid_classes}/{num_classes}, feat_dim={feat_dim}, "
             f"total_proto_samples={total_proto_samples:.0f}"
         )
 
@@ -735,25 +771,23 @@ class FedCD(Server):
             scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
             ce_loss_fn = nn.CrossEntropyLoss()
 
-            valid_idx = torch.nonzero(valid, as_tuple=False).view(-1)
-            class_probs = counts[valid_idx].float()
-            class_probs = class_probs / class_probs.sum().clamp_min(1e-12)
-
+            comp_weights_dev = comp_weights.to(device)
+            comp_labels_dev = comp_labels.to(device)
             feat_mean_dev = feat_mean.to(device)
             feat_var_dev = feat_var.to(device)
-            teacher_logits_dev = teacher_logits_mean.to(device)
+            teacher_logits_dev = teacher_logits.to(device)
 
             steps = max(1, int(self.proto_teacher_steps))
             batch_size = max(1, int(self.proto_teacher_batch_size))
             noise_scale = max(0.0, float(self.proto_teacher_noise_scale))
 
             for _ in range(steps):
-                sampled_pos = torch.multinomial(class_probs, batch_size, replacement=True)
-                labels = valid_idx[sampled_pos].to(device).long()
+                sampled_comp = torch.multinomial(comp_weights_dev, batch_size, replacement=True)
+                labels = comp_labels_dev[sampled_comp].long()
+                mu = feat_mean_dev[sampled_comp]
 
-                mu = feat_mean_dev[labels]
                 if noise_scale > 0:
-                    std = torch.sqrt(feat_var_dev[labels])
+                    std = torch.sqrt(feat_var_dev[sampled_comp])
                     z = mu + noise_scale * std * torch.randn_like(mu)
                 else:
                     z = mu
@@ -766,9 +800,21 @@ class FedCD(Server):
                     if self.proto_teacher_ce_weight > 0:
                         loss = loss + self.proto_teacher_ce_weight * ce_loss_fn(gm_logits, labels)
                     if self.proto_teacher_kl_weight > 0:
-                        teacher_prob = torch.softmax(teacher_logits_dev[labels] / temp, dim=1)
+                        teacher_prob = torch.softmax(teacher_logits_dev[sampled_comp] / temp, dim=1)
                         student_log_prob = torch.log_softmax(gm_logits / temp, dim=1)
-                        kl_loss = F.kl_div(student_log_prob, teacher_prob, reduction="batchmean") * (temp * temp)
+                        if self.proto_teacher_confidence_weight:
+                            teacher_conf = self._teacher_confidence(teacher_prob)
+                            kd_weight = self.proto_teacher_confidence_min + (
+                                1.0 - self.proto_teacher_confidence_min
+                            ) * teacher_conf.pow(self.proto_teacher_confidence_power)
+                            kl_per_sample = F.kl_div(
+                                student_log_prob, teacher_prob, reduction="none"
+                            ).sum(dim=1) * (temp * temp)
+                            kl_loss = (kl_per_sample * kd_weight).mean()
+                        else:
+                            kl_loss = F.kl_div(
+                                student_log_prob, teacher_prob, reduction="batchmean"
+                            ) * (temp * temp)
                         loss = loss + self.proto_teacher_kl_weight * kl_loss
 
                 if not torch.isfinite(loss):

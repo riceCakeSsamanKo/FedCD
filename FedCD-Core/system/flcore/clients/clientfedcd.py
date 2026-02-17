@@ -14,6 +14,7 @@ class PMWrapper(nn.Module):
         f_ext,
         generalized_module,
         personalized_module,
+        num_classes,
         generalized_adapter=None,
         personalized_adapter=None,
         entropy_temp_pm=1.0,
@@ -24,6 +25,9 @@ class PMWrapper(nn.Module):
         entropy_pm_bias=0.0,
         entropy_gm_bias=0.0,
         entropy_disagree_gm_boost=0.0,
+        entropy_use_class_reliability=True,
+        entropy_reliability_scale=0.7,
+        entropy_hard_switch_margin=0.15,
     ):
         super().__init__()
         self.f_ext = f_ext
@@ -39,6 +43,26 @@ class PMWrapper(nn.Module):
         self.entropy_pm_bias = float(entropy_pm_bias)
         self.entropy_gm_bias = float(entropy_gm_bias)
         self.entropy_disagree_gm_boost = max(float(entropy_disagree_gm_boost), 0.0)
+        self.entropy_use_class_reliability = bool(entropy_use_class_reliability)
+        self.entropy_reliability_scale = max(float(entropy_reliability_scale), 0.0)
+        self.entropy_hard_switch_margin = max(float(entropy_hard_switch_margin), 0.0)
+        self.register_buffer(
+            "pm_class_reliability",
+            torch.full((int(num_classes),), 0.5, dtype=torch.float32),
+        )
+        self.register_buffer(
+            "gm_class_reliability",
+            torch.full((int(num_classes),), 0.5, dtype=torch.float32),
+        )
+
+    def set_class_reliability(self, pm_reliability, gm_reliability):
+        with torch.no_grad():
+            if pm_reliability is not None:
+                pm_reliability = pm_reliability.detach().float().clamp(0.0, 1.0)
+                self.pm_class_reliability.copy_(pm_reliability.to(self.pm_class_reliability.device))
+            if gm_reliability is not None:
+                gm_reliability = gm_reliability.detach().float().clamp(0.0, 1.0)
+                self.gm_class_reliability.copy_(gm_reliability.to(self.gm_class_reliability.device))
 
     @staticmethod
     def _normalized_entropy(prob):
@@ -53,9 +77,21 @@ class PMWrapper(nn.Module):
         # Use relative confidence (PM vs GM) so GM can dominate when PM is uncertain.
         pm_prob = torch.softmax(pm_logits / self.entropy_temp_pm, dim=1)
         gm_prob = torch.softmax(gm_logits / self.entropy_temp_gm, dim=1)
-        eps = 1e-12
         pm_conf = 1.0 - self._normalized_entropy(pm_prob)
         gm_conf = 1.0 - self._normalized_entropy(gm_prob)
+        pred_pm = torch.argmax(pm_prob, dim=1)
+        pred_gm = torch.argmax(gm_prob, dim=1)
+
+        if self.entropy_use_class_reliability and self.pm_class_reliability.numel() == pm_prob.size(1):
+            pm_rel = self.pm_class_reliability.to(pm_prob.device).index_select(0, pred_pm).unsqueeze(1)
+            gm_rel = self.gm_class_reliability.to(gm_prob.device).index_select(0, pred_gm).unsqueeze(1)
+            if self.entropy_reliability_scale > 0:
+                # Reliability-adjusted confidence amplifies trusted branch and suppresses weak branch.
+                pm_conf = pm_conf * (1.0 + self.entropy_reliability_scale * (2.0 * pm_rel - 1.0))
+                gm_conf = gm_conf * (1.0 + self.entropy_reliability_scale * (2.0 * gm_rel - 1.0))
+                pm_conf = pm_conf.clamp(0.0, 2.0)
+                gm_conf = gm_conf.clamp(0.0, 2.0)
+
         rel_pm_conf = torch.sigmoid(
             ((pm_conf + self.entropy_pm_bias) - (gm_conf + self.entropy_gm_bias))
             / self.entropy_gate_tau
@@ -65,10 +101,22 @@ class PMWrapper(nn.Module):
             pm_weight = self.entropy_min_pm_weight + span * rel_pm_conf
         else:
             pm_weight = rel_pm_conf
+
+        if self.entropy_hard_switch_margin > 0:
+            conf_gap = pm_conf - gm_conf
+            pm_weight = torch.where(
+                conf_gap >= self.entropy_hard_switch_margin,
+                torch.full_like(pm_weight, self.entropy_max_pm_weight),
+                pm_weight,
+            )
+            pm_weight = torch.where(
+                conf_gap <= -self.entropy_hard_switch_margin,
+                torch.full_like(pm_weight, self.entropy_min_pm_weight),
+                pm_weight,
+            )
+
         if self.entropy_disagree_gm_boost > 0:
-            pred_pm = torch.argmax(pm_prob, dim=1, keepdim=True)
-            pred_gm = torch.argmax(gm_prob, dim=1, keepdim=True)
-            disagree = (pred_pm != pred_gm).float()
+            disagree = (pred_pm != pred_gm).float().unsqueeze(1)
             gm_better = (gm_conf > pm_conf).float()
             pm_weight = pm_weight - self.entropy_disagree_gm_boost * disagree * gm_better
         pm_weight = pm_weight.clamp(0.0, 1.0)
@@ -129,16 +177,24 @@ class clientFedCD(Client):
         self.entropy_pm_bias = float(getattr(args, "fedcd_entropy_pm_bias", 0.0))
         self.entropy_gm_bias = float(getattr(args, "fedcd_entropy_gm_bias", 0.0))
         self.entropy_disagree_gm_boost = float(getattr(args, "fedcd_entropy_disagree_gm_boost", 0.0))
+        self.entropy_use_class_reliability = bool(getattr(args, "fedcd_entropy_use_class_reliability", True))
+        self.entropy_reliability_scale = float(getattr(args, "fedcd_entropy_reliability_scale", 0.7))
+        self.entropy_hard_switch_margin = float(getattr(args, "fedcd_entropy_hard_switch_margin", 0.15))
+        self.gate_reliability_ema = float(getattr(args, "fedcd_gate_reliability_ema", 0.9))
+        self.gate_reliability_samples = int(getattr(args, "fedcd_gate_reliability_samples", 512))
         self.warmup_epochs = int(getattr(args, "fedcd_warmup_epochs", 0))
         self.generalized_module = self._extract_module(self.gm)
         self.personalized_module = self._extract_module(self.pm)
         self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
         self.generalized_adapter = self._build_adapter(self.generalized_module)
         self.personalized_adapter = self._build_adapter(self.personalized_module)
+        self.pm_class_reliability = torch.full((int(self.num_classes),), 0.5, dtype=torch.float32)
+        self.gm_class_reliability = torch.full((int(self.num_classes),), 0.5, dtype=torch.float32)
         self.model = PMWrapper(
             self.f_ext,
             self.generalized_module,
             self.personalized_module,
+            self.num_classes,
             self.generalized_adapter,
             self.personalized_adapter,
             entropy_temp_pm=self.entropy_temp_pm,
@@ -149,7 +205,11 @@ class clientFedCD(Client):
             entropy_pm_bias=self.entropy_pm_bias,
             entropy_gm_bias=self.entropy_gm_bias,
             entropy_disagree_gm_boost=self.entropy_disagree_gm_boost,
+            entropy_use_class_reliability=self.entropy_use_class_reliability,
+            entropy_reliability_scale=self.entropy_reliability_scale,
+            entropy_hard_switch_margin=self.entropy_hard_switch_margin,
         )
+        self.model.set_class_reliability(self.pm_class_reliability, self.gm_class_reliability)
 
         # Local GM training can be toggled by fedcd_gm_update_mode.
         self._set_local_gm_trainable(self.local_gm_trainable)
@@ -288,6 +348,8 @@ class clientFedCD(Client):
         return mean, var
 
     def train(self):
+        trained = False
+
         def _train_once(device, batch_size):
             trainloader = self.load_train_data(batch_size=batch_size)
             # Move models to GPU only during training to reduce memory usage
@@ -390,6 +452,7 @@ class clientFedCD(Client):
 
         try:
             _train_once(self.device, batch_size)
+            trained = True
         except RuntimeError as err:
             if self.device == "cuda" and self._is_oom(err):
                 print("[Warn] OOM during FedCD client training. Reducing batch size / fallback to CPU.")
@@ -404,14 +467,105 @@ class clientFedCD(Client):
                 if reduced < batch_size:
                     try:
                         _train_once(self.device, reduced)
-                        return
+                        trained = True
                     except RuntimeError as err2:
                         if not self._is_oom(err2):
                             raise
-                print("[Warn] OOM persists. Falling back to CPU for this client.")
-                _train_once("cpu", reduced)
-                return
-            raise
+                if not trained:
+                    print("[Warn] OOM persists. Falling back to CPU for this client.")
+                    _train_once("cpu", reduced)
+                    trained = True
+            else:
+                raise
+
+        if trained:
+            self._update_gate_class_reliability(max_samples=self.gate_reliability_samples)
+
+    def _update_gate_class_reliability(self, max_samples=512):
+        ema = min(max(float(self.gate_reliability_ema), 0.0), 1.0)
+        max_samples = int(max_samples) if max_samples is not None else 0
+        if max_samples < 0:
+            max_samples = 0
+
+        try:
+            # Use local train split (not test split) to avoid evaluation leakage.
+            calib_batch_size = min(self.batch_size, max(1, self.train_samples))
+            trainloader = self.load_train_data(batch_size=min(calib_batch_size, 64))
+        except Exception:
+            return
+
+        device = self.device
+        pm_correct = torch.zeros(self.num_classes, dtype=torch.float64)
+        gm_correct = torch.zeros(self.num_classes, dtype=torch.float64)
+        cls_total = torch.zeros(self.num_classes, dtype=torch.float64)
+        seen = 0
+
+        self.f_ext.to(device)
+        self.generalized_module.to(device)
+        self.personalized_module.to(device)
+        self.f_ext.eval()
+        self.generalized_module.eval()
+        self.personalized_module.eval()
+        if self.generalized_adapter is not None:
+            self.generalized_adapter.to(device)
+            self.generalized_adapter.eval()
+        if self.personalized_adapter is not None:
+            self.personalized_adapter.to(device)
+            self.personalized_adapter.eval()
+
+        with torch.no_grad():
+            for x, y in trainloader:
+                if type(x) == type([]):
+                    x = x[0]
+                x = self._to_device(x, device)
+                y = self._to_device(y, device).long()
+
+                z = self.f_ext(x)
+                if z.dim() > 2:
+                    z = torch.flatten(z, 1)
+                z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+                gm_pred = torch.argmax(self.generalized_module(z_gm), dim=1)
+                pm_pred = torch.argmax(self.personalized_module(z_pm), dim=1)
+
+                for cls in y.unique():
+                    cls_id = int(cls.item())
+                    mask = (y == cls)
+                    cnt = mask.sum().item()
+                    if cnt <= 0:
+                        continue
+                    cls_total[cls_id] += cnt
+                    pm_correct[cls_id] += (pm_pred[mask] == cls).sum().item()
+                    gm_correct[cls_id] += (gm_pred[mask] == cls).sum().item()
+
+                seen += y.size(0)
+                if max_samples > 0 and seen >= max_samples:
+                    break
+
+        valid = cls_total > 0
+        if valid.any():
+            pm_new = self.pm_class_reliability.clone()
+            gm_new = self.gm_class_reliability.clone()
+            pm_acc = torch.zeros_like(pm_new)
+            gm_acc = torch.zeros_like(gm_new)
+            pm_acc[valid] = (pm_correct[valid] / cls_total[valid]).to(pm_new.dtype)
+            gm_acc[valid] = (gm_correct[valid] / cls_total[valid]).to(gm_new.dtype)
+            pm_new[valid] = ema * pm_new[valid] + (1.0 - ema) * pm_acc[valid]
+            gm_new[valid] = ema * gm_new[valid] + (1.0 - ema) * gm_acc[valid]
+            self.pm_class_reliability = pm_new.clamp(0.0, 1.0)
+            self.gm_class_reliability = gm_new.clamp(0.0, 1.0)
+            self.model.set_class_reliability(self.pm_class_reliability, self.gm_class_reliability)
+
+        if self.args.avoid_oom:
+            self.f_ext.to("cpu")
+            self.generalized_module.to("cpu")
+            self.personalized_module.to("cpu")
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to("cpu")
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to("cpu")
+            if device == "cuda":
+                torch.cuda.empty_cache()
 
     def warmup_personalized_module(self):
         if self.warmup_epochs <= 0:
