@@ -32,6 +32,7 @@ FEDCD_GM_LOGITS_WEIGHT=1.0
 FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=1.0
 FEDCD_GM_LR_SCALE=0.1
+FEDCD_GLOBAL_PERIOD=4
 FEDCD_GM_UPDATE_MODE="server_proto_teacher"
 FEDCD_PM_TEACHER_LR=0.01
 FEDCD_PM_TEACHER_TEMP=2.0
@@ -47,8 +48,8 @@ FEDCD_PM_TEACHER_ALLOW_TEST_FALLBACK=False
 FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT=True
 FEDCD_PM_TEACHER_CONFIDENCE_MIN=0.05
 FEDCD_PM_TEACHER_CONFIDENCE_POWER=1.0
-FEDCD_PROTO_TEACHER_LR=0.01
-FEDCD_PROTO_TEACHER_STEPS=200
+FEDCD_PROTO_TEACHER_LR=0.005
+FEDCD_PROTO_TEACHER_STEPS=120
 FEDCD_PROTO_TEACHER_BATCH_SIZE=256
 FEDCD_PROTO_TEACHER_TEMP=2.0
 FEDCD_PROTO_TEACHER_CE_WEIGHT=1.0
@@ -61,7 +62,7 @@ FEDCD_PROTO_TEACHER_CONFIDENCE_MIN=0.05
 FEDCD_PROTO_TEACHER_CONFIDENCE_POWER=1.0
 FEDCD_ENTROPY_TEMP_PM=1.0
 FEDCD_ENTROPY_TEMP_GM=1.0
-FEDCD_ENTROPY_MIN_PM_WEIGHT=0.20
+FEDCD_ENTROPY_MIN_PM_WEIGHT=0.05
 FEDCD_ENTROPY_MAX_PM_WEIGHT=0.90
 FEDCD_ENTROPY_GATE_TAU=0.15
 FEDCD_ENTROPY_PM_BIAS=0.0
@@ -69,9 +70,13 @@ FEDCD_ENTROPY_GM_BIAS=0.05
 FEDCD_ENTROPY_DISAGREE_GM_BOOST=0.05
 FEDCD_ENTROPY_USE_CLASS_RELIABILITY=True
 FEDCD_ENTROPY_RELIABILITY_SCALE=0.8
-FEDCD_ENTROPY_HARD_SWITCH_MARGIN=0.15
+FEDCD_ENTROPY_HARD_SWITCH_MARGIN=0.25
+FEDCD_ENTROPY_USE_OOD_GATE=True
+FEDCD_ENTROPY_OOD_SCALE=1.0
 FEDCD_GATE_RELIABILITY_EMA=0.9
 FEDCD_GATE_RELIABILITY_SAMPLES=512
+FEDCD_GATE_FEATURE_EMA=0.9
+FEDCD_GATE_FEATURE_SAMPLES=512
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 0.5 1.0) # (0.1 0.5 1.0)
@@ -88,7 +93,7 @@ echo "Clustering Enabled: ${FEDCD_ENABLE_CLUSTERING}"
 echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}, gm_lr_scale=${FEDCD_GM_LR_SCALE}"
 echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE}, proxy=${FEDCD_PM_TEACHER_PROXY_DATASET}/${FEDCD_PM_TEACHER_PROXY_SPLIT}, conf_w=${FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT})"
 echo "Prototype Teacher: lr=${FEDCD_PROTO_TEACHER_LR}, steps=${FEDCD_PROTO_TEACHER_STEPS}, batch=${FEDCD_PROTO_TEACHER_BATCH_SIZE}, temp=${FEDCD_PROTO_TEACHER_TEMP}, ce=${FEDCD_PROTO_TEACHER_CE_WEIGHT}, kl=${FEDCD_PROTO_TEACHER_KL_WEIGHT}, noise=${FEDCD_PROTO_TEACHER_NOISE_SCALE}, min_count=${FEDCD_PROTO_TEACHER_MIN_COUNT}, client_samples=${FEDCD_PROTO_TEACHER_CLIENT_SAMPLES}, conf_w=${FEDCD_PROTO_TEACHER_CONFIDENCE_WEIGHT}"
-echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}], gate_tau=${FEDCD_ENTROPY_GATE_TAU}, pm_bias=${FEDCD_ENTROPY_PM_BIAS}, gm_bias=${FEDCD_ENTROPY_GM_BIAS}, disagree_gm_boost=${FEDCD_ENTROPY_DISAGREE_GM_BOOST}, class_rel=${FEDCD_ENTROPY_USE_CLASS_RELIABILITY}, rel_scale=${FEDCD_ENTROPY_RELIABILITY_SCALE}, hard_margin=${FEDCD_ENTROPY_HARD_SWITCH_MARGIN}"
+echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}], gate_tau=${FEDCD_ENTROPY_GATE_TAU}, pm_bias=${FEDCD_ENTROPY_PM_BIAS}, gm_bias=${FEDCD_ENTROPY_GM_BIAS}, disagree_gm_boost=${FEDCD_ENTROPY_DISAGREE_GM_BOOST}, class_rel=${FEDCD_ENTROPY_USE_CLASS_RELIABILITY}, rel_scale=${FEDCD_ENTROPY_RELIABILITY_SCALE}, hard_margin=${FEDCD_ENTROPY_HARD_SWITCH_MARGIN}, ood_gate=${FEDCD_ENTROPY_USE_OOD_GATE}, ood_scale=${FEDCD_ENTROPY_OOD_SCALE}"
 echo "============================================================"
 
     for THRESHOLD in "${THRESHOLDS[@]}"
@@ -134,7 +139,7 @@ echo "============================================================"
                 --act_window_size 5 \
                 --cluster_period 2 \
                 --pm_period 1 \
-                --global_period 2 \
+                --global_period $FEDCD_GLOBAL_PERIOD \
                 --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
                 --max_dynamic_clusters 0 \
                 -dev $GPU_DEVICE \
@@ -193,8 +198,12 @@ echo "============================================================"
                 --fedcd_entropy_use_class_reliability $FEDCD_ENTROPY_USE_CLASS_RELIABILITY \
                 --fedcd_entropy_reliability_scale $FEDCD_ENTROPY_RELIABILITY_SCALE \
                 --fedcd_entropy_hard_switch_margin $FEDCD_ENTROPY_HARD_SWITCH_MARGIN \
+                --fedcd_entropy_use_ood_gate $FEDCD_ENTROPY_USE_OOD_GATE \
+                --fedcd_entropy_ood_scale $FEDCD_ENTROPY_OOD_SCALE \
                 --fedcd_gate_reliability_ema $FEDCD_GATE_RELIABILITY_EMA \
                 --fedcd_gate_reliability_samples $FEDCD_GATE_RELIABILITY_SAMPLES \
+                --fedcd_gate_feature_ema $FEDCD_GATE_FEATURE_EMA \
+                --fedcd_gate_feature_samples $FEDCD_GATE_FEATURE_SAMPLES \
                 --local_epochs 1 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
@@ -240,7 +249,7 @@ echo "============================================================"
                     --act_window_size 5 \
                     --cluster_period 2 \
                     --pm_period 1 \
-                    --global_period 2 \
+                    --global_period $FEDCD_GLOBAL_PERIOD \
                     --cluster_sample_size $CLUSTER_SAMPLE_SIZE \
                     --max_dynamic_clusters 0 \
                     -dev $GPU_DEVICE \
@@ -299,8 +308,12 @@ echo "============================================================"
                     --fedcd_entropy_use_class_reliability $FEDCD_ENTROPY_USE_CLASS_RELIABILITY \
                     --fedcd_entropy_reliability_scale $FEDCD_ENTROPY_RELIABILITY_SCALE \
                     --fedcd_entropy_hard_switch_margin $FEDCD_ENTROPY_HARD_SWITCH_MARGIN \
+                    --fedcd_entropy_use_ood_gate $FEDCD_ENTROPY_USE_OOD_GATE \
+                    --fedcd_entropy_ood_scale $FEDCD_ENTROPY_OOD_SCALE \
                     --fedcd_gate_reliability_ema $FEDCD_GATE_RELIABILITY_EMA \
                     --fedcd_gate_reliability_samples $FEDCD_GATE_RELIABILITY_SAMPLES \
+                    --fedcd_gate_feature_ema $FEDCD_GATE_FEATURE_EMA \
+                    --fedcd_gate_feature_samples $FEDCD_GATE_FEATURE_SAMPLES \
                     --local_epochs 1 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
                 ELAPSED_TIME=$(($SECONDS - $START_TIME))
 

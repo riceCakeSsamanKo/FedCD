@@ -521,10 +521,18 @@ if __name__ == "__main__":
                         help="Strength of per-class reliability modulation in entropy gate.")
     parser.add_argument('--fedcd_entropy_hard_switch_margin', type=float, default=0.15,
                         help="Confidence-gap margin for hard PM/GM branch selection (0 disables).")
+    parser.add_argument('--fedcd_entropy_use_ood_gate', type=str2bool, default=True,
+                        help="Use local feature-distribution similarity (OOD-aware) to suppress PM on OOD samples.")
+    parser.add_argument('--fedcd_entropy_ood_scale', type=float, default=1.0,
+                        help="Scale of OOD-aware PM suppression; smaller means stronger suppression.")
     parser.add_argument('--fedcd_gate_reliability_ema', type=float, default=0.9,
                         help="EMA factor for updating per-class PM/GM gate reliability.")
     parser.add_argument('--fedcd_gate_reliability_samples', type=int, default=512,
                         help="Max local test samples per round for gate reliability estimation (0 = full test set).")
+    parser.add_argument('--fedcd_gate_feature_ema', type=float, default=0.9,
+                        help="EMA factor for updating local feature-distribution stats used by OOD gate.")
+    parser.add_argument('--fedcd_gate_feature_samples', type=int, default=512,
+                        help="Max local samples per round for feature-stat updates (0 = full local train set).")
     parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
     parser.add_argument('--fedcd_pm_teacher_lr', type=float, default=0.01,
                         help="Server PM-teacher distillation learning rate for GM update.")

@@ -15,6 +15,7 @@ class PMWrapper(nn.Module):
         generalized_module,
         personalized_module,
         num_classes,
+        feature_dim=0,
         generalized_adapter=None,
         personalized_adapter=None,
         entropy_temp_pm=1.0,
@@ -28,6 +29,8 @@ class PMWrapper(nn.Module):
         entropy_use_class_reliability=True,
         entropy_reliability_scale=0.7,
         entropy_hard_switch_margin=0.15,
+        entropy_use_ood_gate=True,
+        entropy_ood_scale=1.0,
     ):
         super().__init__()
         self.f_ext = f_ext
@@ -46,6 +49,8 @@ class PMWrapper(nn.Module):
         self.entropy_use_class_reliability = bool(entropy_use_class_reliability)
         self.entropy_reliability_scale = max(float(entropy_reliability_scale), 0.0)
         self.entropy_hard_switch_margin = max(float(entropy_hard_switch_margin), 0.0)
+        self.entropy_use_ood_gate = bool(entropy_use_ood_gate)
+        self.entropy_ood_scale = max(float(entropy_ood_scale), 1e-6)
         self.register_buffer(
             "pm_class_reliability",
             torch.full((int(num_classes),), 0.5, dtype=torch.float32),
@@ -54,6 +59,12 @@ class PMWrapper(nn.Module):
             "gm_class_reliability",
             torch.full((int(num_classes),), 0.5, dtype=torch.float32),
         )
+        if int(feature_dim) > 0:
+            self.register_buffer("feature_mean", torch.zeros((int(feature_dim),), dtype=torch.float32))
+            self.register_buffer("feature_var", torch.ones((int(feature_dim),), dtype=torch.float32))
+        else:
+            self.feature_mean = None
+            self.feature_var = None
 
     def set_class_reliability(self, pm_reliability, gm_reliability):
         with torch.no_grad():
@@ -64,6 +75,17 @@ class PMWrapper(nn.Module):
                 gm_reliability = gm_reliability.detach().float().clamp(0.0, 1.0)
                 self.gm_class_reliability.copy_(gm_reliability.to(self.gm_class_reliability.device))
 
+    def set_feature_stats(self, feature_mean, feature_var):
+        if self.feature_mean is None or self.feature_var is None:
+            return
+        with torch.no_grad():
+            if feature_mean is not None:
+                feature_mean = feature_mean.detach().float()
+                self.feature_mean.copy_(feature_mean.to(self.feature_mean.device))
+            if feature_var is not None:
+                feature_var = feature_var.detach().float().clamp_min(1e-6)
+                self.feature_var.copy_(feature_var.to(self.feature_var.device))
+
     @staticmethod
     def _normalized_entropy(prob):
         eps = 1e-12
@@ -72,7 +94,7 @@ class PMWrapper(nn.Module):
         norm = torch.log(torch.tensor(float(num_classes), device=prob.device))
         return entropy / norm.clamp_min(eps)
 
-    def mix_prob(self, gm_logits, pm_logits):
+    def mix_prob(self, gm_logits, pm_logits, feat=None):
         # Entropy-based confidence gating:
         # Use relative confidence (PM vs GM) so GM can dominate when PM is uncertain.
         pm_prob = torch.softmax(pm_logits / self.entropy_temp_pm, dim=1)
@@ -119,13 +141,30 @@ class PMWrapper(nn.Module):
             disagree = (pred_pm != pred_gm).float().unsqueeze(1)
             gm_better = (gm_conf > pm_conf).float()
             pm_weight = pm_weight - self.entropy_disagree_gm_boost * disagree * gm_better
+
+        if (
+            self.entropy_use_ood_gate
+            and feat is not None
+            and self.feature_mean is not None
+            and self.feature_var is not None
+            and feat.dim() >= 2
+            and feat.size(1) == self.feature_mean.numel()
+        ):
+            # OOD-aware gating: PM is down-weighted when sample is far from local feature distribution.
+            mu = self.feature_mean.to(feat.device).unsqueeze(0)
+            var = self.feature_var.to(feat.device).clamp_min(1e-6).unsqueeze(0)
+            mahalanobis = ((feat - mu).pow(2) / var).mean(dim=1, keepdim=True)
+            in_dist_score = torch.exp(-mahalanobis / self.entropy_ood_scale).clamp(0.0, 1.0)
+            pm_floor = min(self.entropy_min_pm_weight, self.entropy_max_pm_weight)
+            pm_weight = pm_floor + (pm_weight - pm_floor) * in_dist_score
+
         pm_weight = pm_weight.clamp(0.0, 1.0)
         gm_weight = 1.0 - pm_weight
         mixed_prob = gm_weight * gm_prob + pm_weight * pm_prob
         return mixed_prob, pm_weight
 
-    def fuse_logits(self, gm_logits, pm_logits):
-        mixed_prob, _ = self.mix_prob(gm_logits, pm_logits)
+    def fuse_logits(self, gm_logits, pm_logits, feat=None):
+        mixed_prob, _ = self.mix_prob(gm_logits, pm_logits, feat=feat)
         return torch.log(mixed_prob.clamp_min(1e-12))
 
     def forward(self, x):
@@ -136,7 +175,7 @@ class PMWrapper(nn.Module):
         gm_logits = self.generalized_module(z_gm)
         z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
         pm_logits = self.personalized_module(z_pm)
-        return self.fuse_logits(gm_logits, pm_logits)
+        return self.fuse_logits(gm_logits, pm_logits, feat=z)
 
 class clientFedCD(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
@@ -180,8 +219,12 @@ class clientFedCD(Client):
         self.entropy_use_class_reliability = bool(getattr(args, "fedcd_entropy_use_class_reliability", True))
         self.entropy_reliability_scale = float(getattr(args, "fedcd_entropy_reliability_scale", 0.7))
         self.entropy_hard_switch_margin = float(getattr(args, "fedcd_entropy_hard_switch_margin", 0.15))
+        self.entropy_use_ood_gate = bool(getattr(args, "fedcd_entropy_use_ood_gate", True))
+        self.entropy_ood_scale = float(getattr(args, "fedcd_entropy_ood_scale", 1.0))
         self.gate_reliability_ema = float(getattr(args, "fedcd_gate_reliability_ema", 0.9))
         self.gate_reliability_samples = int(getattr(args, "fedcd_gate_reliability_samples", 512))
+        self.gate_feature_ema = float(getattr(args, "fedcd_gate_feature_ema", 0.9))
+        self.gate_feature_samples = int(getattr(args, "fedcd_gate_feature_samples", 512))
         self.warmup_epochs = int(getattr(args, "fedcd_warmup_epochs", 0))
         self.generalized_module = self._extract_module(self.gm)
         self.personalized_module = self._extract_module(self.pm)
@@ -190,13 +233,24 @@ class clientFedCD(Client):
         self.personalized_adapter = self._build_adapter(self.personalized_module)
         self.pm_class_reliability = torch.full((int(self.num_classes),), 0.5, dtype=torch.float32)
         self.gm_class_reliability = torch.full((int(self.num_classes),), 0.5, dtype=torch.float32)
+        self.gate_feature_mean = (
+            torch.zeros((int(self.f_ext_dim),), dtype=torch.float32)
+            if self.f_ext_dim is not None and int(self.f_ext_dim) > 0
+            else None
+        )
+        self.gate_feature_var = (
+            torch.ones((int(self.f_ext_dim),), dtype=torch.float32)
+            if self.f_ext_dim is not None and int(self.f_ext_dim) > 0
+            else None
+        )
         self.model = PMWrapper(
             self.f_ext,
             self.generalized_module,
             self.personalized_module,
             self.num_classes,
-            self.generalized_adapter,
-            self.personalized_adapter,
+            feature_dim=(int(self.f_ext_dim) if self.f_ext_dim is not None else 0),
+            generalized_adapter=self.generalized_adapter,
+            personalized_adapter=self.personalized_adapter,
             entropy_temp_pm=self.entropy_temp_pm,
             entropy_temp_gm=self.entropy_temp_gm,
             entropy_min_pm_weight=self.entropy_min_pm_weight,
@@ -208,8 +262,11 @@ class clientFedCD(Client):
             entropy_use_class_reliability=self.entropy_use_class_reliability,
             entropy_reliability_scale=self.entropy_reliability_scale,
             entropy_hard_switch_margin=self.entropy_hard_switch_margin,
+            entropy_use_ood_gate=self.entropy_use_ood_gate,
+            entropy_ood_scale=self.entropy_ood_scale,
         )
         self.model.set_class_reliability(self.pm_class_reliability, self.gm_class_reliability)
+        self.model.set_feature_stats(self.gate_feature_mean, self.gate_feature_var)
 
         # Local GM training can be toggled by fedcd_gm_update_mode.
         self._set_local_gm_trainable(self.local_gm_trainable)
@@ -402,7 +459,7 @@ class clientFedCD(Client):
                         # 2. PM의 예측
                         z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
                         pm_feat, logits_pm = self._forward_module_with_feature(z_pm, self.personalized_module)
-                        fused_logits = self.model.fuse_logits(logits_gm, logits_pm)
+                        fused_logits = self.model.fuse_logits(logits_gm, logits_pm, feat=z)
 
                         # 3. Loss 계산 (Task Loss + Feature-wise Negative Correlation)
                         loss = self.fusion_weight * F.nll_loss(fused_logits, y)
@@ -479,10 +536,12 @@ class clientFedCD(Client):
                 raise
 
         if trained:
-            self._update_gate_class_reliability(max_samples=self.gate_reliability_samples)
+            stat_samples = max(int(self.gate_reliability_samples), int(self.gate_feature_samples))
+            self._update_gate_class_reliability(max_samples=stat_samples)
 
     def _update_gate_class_reliability(self, max_samples=512):
         ema = min(max(float(self.gate_reliability_ema), 0.0), 1.0)
+        feature_ema = min(max(float(self.gate_feature_ema), 0.0), 1.0)
         max_samples = int(max_samples) if max_samples is not None else 0
         if max_samples < 0:
             max_samples = 0
@@ -498,6 +557,9 @@ class clientFedCD(Client):
         pm_correct = torch.zeros(self.num_classes, dtype=torch.float64)
         gm_correct = torch.zeros(self.num_classes, dtype=torch.float64)
         cls_total = torch.zeros(self.num_classes, dtype=torch.float64)
+        feat_sum = None
+        feat_sq_sum = None
+        feat_count = 0
         seen = 0
 
         self.f_ext.to(device)
@@ -538,6 +600,20 @@ class clientFedCD(Client):
                     pm_correct[cls_id] += (pm_pred[mask] == cls).sum().item()
                     gm_correct[cls_id] += (gm_pred[mask] == cls).sum().item()
 
+                if (
+                    self.gate_feature_mean is not None
+                    and self.gate_feature_var is not None
+                    and z.size(1) == self.gate_feature_mean.numel()
+                ):
+                    zf = z.detach().float()
+                    if feat_sum is None:
+                        feat_sum = zf.sum(dim=0)
+                        feat_sq_sum = (zf * zf).sum(dim=0)
+                    else:
+                        feat_sum += zf.sum(dim=0)
+                        feat_sq_sum += (zf * zf).sum(dim=0)
+                    feat_count += zf.size(0)
+
                 seen += y.size(0)
                 if max_samples > 0 and seen >= max_samples:
                     break
@@ -555,6 +631,26 @@ class clientFedCD(Client):
             self.pm_class_reliability = pm_new.clamp(0.0, 1.0)
             self.gm_class_reliability = gm_new.clamp(0.0, 1.0)
             self.model.set_class_reliability(self.pm_class_reliability, self.gm_class_reliability)
+
+        if (
+            feat_count > 0
+            and feat_sum is not None
+            and feat_sq_sum is not None
+            and self.gate_feature_mean is not None
+            and self.gate_feature_var is not None
+        ):
+            feat_mean = feat_sum / float(feat_count)
+            feat_var = (feat_sq_sum / float(feat_count)) - feat_mean.pow(2)
+            feat_var = feat_var.clamp_min(1e-6)
+            mean_old = self.gate_feature_mean
+            var_old = self.gate_feature_var
+            self.gate_feature_mean = (
+                feature_ema * mean_old + (1.0 - feature_ema) * feat_mean.to(mean_old.dtype)
+            )
+            self.gate_feature_var = (
+                feature_ema * var_old + (1.0 - feature_ema) * feat_var.to(var_old.dtype)
+            ).clamp_min(1e-6)
+            self.model.set_feature_stats(self.gate_feature_mean, self.gate_feature_var)
 
         if self.args.avoid_oom:
             self.f_ext.to("cpu")
@@ -606,7 +702,7 @@ class clientFedCD(Client):
                         logits_pm = self.personalized_module(z_pm)
                         z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
                         logits_gm = self.generalized_module(z_gm)
-                        logits = self.model.fuse_logits(logits_gm, logits_pm)
+                        logits = self.model.fuse_logits(logits_gm, logits_pm, feat=z)
                         loss = F.nll_loss(logits, y)
                     scaler.scale(loss).backward()
                     scaler.step(optimizer)
@@ -800,7 +896,7 @@ class clientFedCD(Client):
         gm_logits = self.generalized_module(z_gm)
         z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
         pm_logits = self.personalized_module(z_pm)
-        mixed_prob, pm_weight = self.model.mix_prob(gm_logits, pm_logits)
+        mixed_prob, pm_weight = self.model.mix_prob(gm_logits, pm_logits, feat=z)
         fused_logits = torch.log(mixed_prob.clamp_min(1e-12))
         return fused_logits, gm_logits, pm_logits, pm_weight
 
