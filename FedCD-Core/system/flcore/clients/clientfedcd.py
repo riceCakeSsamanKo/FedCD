@@ -205,9 +205,14 @@ class clientFedCD(Client):
         self.gm_logits_weight = float(getattr(args, "fedcd_gm_logits_weight", 1.0))
         self.gm_lr_scale = float(getattr(args, "fedcd_gm_lr_scale", 0.1))
         self.gm_update_mode = str(getattr(args, "fedcd_gm_update_mode", "local")).strip().lower()
-        if self.gm_update_mode not in {"local", "server_pm_teacher", "server_proto_teacher"}:
+        if self.gm_update_mode not in {
+            "local",
+            "server_pm_teacher",
+            "server_proto_teacher",
+            "hybrid_local_proto",
+        }:
             raise ValueError(f"Unknown fedcd_gm_update_mode: {self.gm_update_mode}")
-        self.local_gm_trainable = (self.gm_update_mode == "local")
+        self.local_gm_trainable = self.gm_update_mode in {"local", "hybrid_local_proto"}
         self.entropy_temp_pm = float(getattr(args, "fedcd_entropy_temp_pm", 1.0))
         self.entropy_temp_gm = float(getattr(args, "fedcd_entropy_temp_gm", 1.0))
         self.entropy_min_pm_weight = float(getattr(args, "fedcd_entropy_min_pm_weight", 0.1))

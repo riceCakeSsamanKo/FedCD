@@ -32,7 +32,8 @@ FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=0.8
 FEDCD_GM_LR_SCALE=0.1
 FEDCD_GLOBAL_PERIOD=4
-FEDCD_GM_UPDATE_MODE="server_proto_teacher"
+FEDCD_GM_UPDATE_MODE="hybrid_local_proto"
+FEDCD_HYBRID_PROTO_BLEND=0.35
 FEDCD_PM_TEACHER_LR=0.01
 FEDCD_PM_TEACHER_TEMP=2.0
 FEDCD_PM_TEACHER_KL_WEIGHT=1.0
@@ -90,7 +91,7 @@ echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Global Test Eval: ${EVAL_COMMON_GLOBAL} (samples=${GLOBAL_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
 echo "Clustering Enabled: ${FEDCD_ENABLE_CLUSTERING}"
 echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}, gm_lr_scale=${FEDCD_GM_LR_SCALE}"
-echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE}, proxy=${FEDCD_PM_TEACHER_PROXY_DATASET}/${FEDCD_PM_TEACHER_PROXY_SPLIT}, conf_w=${FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT})"
+echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (hybrid_blend=${FEDCD_HYBRID_PROTO_BLEND}; pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE}, proxy=${FEDCD_PM_TEACHER_PROXY_DATASET}/${FEDCD_PM_TEACHER_PROXY_SPLIT}, conf_w=${FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT})"
 echo "Prototype Teacher: lr=${FEDCD_PROTO_TEACHER_LR}, steps=${FEDCD_PROTO_TEACHER_STEPS}, batch=${FEDCD_PROTO_TEACHER_BATCH_SIZE}, temp=${FEDCD_PROTO_TEACHER_TEMP}, ce=${FEDCD_PROTO_TEACHER_CE_WEIGHT}, kl=${FEDCD_PROTO_TEACHER_KL_WEIGHT}, noise=${FEDCD_PROTO_TEACHER_NOISE_SCALE}, min_count=${FEDCD_PROTO_TEACHER_MIN_COUNT}, client_samples=${FEDCD_PROTO_TEACHER_CLIENT_SAMPLES}, conf_w=${FEDCD_PROTO_TEACHER_CONFIDENCE_WEIGHT}"
 echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}], gate_tau=${FEDCD_ENTROPY_GATE_TAU}, pm_bias=${FEDCD_ENTROPY_PM_BIAS}, gm_bias=${FEDCD_ENTROPY_GM_BIAS}, disagree_gm_boost=${FEDCD_ENTROPY_DISAGREE_GM_BOOST}, class_rel=${FEDCD_ENTROPY_USE_CLASS_RELIABILITY}, rel_scale=${FEDCD_ENTROPY_RELIABILITY_SCALE}, hard_margin=${FEDCD_ENTROPY_HARD_SWITCH_MARGIN}, ood_gate=${FEDCD_ENTROPY_USE_OOD_GATE}, ood_scale=${FEDCD_ENTROPY_OOD_SCALE}"
 echo "============================================================"
@@ -160,6 +161,7 @@ do
                 --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
                 --fedcd_gm_lr_scale $FEDCD_GM_LR_SCALE \
                 --fedcd_gm_update_mode $FEDCD_GM_UPDATE_MODE \
+                --fedcd_hybrid_proto_blend $FEDCD_HYBRID_PROTO_BLEND \
                 --fedcd_pm_teacher_lr $FEDCD_PM_TEACHER_LR \
                 --fedcd_pm_teacher_temp $FEDCD_PM_TEACHER_TEMP \
                 --fedcd_pm_teacher_kl_weight $FEDCD_PM_TEACHER_KL_WEIGHT \

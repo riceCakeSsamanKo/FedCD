@@ -70,8 +70,15 @@ class FedCD(Server):
         self.cluster_generalized_states = {}
         self._initialize_cluster_generalized_states()
         self.gm_update_mode = str(getattr(args, "fedcd_gm_update_mode", "local")).strip().lower()
-        if self.gm_update_mode not in {"local", "server_pm_teacher", "server_proto_teacher"}:
+        if self.gm_update_mode not in {
+            "local",
+            "server_pm_teacher",
+            "server_proto_teacher",
+            "hybrid_local_proto",
+        }:
             raise ValueError(f"Unknown fedcd_gm_update_mode: {self.gm_update_mode}")
+        self.hybrid_proto_blend = float(getattr(args, "fedcd_hybrid_proto_blend", 0.35))
+        self.hybrid_proto_blend = min(max(self.hybrid_proto_blend, 0.0), 1.0)
         self.pm_teacher_lr = float(getattr(args, "fedcd_pm_teacher_lr", 0.01))
         self.pm_teacher_temp = float(getattr(args, "fedcd_pm_teacher_temp", 2.0))
         self.pm_teacher_kl_weight = float(getattr(args, "fedcd_pm_teacher_kl_weight", 1.0))
@@ -383,12 +390,12 @@ class FedCD(Server):
                 pm_state = client.upload_parameters()
                 received_pms.append((client.id, pm_state))
                 total_uplink_bytes += sum(v.numel() * v.element_size() for v in pm_state.values())
-                if self.gm_update_mode == "local":
+                if self.gm_update_mode in {"local", "hybrid_local_proto"}:
                     gm_state = client.upload_generalized_parameters()
                     if gm_state:
                         received_gms.append((client.id, gm_state, float(getattr(client, "train_samples", 1))))
                         total_uplink_bytes += sum(v.numel() * v.element_size() for v in gm_state.values())
-                elif self.gm_update_mode == "server_proto_teacher":
+                if self.gm_update_mode in {"server_proto_teacher", "hybrid_local_proto"}:
                     proto_state = client.upload_pm_prototypes(max_samples=self.proto_teacher_client_samples)
                     if proto_state:
                         received_protos.append((client.id, proto_state))
@@ -435,8 +442,10 @@ class FedCD(Server):
                     global_gm_state = self.aggregate_global_gms(received_gms) if received_gms else None
                 elif self.gm_update_mode == "server_pm_teacher":
                     global_gm_state = self.distill_global_gm_from_pm_teachers(cluster_pms, cluster_counts)
-                else:
+                elif self.gm_update_mode == "server_proto_teacher":
                     global_gm_state = self.update_gm_from_pm_prototypes(received_protos)
+                else:
+                    global_gm_state = self.update_gm_hybrid_local_proto(received_gms, received_protos)
                 if global_gm_state:
                     if self.gm_update_mode == "local":
                         self._apply_generalized_state_to_server(global_gm_state)
@@ -452,8 +461,14 @@ class FedCD(Server):
                     print(f"[FedCD] Round {i}: Server-side global GM aggregation/update done")
                 elif self.gm_update_mode == "server_pm_teacher":
                     print(f"[FedCD] Round {i}: Server-side PM-teacher GM distillation/update done")
-                else:
+                elif self.gm_update_mode == "server_proto_teacher":
                     print(f"[FedCD] Round {i}: Server-side prototype-based GM update done")
+                else:
+                    print(
+                        "[FedCD] Round "
+                        f"{i}: Hybrid GM update done (FedAvg local GM + prototype refine, "
+                        f"blend={self.hybrid_proto_blend:.2f})"
+                    )
                 # Warm-up Personalized Module after GM update
                 if getattr(self.args, "fedcd_warmup_epochs", 0) > 0:
                     for client in tqdm(self.selected_clients, desc=f"Round {i} PM Warm-up", leave=False):
@@ -860,6 +875,63 @@ class FedCD(Server):
             }
         self._apply_generalized_state_to_server(updated_state)
         return updated_state
+
+    def update_gm_hybrid_local_proto(self, received_gms, received_protos):
+        """
+        Hybrid GM update:
+        1) FedAvg local GM uploads (label-supervised local learning signal)
+        2) Optional prototype-based refinement from PM uploads
+        3) Blend FedAvg and refined GM states for stability
+        """
+        fedavg_state = self.aggregate_global_gms(received_gms) if received_gms else None
+        if fedavg_state is None and not received_protos:
+            print("[FedCD] Hybrid GM update skipped: no GM uploads and no PM prototypes.")
+            return None
+
+        if fedavg_state is not None:
+            # Use FedAvg GM as the base state before refinement.
+            self._apply_generalized_state_to_server(fedavg_state)
+            for cluster_id in set(self.cluster_map.values()):
+                self.cluster_generalized_states[cluster_id] = {
+                    k: v.clone() for k, v in fedavg_state.items()
+                }
+
+        if not received_protos or self.hybrid_proto_blend <= 0.0:
+            if self.hybrid_proto_blend <= 0.0:
+                print("[FedCD] Hybrid GM update: prototype refinement disabled by blend=0.")
+            return fedavg_state
+
+        refined_state = self.update_gm_from_pm_prototypes(received_protos)
+        if refined_state is None:
+            return fedavg_state
+
+        if fedavg_state is None:
+            print("[FedCD] Hybrid GM update: no local GM uploads, using prototype-refined GM only.")
+            return refined_state
+
+        beta = self.hybrid_proto_blend
+        if beta >= 1.0:
+            return refined_state
+
+        # Blend preserves local supervised signal while injecting PM-prototype knowledge.
+        mixed_state = {}
+        all_keys = set(fedavg_state.keys()) | set(refined_state.keys())
+        for key in all_keys:
+            base = fedavg_state.get(key)
+            refined = refined_state.get(key)
+            if base is None:
+                mixed_state[key] = refined.clone()
+            elif refined is None:
+                mixed_state[key] = base.clone()
+            else:
+                mixed_state[key] = (1.0 - beta) * base + beta * refined
+
+        self._apply_generalized_state_to_server(mixed_state)
+        for cluster_id in set(self.cluster_map.values()):
+            self.cluster_generalized_states[cluster_id] = {
+                k: v.clone() for k, v in mixed_state.items()
+            }
+        return mixed_state
 
     def _extract_personalized_state(self, state):
         personalized_module_state = {
