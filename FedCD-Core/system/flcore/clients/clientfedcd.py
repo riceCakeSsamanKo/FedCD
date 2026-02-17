@@ -118,10 +118,16 @@ class PMWrapper(nn.Module):
             ((pm_conf + self.entropy_pm_bias) - (gm_conf + self.entropy_gm_bias))
             / self.entropy_gate_tau
         )
-        if self.entropy_max_pm_weight > self.entropy_min_pm_weight:
-            span = self.entropy_max_pm_weight - self.entropy_min_pm_weight
-            pm_weight = self.entropy_min_pm_weight + span * rel_pm_conf
+        min_w = float(self.entropy_min_pm_weight)
+        max_w = float(self.entropy_max_pm_weight)
+        if abs(max_w - min_w) < 1e-12:
+            # Explicit fixed-ratio mode (e.g., 0.5/0.5) independent of confidence.
+            pm_weight = torch.full_like(rel_pm_conf, min(max(min_w, 0.0), 1.0))
+        elif max_w > min_w:
+            span = max_w - min_w
+            pm_weight = min_w + span * rel_pm_conf
         else:
+            # Fallback for malformed range: use relative confidence directly.
             pm_weight = rel_pm_conf
 
         if self.entropy_hard_switch_margin > 0:

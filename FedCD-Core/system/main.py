@@ -461,6 +461,8 @@ if __name__ == "__main__":
                         help="Enable adaptive threshold adjustment based on client performance trends.")
     parser.add_argument('--threshold_step', type=float, default=0.05,
                         help="Step size for increasing/decreasing the clustering threshold (used if rates are not specified).")
+    parser.add_argument('--threshold_step_max', type=float, default=0.1,
+                        help="Maximum absolute threshold change per ACT update.")
     parser.add_argument('--threshold_decay', type=float, default=0.9,
                         help="Decay rate for the threshold step size when direction reverses (Zig-Zag).")
     parser.add_argument('--act_window_size', type=int, default=5,

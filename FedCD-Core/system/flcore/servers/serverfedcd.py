@@ -138,6 +138,9 @@ class FedCD(Server):
             self.current_threshold = 0.05
             
         self.threshold_step = float(getattr(args, "threshold_step", 0.05))
+        self.threshold_step_max = float(getattr(args, "threshold_step_max", 0.1))
+        self.threshold_step_max = max(self.threshold_step_max, 1e-6)
+        self.threshold_step = min(abs(self.threshold_step), self.threshold_step_max)
         self.threshold_decay = float(getattr(args, "threshold_decay", 0.9))
         self.threshold_max = float(getattr(args, "threshold_max", 0.95))
         
@@ -1467,6 +1470,7 @@ class FedCD(Server):
                 print(f"[ACT] {reason} detected (Diff < Trend)! Reversing direction and decaying step.")
                 self.act_direction *= -1
                 self.threshold_step *= self.threshold_decay
+                self.threshold_step = min(abs(self.threshold_step), self.threshold_step_max)
                 # Reset history to establish a new trend in the new direction
                 self.acc_history = []
             else:
@@ -1481,10 +1485,11 @@ class FedCD(Server):
 
         # Update Threshold
         old_th = self.current_threshold
-        self.current_threshold += self.act_direction * self.threshold_step
+        effective_step = min(abs(self.threshold_step), self.threshold_step_max)
+        self.current_threshold += self.act_direction * effective_step
         self.current_threshold = max(0.01, min(self.threshold_max, self.current_threshold))
         
-        print(f"[ACT] Updated Threshold: {old_th:.4f} -> {self.current_threshold:.4f} (Dir: {self.act_direction}, Step: {self.threshold_step:.4f})")
+        print(f"[ACT] Updated Threshold: {old_th:.4f} -> {self.current_threshold:.4f} (Dir: {self.act_direction}, Step: {effective_step:.4f})")
 
     def cluster_clients_by_distribution(self):
         # Cluster clients by f_ext feature distribution stats

@@ -17,7 +17,7 @@ fi
 # Settings
 GPU_DEVICE="cuda"
 GLOBAL_ROUNDS=100
-LOCAL_EPOCHS=3
+LOCAL_EPOCHS=5
 ALGO="FedCD"
 DATASET="Cifar10"
 TOTAL_DATA=50000
@@ -60,7 +60,7 @@ FEDCD_PM_TEACHER_REL_BATCH=64
 FEDCD_INIT_PRETRAIN=True
 FEDCD_INIT_EPOCHS=5
 FEDCD_INIT_LR=0.005
-FEDCD_INIT_SAMPLES=2000
+FEDCD_INIT_SAMPLES=50000
 FEDCD_INIT_BATCH_SIZE=256
 FEDCD_INIT_CE_WEIGHT=1.0
 FEDCD_INIT_KD_WEIGHT=1.0
@@ -80,10 +80,10 @@ FEDCD_PROTO_TEACHER_CONFIDENCE_MIN=0.05
 FEDCD_PROTO_TEACHER_CONFIDENCE_POWER=1.0
 FEDCD_ENTROPY_TEMP_PM=1.0
 FEDCD_ENTROPY_TEMP_GM=1.0
-FEDCD_ENTROPY_MIN_PM_WEIGHT=0.6
-FEDCD_ENTROPY_MAX_PM_WEIGHT=0.95
+FEDCD_ENTROPY_MIN_PM_WEIGHT=0.5
+FEDCD_ENTROPY_MAX_PM_WEIGHT=0.5
 FEDCD_ENTROPY_GATE_TAU=0.15
-FEDCD_ENTROPY_PM_BIAS=0.05
+FEDCD_ENTROPY_PM_BIAS=0.0
 FEDCD_ENTROPY_GM_BIAS=0.0
 FEDCD_ENTROPY_DISAGREE_GM_BOOST=0.0
 FEDCD_ENTROPY_USE_CLASS_RELIABILITY=False
@@ -156,7 +156,8 @@ echo "============================================================"
                 --cluster_threshold $THRESHOLD \
                 --fedcd_enable_clustering $FEDCD_ENABLE_CLUSTERING \
                 --adaptive_threshold True \
-                --threshold_step 0.05 \
+                --threshold_step 0.1 \
+                --threshold_step_max 0.1 \
                 --threshold_decay 0.9 \
                 --act_window_size 5 \
                 --cluster_period 2 \
@@ -283,7 +284,8 @@ echo "============================================================"
                     --cluster_threshold $THRESHOLD \
                     --fedcd_enable_clustering $FEDCD_ENABLE_CLUSTERING \
                     --adaptive_threshold True \
-                    --threshold_step 0.05 \
+                    --threshold_step 0.1 \
+                    --threshold_step_max 0.1 \
                     --threshold_decay 0.9 \
                     --act_window_size 5 \
                     --cluster_period 2 \
