@@ -57,15 +57,20 @@ class FedCD(Server):
         self.last_global_gate_stats = None
         # Backward-compatible alias
         self.common_test_loader = self.global_test_loader
-        self.f_ext = self._build_f_ext(args)
-        self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
         self.generalized_module = self._extract_module(self.global_model)
-        self.generalized_adapter = self._build_adapter(self.generalized_module)
         pm_model = getattr(args, "pm_model", None)
         if pm_model is None:
             pm_model = copy.deepcopy(self.global_model)
         self.personalized_module = self._extract_module(pm_model)
-        self.personalized_adapter = self._build_adapter(self.personalized_module)
+        target_fext_dim = self._resolve_module_input_dim(
+            self.generalized_module,
+            self.personalized_module,
+        )
+        self.f_ext = self._build_f_ext(args, target_dim=target_fext_dim)
+        self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
+        # Adapter is intentionally disabled.
+        self.generalized_adapter = None
+        self.personalized_adapter = None
         # Cluster-wise GM states (each cluster keeps its own distilled GM).
         self.cluster_generalized_states = {}
         self._initialize_cluster_generalized_states()
@@ -156,7 +161,7 @@ class FedCD(Server):
         self.acc_history = [] # Stores mean accuracy for regression
         self.window_size = int(getattr(args, "act_window_size", 5))
 
-    def _build_f_ext(self, args):
+    def _build_f_ext(self, args, target_dim=None):
         model_name = str(getattr(args, "fext_model", "SmallFExt"))
         if model_name == "VGG16":
             # Load Pretrained VGG16 features
@@ -165,7 +170,10 @@ class FedCD(Server):
             f_ext.out_dim = 512 * 7 * 7 # VGG16 final feature map size
         elif model_name == "SmallFExt":
             in_channels = 1 if "MNIST" in args.dataset else 3
-            fext_dim = int(getattr(args, "fext_dim", 512))
+            if target_dim is not None:
+                fext_dim = int(target_dim)
+            else:
+                fext_dim = int(getattr(args, "fext_dim", 512))
             f_ext = SmallFExt(in_channels=in_channels, out_dim=fext_dim)
         else:
             raise NotImplementedError(f"Unknown fext_model: {model_name}")
@@ -189,14 +197,18 @@ class FedCD(Server):
                 return layer.in_features
         return None
 
-    def _build_adapter(self, module):
-        f_ext_dim = self.f_ext_dim
-        pm_in_dim = self._first_linear_in_features(module)
-        if f_ext_dim is None or pm_in_dim is None:
+    def _resolve_module_input_dim(self, *modules):
+        dims = [self._first_linear_in_features(m) for m in modules]
+        dims = [d for d in dims if d is not None]
+        if not dims:
             return None
-        if f_ext_dim == pm_in_dim:
-            return None
-        return nn.Linear(f_ext_dim, pm_in_dim)
+        unique_dims = sorted(set(int(d) for d in dims))
+        if len(unique_dims) != 1:
+            raise ValueError(
+                "Adapter-free FedCD requires identical GM/PM classifier input dims, "
+                f"but got {unique_dims}."
+            )
+        return unique_dims[0]
 
     def _current_generalized_state(self):
         state = {
