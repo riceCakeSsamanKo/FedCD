@@ -26,6 +26,13 @@ FEDCD_GM_LOGITS_WEIGHT=1.0
 FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=0.8
 FEDCD_GM_LR_SCALE=0.1
+FEDCD_GM_UPDATE_MODE="local"
+FEDCD_PM_TEACHER_LR=0.01
+FEDCD_PM_TEACHER_TEMP=2.0
+FEDCD_PM_TEACHER_KL_WEIGHT=1.0
+FEDCD_PM_TEACHER_CE_WEIGHT=0.2
+FEDCD_PM_TEACHER_SAMPLES=2000
+FEDCD_PM_TEACHER_BATCH_SIZE=256
 FEDCD_ENTROPY_TEMP_PM=1.0
 FEDCD_ENTROPY_TEMP_GM=1.0
 FEDCD_ENTROPY_MIN_PM_WEIGHT=0.1
@@ -42,6 +49,7 @@ echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
 echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}, gm_lr_scale=${FEDCD_GM_LR_SCALE}"
+echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE})"
 echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}]"
 echo "============================================================"
 
@@ -105,6 +113,13 @@ do
                 --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
                 --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
                 --fedcd_gm_lr_scale $FEDCD_GM_LR_SCALE \
+                --fedcd_gm_update_mode $FEDCD_GM_UPDATE_MODE \
+                --fedcd_pm_teacher_lr $FEDCD_PM_TEACHER_LR \
+                --fedcd_pm_teacher_temp $FEDCD_PM_TEACHER_TEMP \
+                --fedcd_pm_teacher_kl_weight $FEDCD_PM_TEACHER_KL_WEIGHT \
+                --fedcd_pm_teacher_ce_weight $FEDCD_PM_TEACHER_CE_WEIGHT \
+                --fedcd_pm_teacher_samples $FEDCD_PM_TEACHER_SAMPLES \
+                --fedcd_pm_teacher_batch_size $FEDCD_PM_TEACHER_BATCH_SIZE \
                 --fedcd_entropy_temp_pm $FEDCD_ENTROPY_TEMP_PM \
                 --fedcd_entropy_temp_gm $FEDCD_ENTROPY_TEMP_GM \
                 --fedcd_entropy_min_pm_weight $FEDCD_ENTROPY_MIN_PM_WEIGHT \

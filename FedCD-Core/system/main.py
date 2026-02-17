@@ -495,6 +495,8 @@ if __name__ == "__main__":
                         help="Auxiliary CE loss weight for GM-only logits during local training.")
     parser.add_argument('--fedcd_gm_lr_scale', type=float, default=0.1,
                         help="Local GM learning-rate scale relative to base local lr.")
+    parser.add_argument('--fedcd_gm_update_mode', type=str, default="local",
+                        help="GM update mode: local | server_pm_teacher")
     parser.add_argument('--fedcd_entropy_temp_pm', type=float, default=1.0,
                         help="Temperature for PM probabilities in entropy-based PM/GM mixing.")
     parser.add_argument('--fedcd_entropy_temp_gm', type=float, default=1.0,
@@ -504,6 +506,18 @@ if __name__ == "__main__":
     parser.add_argument('--fedcd_entropy_max_pm_weight', type=float, default=0.9,
                         help="Maximum PM mixing weight in entropy gate.")
     parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
+    parser.add_argument('--fedcd_pm_teacher_lr', type=float, default=0.01,
+                        help="Server PM-teacher distillation learning rate for GM update.")
+    parser.add_argument('--fedcd_pm_teacher_temp', type=float, default=2.0,
+                        help="Temperature for server PM-teacher distillation.")
+    parser.add_argument('--fedcd_pm_teacher_kl_weight', type=float, default=1.0,
+                        help="KL loss weight for server PM-teacher distillation.")
+    parser.add_argument('--fedcd_pm_teacher_ce_weight', type=float, default=0.2,
+                        help="CE loss weight (with labels) for server PM-teacher distillation.")
+    parser.add_argument('--fedcd_pm_teacher_samples', type=int, default=2000,
+                        help="Number of samples for server PM-teacher distillation (0 = full union test set).")
+    parser.add_argument('--fedcd_pm_teacher_batch_size', type=int, default=256,
+                        help="Batch size for server PM-teacher distillation.")
     parser.add_argument('--gm_model', type=str, default="VGG16",
                         help="FedCD GM model name")
     parser.add_argument('--pm_model', type=str, default="VGG8",

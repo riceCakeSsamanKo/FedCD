@@ -95,6 +95,10 @@ class clientFedCD(Client):
         self.pm_only_weight = float(getattr(args, "fedcd_pm_only_weight", 1.5))
         self.gm_logits_weight = float(getattr(args, "fedcd_gm_logits_weight", 1.0))
         self.gm_lr_scale = float(getattr(args, "fedcd_gm_lr_scale", 0.1))
+        self.gm_update_mode = str(getattr(args, "fedcd_gm_update_mode", "local")).strip().lower()
+        if self.gm_update_mode not in {"local", "server_pm_teacher"}:
+            raise ValueError(f"Unknown fedcd_gm_update_mode: {self.gm_update_mode}")
+        self.local_gm_trainable = (self.gm_update_mode == "local")
         self.entropy_temp_pm = float(getattr(args, "fedcd_entropy_temp_pm", 1.0))
         self.entropy_temp_gm = float(getattr(args, "fedcd_entropy_temp_gm", 1.0))
         self.entropy_min_pm_weight = float(getattr(args, "fedcd_entropy_min_pm_weight", 0.1))
@@ -117,12 +121,8 @@ class clientFedCD(Client):
             entropy_max_pm_weight=self.entropy_max_pm_weight,
         )
 
-        # Enable training for GM head(+adapter) only (feature extractor stays frozen).
-        for p in self.generalized_module.parameters():
-            p.requires_grad = True
-        if self.generalized_adapter is not None:
-            for p in self.generalized_adapter.parameters():
-                p.requires_grad = True
+        # Local GM training can be toggled by fedcd_gm_update_mode.
+        self._set_local_gm_trainable(self.local_gm_trainable)
 
         # Optimizer: PM uses base lr, GM uses scaled lr.
         self.optimizer = self._build_optimizer()
@@ -196,6 +196,13 @@ class clientFedCD(Client):
         logits = module(z)
         return z, logits
 
+    def _set_local_gm_trainable(self, trainable):
+        for p in self.generalized_module.parameters():
+            p.requires_grad = bool(trainable)
+        if self.generalized_adapter is not None:
+            for p in self.generalized_adapter.parameters():
+                p.requires_grad = bool(trainable)
+
     @staticmethod
     def _merge_legacy_module_state(module, head_state, final_state):
         if not head_state and not final_state:
@@ -264,9 +271,14 @@ class clientFedCD(Client):
             if self.personalized_adapter is not None:
                 self.personalized_adapter.to(device)
             self.personalized_module.train()
-            self.generalized_module.train()
-            if self.generalized_adapter is not None:
-                self.generalized_adapter.train()
+            if self.local_gm_trainable:
+                self.generalized_module.train()
+                if self.generalized_adapter is not None:
+                    self.generalized_adapter.train()
+            else:
+                self.generalized_module.eval()
+                if self.generalized_adapter is not None:
+                    self.generalized_adapter.eval()
             use_amp = device == "cuda" and self.use_amp
             scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
@@ -285,9 +297,15 @@ class clientFedCD(Client):
                         if z.dim() > 2:
                             z = torch.flatten(z, 1)
 
-                        # 1. GM prediction (trainable)
-                        z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
-                        gm_feat, logits_gm = self._forward_module_with_feature(z_gm, self.generalized_module)
+                        if self.local_gm_trainable:
+                            # 1. GM prediction (trainable on local mode)
+                            z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                            gm_feat, logits_gm = self._forward_module_with_feature(z_gm, self.generalized_module)
+                        else:
+                            # 1. GM prediction (frozen in server_pm_teacher mode)
+                            with torch.no_grad():
+                                z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                                gm_feat, logits_gm = self._forward_module_with_feature(z_gm, self.generalized_module)
 
                         # 2. PM의 예측
                         z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
@@ -296,13 +314,13 @@ class clientFedCD(Client):
 
                         # 3. Loss 계산 (Task Loss + Feature-wise Negative Correlation)
                         loss = self.fusion_weight * F.nll_loss(fused_logits, y)
-                        if self.gm_logits_weight > 0:
+                        if self.local_gm_trainable and self.gm_logits_weight > 0:
                             loss = loss + self.gm_logits_weight * self.loss_func(logits_gm, y)
                         if self.pm_logits_weight > 0:
                             loss = loss + self.pm_logits_weight * self.loss_func(logits_pm, y)
                         if self.pm_only_weight > 0:
                             loss = loss + self.pm_only_weight * self.loss_func(logits_pm, y)
-                        if self.nc_weight > 0:
+                        if self.local_gm_trainable and self.nc_weight > 0:
                             fused = (gm_feat + pm_feat) / 2.0
                             nc_term = (gm_feat - fused) * (pm_feat - fused)
                             nc_loss = nc_term.mean()
@@ -576,15 +594,17 @@ class clientFedCD(Client):
         if self.personalized_adapter is not None:
             pm_params += list(self.personalized_adapter.parameters())
 
-        gm_params = list(self.generalized_module.parameters())
-        if self.generalized_adapter is not None:
-            gm_params += list(self.generalized_adapter.parameters())
+        gm_params = []
+        if self.local_gm_trainable:
+            gm_params = list(self.generalized_module.parameters())
+            if self.generalized_adapter is not None:
+                gm_params += list(self.generalized_adapter.parameters())
 
         gm_lr = max(self.learning_rate * self.gm_lr_scale, 0.0)
         param_groups = []
         if pm_params:
             param_groups.append({"params": pm_params, "lr": self.learning_rate})
-        if gm_params:
+        if gm_params and gm_lr > 0:
             param_groups.append({"params": gm_params, "lr": gm_lr})
         return torch.optim.SGD(param_groups, lr=self.learning_rate)
 
@@ -603,6 +623,8 @@ class clientFedCD(Client):
         return state
 
     def upload_generalized_parameters(self):
+        if not self.local_gm_trainable:
+            return {}
         state = {
             f"generalized_module.{k}": v.detach().cpu()
             for k, v in self.generalized_module.state_dict().items()
