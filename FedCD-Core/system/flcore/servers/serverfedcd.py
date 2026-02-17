@@ -433,15 +433,15 @@ class FedCD(Server):
 
             # 2. PM 수집 (Receive PMs)
             received_pms = []
-            received_prototypes = []
+            received_gms = []
             total_uplink_bytes = 0
             for client in tqdm(self.selected_clients, desc=f"Round {i} Collecting PMs", leave=False):
                 pm_state = client.upload_parameters()
-                proto_state = client.upload_class_prototypes(self.prototype_samples)
+                gm_state = client.upload_generalized_parameters()
                 received_pms.append((client.id, pm_state))
-                received_prototypes.append((client.id, proto_state))
+                received_gms.append((client.id, gm_state, float(getattr(client, "train_samples", 1))))
                 total_uplink_bytes += sum(v.numel() * v.element_size() for v in pm_state.values())
-                total_uplink_bytes += sum(v.numel() * v.element_size() for v in proto_state.values())
+                total_uplink_bytes += sum(v.numel() * v.element_size() for v in gm_state.values())
             
             round_uplink += total_uplink_bytes
 
@@ -468,17 +468,6 @@ class FedCD(Server):
                     clients_in_cluster = sorted(cluster_groups[c_id])
                     print(f"  Cluster {c_id} ({len(clients_in_cluster)} clients): {clients_in_cluster}")
 
-            (
-                self.cluster_proto_info,
-                self.global_proto_info,
-                self.cluster_teacher_confidence,
-            ) = self.aggregate_cluster_prototypes(received_prototypes)
-            if self.cluster_teacher_confidence:
-                conf_msg = ", ".join(
-                    f"{cid}:{conf:.3f}" for cid, conf in sorted(self.cluster_teacher_confidence.items())
-                )
-                print(f"[FedCD] Prototype consensus confidence: {conf_msg}")
-
             # 3. 클러스터 내 PM 집계 및 배포
             cluster_pms = self.aggregate_cluster_pms(received_pms)
             if i % self.pm_period == 0 and cluster_pms:
@@ -488,23 +477,28 @@ class FedCD(Server):
                 if self.log_usage and i % self.log_usage_every == 0:
                     self._log_usage(i, "post_pm", wall_start, cpu_start)
 
-            # 4. 서버 측 앙상블 증류 (Server-side Ensemble Distillation)
-            if i > 0 and i % self.global_period == 0 and cluster_pms:
-                cluster_counts = self._get_cluster_client_counts(received_pms)
-                cluster_gm_states = self.aggregate_and_distill(cluster_pms, cluster_counts)
-                # Distilled cluster GM을 각 클러스터 클라이언트에 배포
-                downlink_bytes = self.send_cluster_gms(cluster_gm_states)
+            # 4. GM 전역 통합 (Global GM Aggregation across all clients)
+            if i % self.global_period == 0 and received_gms:
+                global_gm_state = self.aggregate_global_gms(received_gms)
+                if global_gm_state:
+                    self._apply_generalized_state_to_server(global_gm_state)
+                    for c_id in set(self.cluster_map.values()):
+                        self.cluster_generalized_states[c_id] = {
+                            k: v.clone() for k, v in global_gm_state.items()
+                        }
+                    if self.broadcast_global_combiner:
+                        cluster_counts = self._get_cluster_client_counts(received_pms)
+                        self.update_global_combiner(cluster_pms, cluster_counts)
+                    downlink_bytes = self.send_models()
+                else:
+                    downlink_bytes = 0
                 calib_epochs = int(getattr(self.args, "fedcd_combiner_calib_epochs", 1))
                 if calib_epochs > 0:
                     print(f"[FedCD] Round {i}: Combiner-only calibration on selected clients (epochs={calib_epochs})")
                     for client in tqdm(self.selected_clients, desc=f"Round {i} Combiner Calibration", leave=False):
                         client.calibrate_combiner()
-                # Optional: broadcast global combiner if enabled
-                if self.broadcast_global_combiner:
-                    self.update_global_combiner(cluster_pms, cluster_counts)
-                    downlink_bytes += self.send_global_combiner()
                 round_downlink += downlink_bytes
-                print(f"[FedCD] Round {i}: Server-side cluster GM distillation/update done")
+                print(f"[FedCD] Round {i}: Server-side global GM aggregation/update done")
                 # Warm-up Personalized Module after GM update
                 if getattr(self.args, "fedcd_warmup_epochs", 0) > 0:
                     for client in tqdm(self.selected_clients, desc=f"Round {i} PM Warm-up", leave=False):
@@ -762,6 +756,39 @@ class FedCD(Server):
             cluster_id = self.cluster_map.get(client_id, 0)
             counts[cluster_id] = counts.get(cluster_id, 0) + 1
         return counts
+
+    def aggregate_global_gms(self, received_gms):
+        """
+        Aggregate GM states from all selected clients (weighted FedAvg).
+        received_gms: [(client_id, gm_state_dict, weight), ...]
+        """
+        if not received_gms:
+            return None
+
+        valid = []
+        total_weight = 0.0
+        for _, state, weight in received_gms:
+            w = float(weight)
+            if w <= 0:
+                continue
+            valid.append((state, w))
+            total_weight += w
+
+        if not valid or total_weight <= 0:
+            return None
+
+        template = valid[0][0]
+        avg_state = {}
+        for key in template.keys():
+            acc = None
+            for state, w in valid:
+                if key not in state:
+                    continue
+                contrib = state[key] * (w / total_weight)
+                acc = contrib if acc is None else (acc + contrib)
+            if acc is not None:
+                avg_state[key] = acc
+        return avg_state
 
     def update_global_combiner(self, cluster_pms, cluster_counts):
         weighted_states = []

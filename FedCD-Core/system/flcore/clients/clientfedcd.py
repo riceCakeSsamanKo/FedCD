@@ -50,7 +50,7 @@ class clientFedCD(Client):
             self.pm = copy.deepcopy(self.model) # Personalized Module (CPU)
         self.f_ext = self._build_f_ext(args)
         
-        # GM은 영원히 Freeze (BN 통계량 포함)
+        # Start from frozen GM backbone; only GM head(+adapter) is trainable.
         for param in self.gm.parameters():
             param.requires_grad = False
         self.gm.eval() 
@@ -67,6 +67,7 @@ class clientFedCD(Client):
                 getattr(args, "fedcd_pm_combiner_weight", 1.5),
             )
         )
+        self.gm_logits_weight = float(getattr(args, "fedcd_gm_logits_weight", 1.0))
         self.prototype_samples = int(getattr(args, "fedcd_prototype_samples", 512))
         self.combiner_calib_epochs = int(getattr(args, "fedcd_combiner_calib_epochs", 1))
         self.combiner_calib_lr_mult = float(getattr(args, "fedcd_combiner_calib_lr_mult", 1.0))
@@ -86,10 +87,20 @@ class clientFedCD(Client):
             self.personalized_adapter,
         )
 
-        # Optimizer는 Personalized Module(+adapter)만 관리
+        # Enable training for GM head(+adapter) only (feature extractor stays frozen).
+        for p in self.generalized_module.parameters():
+            p.requires_grad = True
+        if self.generalized_adapter is not None:
+            for p in self.generalized_adapter.parameters():
+                p.requires_grad = True
+
+        # Optimizer: PM + combiner + GM head(+adapter)
         pm_params = list(self.personalized_module.parameters()) + list(self.combiner.parameters())
         if self.personalized_adapter is not None:
             pm_params += list(self.personalized_adapter.parameters())
+        pm_params += list(self.generalized_module.parameters())
+        if self.generalized_adapter is not None:
+            pm_params += list(self.generalized_adapter.parameters())
         self.optimizer = torch.optim.SGD(pm_params, lr=self.learning_rate)
 
         # [Info] Print Model Stats for Client 0
@@ -253,7 +264,9 @@ class clientFedCD(Client):
                 self.personalized_adapter.to(device)
             self.personalized_module.train()
             self.combiner.train()
-            self.generalized_module.eval()
+            self.generalized_module.train()
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.train()
             use_amp = device == "cuda" and self.use_amp
             scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
@@ -272,10 +285,9 @@ class clientFedCD(Client):
                         if z.dim() > 2:
                             z = torch.flatten(z, 1)
 
-                        # 1. GM의 지식 (Reference)
-                        with torch.no_grad():
-                            z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
-                            gm_feat, logits_gm = self._forward_module_with_feature(z_gm, self.generalized_module)
+                        # 1. GM prediction (trainable)
+                        z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                        gm_feat, logits_gm = self._forward_module_with_feature(z_gm, self.generalized_module)
 
                         # 2. PM의 예측
                         z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
@@ -284,6 +296,8 @@ class clientFedCD(Client):
 
                         # 3. Loss 계산 (Task Loss + Feature-wise Negative Correlation)
                         loss = self.fusion_weight * self.loss_func(fused_logits, y)
+                        if self.gm_logits_weight > 0:
+                            loss = loss + self.gm_logits_weight * self.loss_func(logits_gm, y)
                         if self.pm_logits_weight > 0:
                             loss = loss + self.pm_logits_weight * self.loss_func(logits_pm, y)
                         if self.pm_only_weight > 0:
@@ -541,6 +555,7 @@ class clientFedCD(Client):
     def set_parameters(self, model):
         # 서버에서 받은 Generalized Module 관련 파라미터를 로드
         combiner_updated = False
+        gm_updated = False
         if isinstance(model, dict):
             gm_parts = model.get("gm_parts", None)
             gm_state = model.get("gm_state", {})
@@ -588,8 +603,10 @@ class clientFedCD(Client):
 
             if generalized_module_state:
                 self.generalized_module.load_state_dict(generalized_module_state, strict=True)
+                gm_updated = True
             if self.generalized_adapter is not None and generalized_adapter_state:
                 self.generalized_adapter.load_state_dict(generalized_adapter_state, strict=True)
+                gm_updated = True
             if global_combiner_state:
                 self.combiner.load_state_dict(global_combiner_state, strict=True)
                 combiner_updated = True
@@ -606,8 +623,10 @@ class clientFedCD(Client):
                     }
                     if generalized_module_state:
                         self.generalized_module.load_state_dict(generalized_module_state, strict=True)
+                        gm_updated = True
                 else:
                     self.gm.load_state_dict(gm_state, strict=True)
+                    gm_updated = True
                 if any(k.startswith("global_combiner.") for k in gm_state.keys()):
                     global_combiner_state = {
                         k.replace("global_combiner.", ""): v
@@ -616,6 +635,7 @@ class clientFedCD(Client):
                     }
             if gm_adapter_state is not None and self.generalized_adapter is not None:
                 self.generalized_adapter.load_state_dict(gm_adapter_state, strict=True)
+                gm_updated = True
             if global_combiner_state is not None:
                 self.combiner.load_state_dict(global_combiner_state, strict=True)
                 combiner_updated = True
@@ -624,7 +644,7 @@ class clientFedCD(Client):
         if self.generalized_adapter is not None:
             self.model.generalized_adapter = self.generalized_adapter
         self.model.combiner = self.combiner
-        if combiner_updated:
+        if combiner_updated or gm_updated:
             self._reset_optimizer()
         
         # PM은 GM과 너무 멀어지지 않게 살짝 당겨주거나(Regularization), 
@@ -678,6 +698,9 @@ class clientFedCD(Client):
         pm_params = list(self.personalized_module.parameters()) + list(self.combiner.parameters())
         if self.personalized_adapter is not None:
             pm_params += list(self.personalized_adapter.parameters())
+        pm_params += list(self.generalized_module.parameters())
+        if self.generalized_adapter is not None:
+            pm_params += list(self.generalized_adapter.parameters())
         self.optimizer = torch.optim.SGD(pm_params, lr=self.learning_rate)
 
     def upload_parameters(self):
@@ -693,6 +716,18 @@ class clientFedCD(Client):
                 for k, v in self.personalized_adapter.state_dict().items()
             })
         state.update({f"combiner.{k}": v.detach().cpu() for k, v in self.combiner.state_dict().items()})
+        return state
+
+    def upload_generalized_parameters(self):
+        state = {
+            f"generalized_module.{k}": v.detach().cpu()
+            for k, v in self.generalized_module.state_dict().items()
+        }
+        if self.generalized_adapter is not None:
+            state.update({
+                f"generalized_adapter.{k}": v.detach().cpu()
+                for k, v in self.generalized_adapter.state_dict().items()
+            })
         return state
 
     def upload_class_prototypes(self, max_samples=None):

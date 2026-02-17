@@ -26,6 +26,7 @@ FEDCD_DISTILL_TEMP=3.0
 FEDCD_DISTILL_KL_WEIGHT=1.0
 FEDCD_DISTILL_CE_WEIGHT=0.05
 FEDCD_FUSION_WEIGHT=1.0
+FEDCD_GM_LOGITS_WEIGHT=1.0
 FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=0.8
 FEDCD_PROTOTYPE_SAMPLES=512
@@ -45,7 +46,7 @@ echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
 echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Distill: lr=${FEDCD_DISTILL_LR}, temp=${FEDCD_DISTILL_TEMP}, kl=${FEDCD_DISTILL_KL_WEIGHT}, ce=${FEDCD_DISTILL_CE_WEIGHT}"
-echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}"
+echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}"
 echo "Prototype Consensus: samples=${FEDCD_PROTOTYPE_SAMPLES}, proto_w=${FEDCD_PROTO_WEIGHT}, rel_w=${FEDCD_RELATION_WEIGHT}"
 echo "Post-GM Combiner Calibration: epochs=${FEDCD_COMBINER_CALIB_EPOCHS}, lr_mult=${FEDCD_COMBINER_CALIB_LR_MULT}"
 echo "============================================================"
@@ -110,6 +111,7 @@ do
                 --fedcd_distill_kl_weight $FEDCD_DISTILL_KL_WEIGHT \
                 --fedcd_distill_ce_weight $FEDCD_DISTILL_CE_WEIGHT \
                 --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
+                --fedcd_gm_logits_weight $FEDCD_GM_LOGITS_WEIGHT \
                 --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
                 --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
                 --fedcd_prototype_samples $FEDCD_PROTOTYPE_SAMPLES \

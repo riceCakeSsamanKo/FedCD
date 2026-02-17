@@ -492,6 +492,8 @@ if __name__ == "__main__":
     parser.add_argument('--fedcd_pm_only_weight', '--fedcd_pm_combiner_weight',
                         dest='fedcd_pm_only_weight', type=float, default=1.5,
                         help="Auxiliary CE loss weight for PM-only combiner branch during local training.")
+    parser.add_argument('--fedcd_gm_logits_weight', type=float, default=1.0,
+                        help="Auxiliary CE loss weight for GM-only logits during local training.")
     parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
     parser.add_argument('--broadcast_global_combiner', type=str2bool, default=False,
                         help="Broadcast distilled global combiner to clients together with GM.")
