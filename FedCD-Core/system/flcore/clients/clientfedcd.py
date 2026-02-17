@@ -642,14 +642,20 @@ class clientFedCD(Client):
             feat_mean = feat_sum / float(feat_count)
             feat_var = (feat_sq_sum / float(feat_count)) - feat_mean.pow(2)
             feat_var = feat_var.clamp_min(1e-6)
+
+            # Keep client-side cached stats on CPU, but allow temporary device alignment
+            # during EMA update to avoid cpu/cuda mixing errors.
             mean_old = self.gate_feature_mean
             var_old = self.gate_feature_var
-            self.gate_feature_mean = (
-                feature_ema * mean_old + (1.0 - feature_ema) * feat_mean.to(mean_old.dtype)
-            )
-            self.gate_feature_var = (
-                feature_ema * var_old + (1.0 - feature_ema) * feat_var.to(var_old.dtype)
+            target_device = feat_mean.device
+            mean_old_dev = mean_old.to(target_device)
+            var_old_dev = var_old.to(target_device)
+            mean_new = feature_ema * mean_old_dev + (1.0 - feature_ema) * feat_mean.to(mean_old_dev.dtype)
+            var_new = (
+                feature_ema * var_old_dev + (1.0 - feature_ema) * feat_var.to(var_old_dev.dtype)
             ).clamp_min(1e-6)
+            self.gate_feature_mean = mean_new.detach().cpu()
+            self.gate_feature_var = var_new.detach().cpu()
             self.model.set_feature_stats(self.gate_feature_mean, self.gate_feature_var)
 
         if self.args.avoid_oom:
