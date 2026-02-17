@@ -199,6 +199,7 @@ class clientFedCD(Client):
 
         self.loss_func = nn.CrossEntropyLoss()
         self.nc_weight = float(getattr(args, "fedcd_nc_weight", 0.0))
+        self.nc_target_corr = float(getattr(args, "fedcd_nc_target_corr", -0.1))
         self.fusion_weight = float(getattr(args, "fedcd_fusion_weight", 1.0))
         self.pm_logits_weight = float(getattr(args, "fedcd_pm_logits_weight", 0.5))
         self.pm_only_weight = float(getattr(args, "fedcd_pm_only_weight", 1.5))
@@ -348,6 +349,34 @@ class clientFedCD(Client):
         logits = module(z)
         return z, logits
 
+    def _feature_negative_correlation_loss(self, gm_feat, pm_feat):
+        # FedEXT-inspired feature-wise negative correlation:
+        # compute per-feature Pearson correlation and push it to a mild negative target.
+        if gm_feat.dim() > 2:
+            gm_feat = torch.flatten(gm_feat, 1)
+        if pm_feat.dim() > 2:
+            pm_feat = torch.flatten(pm_feat, 1)
+        if gm_feat.size(0) <= 1 or pm_feat.size(0) <= 1:
+            return gm_feat.new_zeros(())
+
+        feat_dim = min(gm_feat.size(1), pm_feat.size(1))
+        if feat_dim <= 0:
+            return gm_feat.new_zeros(())
+        if gm_feat.size(1) != feat_dim:
+            gm_feat = gm_feat[:, :feat_dim]
+        if pm_feat.size(1) != feat_dim:
+            pm_feat = pm_feat[:, :feat_dim]
+
+        gm_centered = gm_feat - gm_feat.mean(dim=0, keepdim=True)
+        pm_centered = pm_feat - pm_feat.mean(dim=0, keepdim=True)
+        gm_std = gm_centered.std(dim=0, unbiased=False).clamp_min(1e-6)
+        pm_std = pm_centered.std(dim=0, unbiased=False).clamp_min(1e-6)
+        corr = (gm_centered * pm_centered).mean(dim=0) / (gm_std * pm_std)
+        corr = corr.clamp(-1.0, 1.0)
+
+        target = torch.full_like(corr, float(self.nc_target_corr))
+        return F.mse_loss(corr, target, reduction="mean")
+
     def _set_local_gm_trainable(self, trainable):
         for p in self.generalized_module.parameters():
             p.requires_grad = bool(trainable)
@@ -474,10 +503,8 @@ class clientFedCD(Client):
                             loss = loss + self.pm_logits_weight * self.loss_func(logits_pm, y)
                         if self.pm_only_weight > 0:
                             loss = loss + self.pm_only_weight * self.loss_func(logits_pm, y)
-                        if self.local_gm_trainable and self.nc_weight > 0:
-                            fused = (gm_feat + pm_feat) / 2.0
-                            nc_term = (gm_feat - fused) * (pm_feat - fused)
-                            nc_loss = nc_term.mean()
+                        if self.nc_weight > 0:
+                            nc_loss = self._feature_negative_correlation_loss(gm_feat, pm_feat)
                             loss = loss + self.nc_weight * nc_loss
                         # 필요시 여기에 GM과의 Distillation Loss 추가 가능
                     
@@ -761,6 +788,9 @@ class clientFedCD(Client):
     # [핵심] 서버에서 Generalized Module 파트를 받아 적용
     def set_parameters(self, model):
         # 서버에서 받은 Generalized Module 관련 파라미터를 로드
+        if isinstance(model, dict) and model.get("init_parts", None) is not None:
+            self.set_initial_parameters(model["init_parts"])
+            return
         gm_updated = False
         if isinstance(model, dict):
             gm_parts = model.get("gm_parts", None)
@@ -836,6 +866,60 @@ class clientFedCD(Client):
         # PM은 GM과 너무 멀어지지 않게 살짝 당겨주거나(Regularization), 
         # 혹은 그대로 둡니다(Pure Personalization). 연구 의도에 따라 선택.
         # 여기서는 일단 PM은 그대로 유지하는 것으로 둡니다.
+
+    def set_initial_parameters(self, init_state):
+        if not init_state:
+            return
+        state = init_state
+        if next(iter(state.values())).is_cuda:
+            state = {k: v.detach().cpu() for k, v in state.items()}
+
+        f_ext_state = {
+            k.replace("f_ext.", ""): v
+            for k, v in state.items()
+            if k.startswith("f_ext.")
+        }
+        generalized_module_state = {
+            k.replace("generalized_module.", ""): v
+            for k, v in state.items()
+            if k.startswith("generalized_module.")
+        }
+        generalized_adapter_state = {
+            k.replace("generalized_adapter.", ""): v
+            for k, v in state.items()
+            if k.startswith("generalized_adapter.")
+        }
+        personalized_module_state = {
+            k.replace("personalized_module.", ""): v
+            for k, v in state.items()
+            if k.startswith("personalized_module.")
+        }
+        personalized_adapter_state = {
+            k.replace("personalized_adapter.", ""): v
+            for k, v in state.items()
+            if k.startswith("personalized_adapter.")
+        }
+
+        if f_ext_state:
+            self.f_ext.load_state_dict(f_ext_state, strict=True)
+        if generalized_module_state:
+            self.generalized_module.load_state_dict(generalized_module_state, strict=True)
+        if self.generalized_adapter is not None and generalized_adapter_state:
+            self.generalized_adapter.load_state_dict(generalized_adapter_state, strict=True)
+        if personalized_module_state:
+            self.personalized_module.load_state_dict(personalized_module_state, strict=True)
+        if self.personalized_adapter is not None and personalized_adapter_state:
+            self.personalized_adapter.load_state_dict(personalized_adapter_state, strict=True)
+
+        self.model.f_ext = self.f_ext
+        self.model.generalized_module = self.generalized_module
+        self.model.personalized_module = self.personalized_module
+        if self.generalized_adapter is not None:
+            self.model.generalized_adapter = self.generalized_adapter
+        if self.personalized_adapter is not None:
+            self.model.personalized_adapter = self.personalized_adapter
+
+        self._reset_optimizer()
 
     def set_personalized_parameters(self, pm_state):
         # 서버에서 받은 클러스터 대표 Personalized Module을 업데이트

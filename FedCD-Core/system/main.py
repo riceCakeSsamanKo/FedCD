@@ -487,6 +487,8 @@ if __name__ == "__main__":
     parser.add_argument('--max_dynamic_clusters', type=int, default=5,
                         help="Maximum number of clusters allowed in threshold-based dynamic clustering (0 disables cap).")
     parser.add_argument('--fedcd_nc_weight', type=float, default=0.0)
+    parser.add_argument('--fedcd_nc_target_corr', type=float, default=-0.1,
+                        help="Target feature-wise correlation between GM/PM features for NC regularization.")
     parser.add_argument('--fedcd_fusion_weight', type=float, default=1.0,
                         help="Main CE/NLL loss weight for entropy-mixed GM+PM prediction.")
     parser.add_argument('--fedcd_pm_logits_weight', type=float, default=0.5,
@@ -564,6 +566,30 @@ if __name__ == "__main__":
                         help="Minimum per-sample KL weight when confidence weighting is enabled.")
     parser.add_argument('--fedcd_pm_teacher_confidence_power', type=float, default=1.0,
                         help="Exponent for teacher confidence shaping in KL weighting.")
+    parser.add_argument('--fedcd_pm_teacher_ensemble_confidence', type=str2bool, default=True,
+                        help="Use per-sample teacher confidence when ensembling multiple PM teachers.")
+    parser.add_argument('--fedcd_pm_teacher_rel_weight', type=float, default=0.2,
+                        help="Relational KD weight (sample-similarity matching) for PM-teacher GM distillation.")
+    parser.add_argument('--fedcd_pm_teacher_rel_batch', type=int, default=64,
+                        help="Max batch size used for relational KD similarity matching.")
+    parser.add_argument('--fedcd_init_pretrain', type=str2bool, default=True,
+                        help="Run server-side proxy initialization pretrain for f_ext/GM/PM before round 0.")
+    parser.add_argument('--fedcd_init_epochs', type=int, default=1,
+                        help="Epochs for server-side initialization pretrain.")
+    parser.add_argument('--fedcd_init_lr', type=float, default=0.005,
+                        help="Learning rate for server-side initialization pretrain.")
+    parser.add_argument('--fedcd_init_samples', type=int, default=2000,
+                        help="Proxy samples used in server-side initialization pretrain (0 = full proxy set).")
+    parser.add_argument('--fedcd_init_batch_size', type=int, default=256,
+                        help="Batch size for server-side initialization pretrain.")
+    parser.add_argument('--fedcd_init_ce_weight', type=float, default=1.0,
+                        help="CE weight in initialization pretrain (applied when proxy labels match target classes).")
+    parser.add_argument('--fedcd_init_kd_weight', type=float, default=1.0,
+                        help="Mutual KD weight between GM and PM during initialization pretrain.")
+    parser.add_argument('--fedcd_init_entropy_weight', type=float, default=0.05,
+                        help="Entropy regularization weight during initialization pretrain.")
+    parser.add_argument('--fedcd_init_diversity_weight', type=float, default=0.05,
+                        help="Batch diversity regularization weight during initialization pretrain.")
     parser.add_argument('--fedcd_proto_teacher_lr', type=float, default=0.01,
                         help="Server prototype-teacher learning rate for GM update.")
     parser.add_argument('--fedcd_proto_teacher_steps', type=int, default=200,
@@ -588,11 +614,11 @@ if __name__ == "__main__":
                         help="Minimum per-sample KL weight for prototype teacher confidence weighting.")
     parser.add_argument('--fedcd_proto_teacher_confidence_power', type=float, default=1.0,
                         help="Exponent for prototype teacher confidence shaping.")
-    parser.add_argument('--gm_model', type=str, default="VGG16",
+    parser.add_argument('--gm_model', type=str, default="VGG8",
                         help="FedCD GM model name")
-    parser.add_argument('--pm_model', type=str, default="VGG8",
+    parser.add_argument('--pm_model', type=str, default="CNN",
                         help="FedCD PM model name")
-    parser.add_argument('--fext_model', type=str, default="VGG16",
+    parser.add_argument('--fext_model', type=str, default="SmallFExt",
                         help="FedCD feature extractor model name")
     parser.add_argument('--fext_dim', type=int, default=512,
                         help="FedCD feature extractor output dimension")

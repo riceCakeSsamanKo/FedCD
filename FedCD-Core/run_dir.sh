@@ -26,14 +26,18 @@ EVAL_COMMON_GLOBAL=True
 GLOBAL_TEST_SAMPLES=0
 COMMON_EVAL_BATCH_SIZE=256
 FEDCD_ENABLE_CLUSTERING=True
+FEDCD_GM_MODEL="VGG8"
+FEDCD_PM_MODEL="CNN"
 FEDCD_FUSION_WEIGHT=1.0
 FEDCD_GM_LOGITS_WEIGHT=1.0
 FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=0.8
 FEDCD_GM_LR_SCALE=0.1
 FEDCD_GLOBAL_PERIOD=4
-FEDCD_GM_UPDATE_MODE="hybrid_local_proto"
+FEDCD_GM_UPDATE_MODE="server_pm_teacher"
 FEDCD_HYBRID_PROTO_BLEND=0.35
+FEDCD_NC_WEIGHT=0.02
+FEDCD_NC_TARGET_CORR=-0.1
 FEDCD_PM_TEACHER_LR=0.01
 FEDCD_PM_TEACHER_TEMP=2.0
 FEDCD_PM_TEACHER_KL_WEIGHT=1.0
@@ -48,6 +52,18 @@ FEDCD_PM_TEACHER_ALLOW_TEST_FALLBACK=False
 FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT=True
 FEDCD_PM_TEACHER_CONFIDENCE_MIN=0.05
 FEDCD_PM_TEACHER_CONFIDENCE_POWER=1.0
+FEDCD_PM_TEACHER_ENSEMBLE_CONFIDENCE=True
+FEDCD_PM_TEACHER_REL_WEIGHT=0.2
+FEDCD_PM_TEACHER_REL_BATCH=64
+FEDCD_INIT_PRETRAIN=True
+FEDCD_INIT_EPOCHS=1
+FEDCD_INIT_LR=0.005
+FEDCD_INIT_SAMPLES=2000
+FEDCD_INIT_BATCH_SIZE=256
+FEDCD_INIT_CE_WEIGHT=1.0
+FEDCD_INIT_KD_WEIGHT=1.0
+FEDCD_INIT_ENTROPY_WEIGHT=0.05
+FEDCD_INIT_DIVERSITY_WEIGHT=0.05
 FEDCD_PROTO_TEACHER_LR=0.005
 FEDCD_PROTO_TEACHER_STEPS=120
 FEDCD_PROTO_TEACHER_BATCH_SIZE=256
@@ -90,8 +106,10 @@ echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Global Test Eval: ${EVAL_COMMON_GLOBAL} (samples=${GLOBAL_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
 echo "Clustering Enabled: ${FEDCD_ENABLE_CLUSTERING}"
-echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}, gm_lr_scale=${FEDCD_GM_LR_SCALE}"
-echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (hybrid_blend=${FEDCD_HYBRID_PROTO_BLEND}; pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE}, proxy=${FEDCD_PM_TEACHER_PROXY_DATASET}/${FEDCD_PM_TEACHER_PROXY_SPLIT}, conf_w=${FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT})"
+echo "Model Setup: GM=${FEDCD_GM_MODEL}, PM=${FEDCD_PM_MODEL}, FExt=SmallFExt"
+echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}, gm_lr_scale=${FEDCD_GM_LR_SCALE}, nc_w=${FEDCD_NC_WEIGHT}, nc_target=${FEDCD_NC_TARGET_CORR}"
+echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (hybrid_blend=${FEDCD_HYBRID_PROTO_BLEND}; pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, rel=${FEDCD_PM_TEACHER_REL_WEIGHT}, rel_batch=${FEDCD_PM_TEACHER_REL_BATCH}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE}, proxy=${FEDCD_PM_TEACHER_PROXY_DATASET}/${FEDCD_PM_TEACHER_PROXY_SPLIT}, conf_w=${FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT}, ens_conf=${FEDCD_PM_TEACHER_ENSEMBLE_CONFIDENCE})"
+echo "Init Pretrain: enabled=${FEDCD_INIT_PRETRAIN}, epochs=${FEDCD_INIT_EPOCHS}, lr=${FEDCD_INIT_LR}, samples=${FEDCD_INIT_SAMPLES}, batch=${FEDCD_INIT_BATCH_SIZE}, ce=${FEDCD_INIT_CE_WEIGHT}, kd=${FEDCD_INIT_KD_WEIGHT}, ent=${FEDCD_INIT_ENTROPY_WEIGHT}, div=${FEDCD_INIT_DIVERSITY_WEIGHT}"
 echo "Prototype Teacher: lr=${FEDCD_PROTO_TEACHER_LR}, steps=${FEDCD_PROTO_TEACHER_STEPS}, batch=${FEDCD_PROTO_TEACHER_BATCH_SIZE}, temp=${FEDCD_PROTO_TEACHER_TEMP}, ce=${FEDCD_PROTO_TEACHER_CE_WEIGHT}, kl=${FEDCD_PROTO_TEACHER_KL_WEIGHT}, noise=${FEDCD_PROTO_TEACHER_NOISE_SCALE}, min_count=${FEDCD_PROTO_TEACHER_MIN_COUNT}, client_samples=${FEDCD_PROTO_TEACHER_CLIENT_SAMPLES}, conf_w=${FEDCD_PROTO_TEACHER_CONFIDENCE_WEIGHT}"
 echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}], gate_tau=${FEDCD_ENTROPY_GATE_TAU}, pm_bias=${FEDCD_ENTROPY_PM_BIAS}, gm_bias=${FEDCD_ENTROPY_GM_BIAS}, disagree_gm_boost=${FEDCD_ENTROPY_DISAGREE_GM_BOOST}, class_rel=${FEDCD_ENTROPY_USE_CLASS_RELIABILITY}, rel_scale=${FEDCD_ENTROPY_RELIABILITY_SCALE}, hard_margin=${FEDCD_ENTROPY_HARD_SWITCH_MARGIN}, ood_gate=${FEDCD_ENTROPY_USE_OOD_GATE}, ood_scale=${FEDCD_ENTROPY_OOD_SCALE}"
 echo "============================================================"
@@ -127,8 +145,10 @@ do
             python system/main.py \
                 -data $DATASET_NAME \
                 -algo $ALGO \
-                --gm_model VGG16 \
-                --pm_model VGG8 \
+                --gm_model $FEDCD_GM_MODEL \
+                --pm_model $FEDCD_PM_MODEL \
+                --fext_model SmallFExt \
+                --fext_dim 512 \
                 -gr $GLOBAL_ROUNDS \
                 -nc $NUM_CLIENTS \
                 --cluster_threshold $THRESHOLD \
@@ -156,6 +176,8 @@ do
                 --global_test_samples $GLOBAL_TEST_SAMPLES \
                 --common_eval_batch_size $COMMON_EVAL_BATCH_SIZE \
                 --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
+                --fedcd_nc_weight $FEDCD_NC_WEIGHT \
+                --fedcd_nc_target_corr $FEDCD_NC_TARGET_CORR \
                 --fedcd_gm_logits_weight $FEDCD_GM_LOGITS_WEIGHT \
                 --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
                 --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
@@ -176,6 +198,18 @@ do
                 --fedcd_pm_teacher_confidence_weight $FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT \
                 --fedcd_pm_teacher_confidence_min $FEDCD_PM_TEACHER_CONFIDENCE_MIN \
                 --fedcd_pm_teacher_confidence_power $FEDCD_PM_TEACHER_CONFIDENCE_POWER \
+                --fedcd_pm_teacher_ensemble_confidence $FEDCD_PM_TEACHER_ENSEMBLE_CONFIDENCE \
+                --fedcd_pm_teacher_rel_weight $FEDCD_PM_TEACHER_REL_WEIGHT \
+                --fedcd_pm_teacher_rel_batch $FEDCD_PM_TEACHER_REL_BATCH \
+                --fedcd_init_pretrain $FEDCD_INIT_PRETRAIN \
+                --fedcd_init_epochs $FEDCD_INIT_EPOCHS \
+                --fedcd_init_lr $FEDCD_INIT_LR \
+                --fedcd_init_samples $FEDCD_INIT_SAMPLES \
+                --fedcd_init_batch_size $FEDCD_INIT_BATCH_SIZE \
+                --fedcd_init_ce_weight $FEDCD_INIT_CE_WEIGHT \
+                --fedcd_init_kd_weight $FEDCD_INIT_KD_WEIGHT \
+                --fedcd_init_entropy_weight $FEDCD_INIT_ENTROPY_WEIGHT \
+                --fedcd_init_diversity_weight $FEDCD_INIT_DIVERSITY_WEIGHT \
                 --fedcd_proto_teacher_lr $FEDCD_PROTO_TEACHER_LR \
                 --fedcd_proto_teacher_steps $FEDCD_PROTO_TEACHER_STEPS \
                 --fedcd_proto_teacher_batch_size $FEDCD_PROTO_TEACHER_BATCH_SIZE \

@@ -519,6 +519,39 @@ class TextCNN(nn.Module):
 
 import torchvision.models as models
 
+class VGG8(nn.Module):
+    def __init__(self, num_classes=10):
+        super(VGG8, self).__init__()
+        cfg = [64, 'M', 128, 'M', 256, 256, 'M']
+        self.features = self._make_layers(cfg)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.classifier = nn.Sequential(
+            nn.Linear(256, 256),
+            nn.ReLU(True),
+            nn.Linear(256, num_classes),
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x
+
+    @staticmethod
+    def _make_layers(cfg):
+        layers = []
+        in_channels = 3
+        for v in cfg:
+            if v == 'M':
+                layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+            else:
+                layers.append(nn.Conv2d(in_channels, v, kernel_size=3, padding=1))
+                layers.append(nn.BatchNorm2d(v))
+                layers.append(nn.ReLU(inplace=True))
+                in_channels = v
+        return nn.Sequential(*layers)
+
 class VGG16(nn.Module):
     def __init__(self, num_classes=10, pretrained=True):
         super(VGG16, self).__init__()

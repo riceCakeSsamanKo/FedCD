@@ -95,6 +95,20 @@ class FedCD(Server):
         self.pm_teacher_confidence_min = min(max(self.pm_teacher_confidence_min, 0.0), 1.0)
         self.pm_teacher_confidence_power = float(getattr(args, "fedcd_pm_teacher_confidence_power", 1.0))
         self.pm_teacher_confidence_power = max(self.pm_teacher_confidence_power, 1e-6)
+        self.pm_teacher_ensemble_confidence = bool(
+            getattr(args, "fedcd_pm_teacher_ensemble_confidence", True)
+        )
+        self.pm_teacher_rel_weight = float(getattr(args, "fedcd_pm_teacher_rel_weight", 0.2))
+        self.pm_teacher_rel_batch = int(getattr(args, "fedcd_pm_teacher_rel_batch", 64))
+        self.init_pretrain = bool(getattr(args, "fedcd_init_pretrain", True))
+        self.init_epochs = max(0, int(getattr(args, "fedcd_init_epochs", 1)))
+        self.init_lr = float(getattr(args, "fedcd_init_lr", 0.005))
+        self.init_samples = int(getattr(args, "fedcd_init_samples", 2000))
+        self.init_batch_size = int(getattr(args, "fedcd_init_batch_size", 256))
+        self.init_ce_weight = float(getattr(args, "fedcd_init_ce_weight", 1.0))
+        self.init_kd_weight = float(getattr(args, "fedcd_init_kd_weight", 1.0))
+        self.init_entropy_weight = float(getattr(args, "fedcd_init_entropy_weight", 0.05))
+        self.init_diversity_weight = float(getattr(args, "fedcd_init_diversity_weight", 0.05))
         self.proto_teacher_lr = float(getattr(args, "fedcd_proto_teacher_lr", 0.01))
         self.proto_teacher_steps = int(getattr(args, "fedcd_proto_teacher_steps", 200))
         self.proto_teacher_batch_size = int(getattr(args, "fedcd_proto_teacher_batch_size", 256))
@@ -112,6 +126,8 @@ class FedCD(Server):
         self.pm_teacher_loader = None
         if self.gm_update_mode == "server_pm_teacher":
             self.pm_teacher_loader = self._build_pm_teacher_loader()
+        if self.init_pretrain and self.init_epochs > 0:
+            self._pretrain_and_broadcast_initial_components()
 
         # [ACT] Adaptive Clustering Threshold Initialization
         self.adaptive_threshold = bool(getattr(args, "adaptive_threshold", False)) and self.enable_clustering
@@ -229,6 +245,221 @@ class FedCD(Server):
                 for k, v in self.generalized_adapter.state_dict().items()
             })
         return parts
+
+    def _build_initial_parts(self):
+        parts = {}
+        parts.update({
+            f"f_ext.{k}": v.detach().cpu()
+            for k, v in self.f_ext.state_dict().items()
+        })
+        parts.update({
+            f"generalized_module.{k}": v.detach().cpu()
+            for k, v in self.generalized_module.state_dict().items()
+        })
+        if self.generalized_adapter is not None:
+            parts.update({
+                f"generalized_adapter.{k}": v.detach().cpu()
+                for k, v in self.generalized_adapter.state_dict().items()
+            })
+        parts.update({
+            f"personalized_module.{k}": v.detach().cpu()
+            for k, v in self.personalized_module.state_dict().items()
+        })
+        if self.personalized_adapter is not None:
+            parts.update({
+                f"personalized_adapter.{k}": v.detach().cpu()
+                for k, v in self.personalized_adapter.state_dict().items()
+            })
+        return parts
+
+    def _build_init_proxy_loader(self):
+        try:
+            proxy_data, proxy_source = self._build_proxy_distill_data()
+        except Exception as err:
+            print(f"[FedCD] Init pretrain proxy load failed: {err}")
+            return None, None
+
+        if proxy_data is None or len(proxy_data) == 0:
+            print("[FedCD] Init pretrain skipped: proxy data is empty.")
+            return None, None
+
+        if self.init_samples > 0 and self.init_samples < len(proxy_data):
+            rng = random.Random(0)
+            sample_indices = rng.sample(range(len(proxy_data)), self.init_samples)
+            proxy_data = (
+                [proxy_data[idx] for idx in sample_indices]
+                if isinstance(proxy_data, list)
+                else torch.utils.data.Subset(proxy_data, sample_indices)
+            )
+
+        num_workers = int(getattr(self.args, "num_workers", 0))
+        pin_memory = bool(getattr(self.args, "pin_memory", False)) and self.device == "cuda"
+        loader_kwargs = {
+            "batch_size": max(1, int(self.init_batch_size)),
+            "shuffle": True,
+            "drop_last": False,
+            "num_workers": num_workers,
+            "pin_memory": pin_memory,
+        }
+        if num_workers > 0:
+            loader_kwargs["persistent_workers"] = True
+            loader_kwargs["prefetch_factor"] = int(getattr(self.args, "prefetch_factor", 2))
+
+        loader = torch.utils.data.DataLoader(proxy_data, **loader_kwargs)
+        return loader, proxy_source
+
+    def _pretrain_and_broadcast_initial_components(self):
+        loader, proxy_source = self._build_init_proxy_loader()
+        if loader is None:
+            return
+
+        print(
+            f"[FedCD] Initialization pretrain: source={proxy_source}, "
+            f"epochs={self.init_epochs}, lr={self.init_lr}, samples={len(loader.dataset)}"
+        )
+
+        def _run_once(device):
+            use_amp = device == "cuda" and bool(getattr(self.args, "amp", False))
+            temp = max(1e-6, float(self.pm_teacher_temp))
+            eps = 1e-12
+
+            self.f_ext.to(device)
+            self.generalized_module.to(device)
+            self.personalized_module.to(device)
+            self.f_ext.train()
+            self.generalized_module.train()
+            self.personalized_module.train()
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to(device)
+                self.generalized_adapter.train()
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to(device)
+                self.personalized_adapter.train()
+
+            for p in self.f_ext.parameters():
+                p.requires_grad = True
+            for p in self.generalized_module.parameters():
+                p.requires_grad = True
+            for p in self.personalized_module.parameters():
+                p.requires_grad = True
+            if self.generalized_adapter is not None:
+                for p in self.generalized_adapter.parameters():
+                    p.requires_grad = True
+            if self.personalized_adapter is not None:
+                for p in self.personalized_adapter.parameters():
+                    p.requires_grad = True
+
+            params = list(self.f_ext.parameters())
+            params += list(self.generalized_module.parameters())
+            params += list(self.personalized_module.parameters())
+            if self.generalized_adapter is not None:
+                params += list(self.generalized_adapter.parameters())
+            if self.personalized_adapter is not None:
+                params += list(self.personalized_adapter.parameters())
+
+            optimizer = torch.optim.SGD(params, lr=self.init_lr, momentum=0.9, weight_decay=1e-4)
+            scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+
+            for _ in range(self.init_epochs):
+                for x, y in tqdm(loader, desc="Init pretrain on proxy", leave=False):
+                    if type(x) == type([]):
+                        x = x[0]
+                    x = x.to(device, non_blocking=(device == "cuda"))
+                    y = y.to(device, non_blocking=(device == "cuda")).long()
+
+                    optimizer.zero_grad()
+                    with torch.cuda.amp.autocast(enabled=use_amp):
+                        z = self.f_ext(x)
+                        if z.dim() > 2:
+                            z = torch.flatten(z, 1)
+
+                        z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+                        logits_gm = self.generalized_module(z_gm)
+                        logits_pm = self.personalized_module(z_pm)
+
+                        prob_gm_t = torch.softmax(logits_gm / temp, dim=1)
+                        prob_pm_t = torch.softmax(logits_pm / temp, dim=1)
+                        log_prob_gm_t = torch.log_softmax(logits_gm / temp, dim=1)
+                        log_prob_pm_t = torch.log_softmax(logits_pm / temp, dim=1)
+                        kd_loss = 0.5 * (
+                            F.kl_div(log_prob_gm_t, prob_pm_t, reduction="batchmean")
+                            + F.kl_div(log_prob_pm_t, prob_gm_t, reduction="batchmean")
+                        ) * (temp * temp)
+
+                        prob_mix = 0.5 * (
+                            torch.softmax(logits_gm, dim=1) + torch.softmax(logits_pm, dim=1)
+                        )
+                        entropy_loss = -(prob_mix * torch.log(prob_mix.clamp_min(eps))).sum(dim=1).mean()
+                        mean_prob = prob_mix.mean(dim=0)
+                        diversity_loss = torch.sum(mean_prob * torch.log(mean_prob.clamp_min(eps)))
+
+                        total_loss = (
+                            self.init_kd_weight * kd_loss
+                            + self.init_entropy_weight * entropy_loss
+                            + self.init_diversity_weight * diversity_loss
+                        )
+
+                        if self.init_ce_weight > 0:
+                            valid = (y >= 0) & (y < self.num_classes)
+                            if valid.any():
+                                logits_fused = logits_gm + logits_pm
+                                ce_loss = (
+                                    F.cross_entropy(logits_gm[valid], y[valid])
+                                    + F.cross_entropy(logits_pm[valid], y[valid])
+                                    + F.cross_entropy(logits_fused[valid], y[valid])
+                                ) / 3.0
+                                total_loss = total_loss + self.init_ce_weight * ce_loss
+
+                    if not torch.isfinite(total_loss):
+                        continue
+                    scaler.scale(total_loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+
+            self.f_ext.to("cpu")
+            self.generalized_module.to("cpu")
+            self.personalized_module.to("cpu")
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to("cpu")
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to("cpu")
+            self.f_ext.eval()
+            self.generalized_module.eval()
+            self.personalized_module.eval()
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.eval()
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.eval()
+
+            for p in self.f_ext.parameters():
+                p.requires_grad = False
+            if device == "cuda" and self.args.avoid_oom:
+                torch.cuda.empty_cache()
+
+        try:
+            _run_once(self.device)
+        except RuntimeError as err:
+            if self.device == "cuda" and "out of memory" in str(err).lower():
+                print("[Warn] OOM during initialization pretrain. Falling back to CPU.")
+                torch.cuda.empty_cache()
+                _run_once("cpu")
+            else:
+                raise
+
+        base_state = self._current_generalized_state()
+        for cluster_id in set(self.cluster_map.values()):
+            self.cluster_generalized_states[cluster_id] = {k: v.clone() for k, v in base_state.items()}
+
+        init_parts = self._build_initial_parts()
+        total_bytes = sum(v.numel() * v.element_size() for v in init_parts.values())
+        print(
+            f"[FedCD] Broadcast initial components (f_ext+GM+PM): "
+            f"{total_bytes / (1024**2):.2f} MB per client"
+        )
+        payload = {"init_parts": init_parts}
+        for client in self.clients:
+            client.set_initial_parameters(payload["init_parts"])
 
     def _log_usage(
         self,
@@ -1037,19 +1268,33 @@ class FedCD(Server):
                         z = torch.flatten(z, 1)
 
                     teacher_prob_sum = None
-                    total_weight = 0.0
+                    teacher_weight_sum = None
                     for comp in teacher_components:
                         pm_adapter = comp["pm_adapter"]
                         z_pm = pm_adapter(z) if pm_adapter is not None else z
                         pm_logits = comp["pm_module"](z_pm)
                         pm_prob = torch.softmax(pm_logits / temp, dim=1)
                         w = comp["weight"]
-                        total_weight += w
-                        teacher_prob_sum = pm_prob * w if teacher_prob_sum is None else (teacher_prob_sum + pm_prob * w)
+                        if self.pm_teacher_ensemble_confidence:
+                            pm_conf = self._teacher_confidence(pm_prob)
+                            pm_conf = self.pm_teacher_confidence_min + (
+                                1.0 - self.pm_teacher_confidence_min
+                            ) * pm_conf.pow(self.pm_teacher_confidence_power)
+                            sample_w = pm_conf.unsqueeze(1) * w
+                        else:
+                            sample_w = torch.full(
+                                (pm_prob.size(0), 1),
+                                w,
+                                device=pm_prob.device,
+                                dtype=pm_prob.dtype,
+                            )
+                        weighted_prob = pm_prob * sample_w
+                        teacher_prob_sum = weighted_prob if teacher_prob_sum is None else (teacher_prob_sum + weighted_prob)
+                        teacher_weight_sum = sample_w if teacher_weight_sum is None else (teacher_weight_sum + sample_w)
 
-                    if teacher_prob_sum is None or total_weight <= 0:
+                    if teacher_prob_sum is None or teacher_weight_sum is None:
                         continue
-                    teacher_prob = teacher_prob_sum / total_weight
+                    teacher_prob = teacher_prob_sum / teacher_weight_sum.clamp_min(1e-12)
 
                 with torch.cuda.amp.autocast(enabled=use_amp):
                     z_gm = gm_adapter(z) if gm_adapter is not None else z
@@ -1072,7 +1317,18 @@ class FedCD(Server):
                     ce_loss = gm_logits.new_tensor(0.0)
                     if self.pm_teacher_ce_weight > 0:
                         ce_loss = ce_loss_fn(gm_logits, y)
-                    loss = self.pm_teacher_kl_weight * kd_loss + self.pm_teacher_ce_weight * ce_loss
+                    rel_loss = gm_logits.new_tensor(0.0)
+                    if self.pm_teacher_rel_weight > 0:
+                        rel_loss = self._relation_kd_loss(
+                            gm_logits,
+                            teacher_prob,
+                            max_samples=self.pm_teacher_rel_batch,
+                        )
+                    loss = (
+                        self.pm_teacher_kl_weight * kd_loss
+                        + self.pm_teacher_ce_weight * ce_loss
+                        + self.pm_teacher_rel_weight * rel_loss
+                    )
 
                 if not torch.isfinite(loss):
                     optimizer.zero_grad()
@@ -1397,6 +1653,32 @@ class FedCD(Server):
         max_entropy = torch.log(torch.tensor(float(num_classes), device=prob.device)).clamp_min(eps)
         confidence = 1.0 - (entropy / max_entropy)
         return confidence.clamp(0.0, 1.0)
+
+    @staticmethod
+    def _relation_kd_loss(student_logits, teacher_prob, max_samples=64):
+        # Relational KD on sample-similarity graphs:
+        # preserve inter-sample structure from teacher predictions.
+        if student_logits.dim() != 2 or teacher_prob.dim() != 2:
+            return student_logits.new_zeros(())
+        n = student_logits.size(0)
+        if n <= 1:
+            return student_logits.new_zeros(())
+        if max_samples is not None and int(max_samples) > 0 and n > int(max_samples):
+            idx = torch.randperm(n, device=student_logits.device)[: int(max_samples)]
+            student_logits = student_logits.index_select(0, idx)
+            teacher_prob = teacher_prob.index_select(0, idx)
+
+        student_repr = F.normalize(student_logits, p=2, dim=1)
+        teacher_repr = torch.log(teacher_prob.clamp_min(1e-12))
+        teacher_repr = teacher_repr - teacher_repr.mean(dim=1, keepdim=True)
+        teacher_repr = F.normalize(teacher_repr, p=2, dim=1)
+
+        student_rel = torch.matmul(student_repr, student_repr.t())
+        teacher_rel = torch.matmul(teacher_repr, teacher_repr.t())
+        mask = ~torch.eye(student_rel.size(0), dtype=torch.bool, device=student_rel.device)
+        if mask.sum() == 0:
+            return student_logits.new_zeros(())
+        return F.mse_loss(student_rel[mask], teacher_rel[mask], reduction="mean")
 
     def _core_root(self):
         return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))

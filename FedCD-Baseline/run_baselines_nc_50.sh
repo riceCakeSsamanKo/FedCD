@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Experiment settings
-MODEL="VGG16"
+MODEL="VGG8"
 GR=100
 LR=0.005
 LBS=128

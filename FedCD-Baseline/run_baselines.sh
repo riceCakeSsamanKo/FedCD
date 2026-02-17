@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Common runtime settings
-MODEL="VGG16"
+MODEL="VGG8"
 DEVICE="cuda"
 DEVICE_ID="0"
 

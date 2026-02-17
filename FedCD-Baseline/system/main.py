@@ -85,8 +85,19 @@ def split_model(model):
         head = copy.deepcopy(model.fc)
         model.fc = nn.Identity()
     elif hasattr(model, 'classifier'):
-        head = copy.deepcopy(model.classifier[6])
-        model.classifier[6] = nn.Identity()
+        if isinstance(model.classifier, nn.Sequential):
+            last_linear_idx = None
+            for idx in range(len(model.classifier) - 1, -1, -1):
+                if isinstance(model.classifier[idx], nn.Linear):
+                    last_linear_idx = idx
+                    break
+            if last_linear_idx is None:
+                raise NotImplementedError("No linear classifier head found for splitting.")
+            head = copy.deepcopy(model.classifier[last_linear_idx])
+            model.classifier[last_linear_idx] = nn.Identity()
+        else:
+            head = copy.deepcopy(model.classifier)
+            model.classifier = nn.Identity()
     else:
         raise NotImplementedError("Model structure not supported for splitting.")
     return BaseHeadSplit(model, head)
@@ -194,6 +205,9 @@ def run(args):
             in_features = args.model.classifier[6].in_features
             args.model.classifier[6] = nn.Linear(in_features, args.num_classes)
             # args.model = args.model.to(args.device)
+
+        elif model_str == "VGG8":
+            args.model = VGG8(num_classes=args.num_classes)
 
         elif model_str == "AmazonMLP":
             args.model = AmazonMLP() # .to(args.device)
@@ -385,7 +399,7 @@ if __name__ == "__main__":
     parser.add_argument('-did', "--device_id", type=str, default="0")
     parser.add_argument('-data', "--dataset", type=str, default="Cifar10")
     parser.add_argument('-ncl', "--num_classes", type=int, default=10)
-    parser.add_argument('-m', "--model", type=str, default="VGG16")
+    parser.add_argument('-m', "--model", type=str, default="VGG8")
     parser.add_argument('-lbs', "--batch_size", type=int, default=128)
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,
                         help="Local learning rate")
