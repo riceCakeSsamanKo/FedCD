@@ -624,6 +624,26 @@ if __name__ == "__main__":
                         help="Minimum per-sample KL weight for prototype teacher confidence weighting.")
     parser.add_argument('--fedcd_proto_teacher_confidence_power', type=float, default=1.0,
                         help="Exponent for prototype teacher confidence shaping.")
+    parser.add_argument('--fedcd_search_enable', type=str2bool, default=False,
+                        help="Enable FedCD run-level early stop for automated method/parameter search.")
+    parser.add_argument('--fedcd_search_min_rounds', type=int, default=8,
+                        help="Minimum evaluated rounds before FedCD early-stop checks are applied.")
+    parser.add_argument('--fedcd_search_patience', type=int, default=6,
+                        help="Stop when combined search score does not improve for this many eval rounds.")
+    parser.add_argument('--fedcd_search_drop_patience', type=int, default=3,
+                        help="Stop when both PM-local and GM-global drop simultaneously for this many eval rounds.")
+    parser.add_argument('--fedcd_search_drop_delta', type=float, default=0.003,
+                        help="Minimum per-round drop magnitude used by dual-drop early-stop rule.")
+    parser.add_argument('--fedcd_search_score_gm_weight', type=float, default=0.75,
+                        help="Weight of GM-only global accuracy in search score.")
+    parser.add_argument('--fedcd_search_score_pm_weight', type=float, default=0.25,
+                        help="Weight of PM-only local accuracy in search score.")
+    parser.add_argument('--fedcd_search_score_eps', type=float, default=1e-4,
+                        help="Minimum score improvement treated as progress in search mode.")
+    parser.add_argument('--fedcd_search_min_pm_local_acc', type=float, default=0.55,
+                        help="Minimum PM-local accuracy floor used by hard-fail early stop in search mode.")
+    parser.add_argument('--fedcd_search_min_gm_global_acc', type=float, default=0.18,
+                        help="Minimum GM-global accuracy floor used by hard-fail early stop in search mode.")
     parser.add_argument('--gm_model', type=str, default="VGG8",
                         help="FedCD GM model name")
     parser.add_argument('--pm_model', type=str, default="CNN",

@@ -161,6 +161,86 @@ class FedCD(Server):
         self.acc_history = [] # Stores mean accuracy for regression
         self.window_size = int(getattr(args, "act_window_size", 5))
 
+        # Automated search-time early stop controls.
+        self.search_enable = bool(getattr(args, "fedcd_search_enable", False))
+        self.search_min_rounds = max(1, int(getattr(args, "fedcd_search_min_rounds", 8)))
+        self.search_patience = max(1, int(getattr(args, "fedcd_search_patience", 6)))
+        self.search_drop_patience = max(1, int(getattr(args, "fedcd_search_drop_patience", 3)))
+        self.search_drop_delta = max(0.0, float(getattr(args, "fedcd_search_drop_delta", 0.003)))
+        self.search_score_gm_weight = float(getattr(args, "fedcd_search_score_gm_weight", 0.75))
+        self.search_score_pm_weight = float(getattr(args, "fedcd_search_score_pm_weight", 0.25))
+        self.search_score_eps = max(0.0, float(getattr(args, "fedcd_search_score_eps", 1e-4)))
+        self.search_min_pm_local_acc = float(getattr(args, "fedcd_search_min_pm_local_acc", 0.55))
+        self.search_min_gm_global_acc = float(getattr(args, "fedcd_search_min_gm_global_acc", 0.18))
+        self.search_best_score = float("-inf")
+        self.search_no_improve_rounds = 0
+        self.search_dual_drop_rounds = 0
+        self.search_prev_pm_local = None
+        self.search_prev_gm_global = None
+
+    def _search_score(self, pm_local_test_acc, gm_only_global_test_acc):
+        pm = 0.0 if pm_local_test_acc is None else float(pm_local_test_acc)
+        gm = 0.0 if gm_only_global_test_acc is None else float(gm_only_global_test_acc)
+        return self.search_score_pm_weight * pm + self.search_score_gm_weight * gm
+
+    def _should_stop_for_search(self, round_idx, pm_local_test_acc, gm_only_global_test_acc):
+        if not self.search_enable:
+            return False
+        if pm_local_test_acc is None or gm_only_global_test_acc is None:
+            return False
+        if round_idx < self.search_min_rounds:
+            self.search_prev_pm_local = float(pm_local_test_acc)
+            self.search_prev_gm_global = float(gm_only_global_test_acc)
+            return False
+
+        score = self._search_score(pm_local_test_acc, gm_only_global_test_acc)
+        if score > (self.search_best_score + self.search_score_eps):
+            self.search_best_score = score
+            self.search_no_improve_rounds = 0
+        else:
+            self.search_no_improve_rounds += 1
+
+        dual_drop = False
+        if self.search_prev_pm_local is not None and self.search_prev_gm_global is not None:
+            pm_drop = float(pm_local_test_acc) < (self.search_prev_pm_local - self.search_drop_delta)
+            gm_drop = float(gm_only_global_test_acc) < (self.search_prev_gm_global - self.search_drop_delta)
+            dual_drop = pm_drop and gm_drop
+        if dual_drop:
+            self.search_dual_drop_rounds += 1
+        else:
+            self.search_dual_drop_rounds = 0
+
+        self.search_prev_pm_local = float(pm_local_test_acc)
+        self.search_prev_gm_global = float(gm_only_global_test_acc)
+
+        hard_fail = (
+            float(pm_local_test_acc) < self.search_min_pm_local_acc
+            and float(gm_only_global_test_acc) < self.search_min_gm_global_acc
+        )
+        if hard_fail:
+            print(
+                "[FedCD][Search] Early stop: both PM-local and GM-global are below floors "
+                f"({pm_local_test_acc:.4f} < {self.search_min_pm_local_acc:.4f}, "
+                f"{gm_only_global_test_acc:.4f} < {self.search_min_gm_global_acc:.4f})."
+            )
+            return True
+
+        if self.search_no_improve_rounds >= self.search_patience:
+            print(
+                "[FedCD][Search] Early stop: no score improvement for "
+                f"{self.search_no_improve_rounds} eval rounds."
+            )
+            return True
+
+        if self.search_dual_drop_rounds >= self.search_drop_patience:
+            print(
+                "[FedCD][Search] Early stop: PM-local and GM-global dropped together for "
+                f"{self.search_dual_drop_rounds} consecutive eval rounds."
+            )
+            return True
+
+        return False
+
     def _build_f_ext(self, args, target_dim=None):
         model_name = str(getattr(args, "fext_model", "SmallFExt"))
         if model_name == "VGG16":
@@ -761,7 +841,14 @@ class FedCD(Server):
             if i % self.eval_gap == 0:
                 print(f"\n------------- Round number: {i} -------------")
                 # 평가 실행 및 클러스터별 정확도 로깅
-                self.evaluate_with_clusters(i, wall_start, cpu_start, round_uplink, round_downlink)
+                metrics = self.evaluate_with_clusters(i, wall_start, cpu_start, round_uplink, round_downlink)
+                if self._should_stop_for_search(
+                    i,
+                    metrics.get("pm_local_test_acc"),
+                    metrics.get("gm_only_global_test_acc"),
+                ):
+                    print(f"[FedCD][Search] Stop round: {i}")
+                    break
 
         print("\nTraining finished. Saving results...")
         self.save_results()
@@ -860,6 +947,16 @@ class FedCD(Server):
                     self._log_cluster_acc(round_idx, c_id, c_acc, s["samples"])
             else:
                 print(f"  Cluster {c_id}: N/A (no samples)")
+
+        return {
+            "local_test_acc": avg_acc,
+            "pm_local_test_acc": pm_local_test_acc,
+            "gm_local_test_acc": gm_local_test_acc,
+            "global_test_acc": global_test_acc,
+            "gm_only_global_test_acc": gm_only_global_test_acc,
+            "pm_global_test_acc": pm_global_test_acc,
+            "train_loss": avg_loss,
+        }
 
     def aggregate_cluster_pms(self, received_pms):
         # Streamed aggregation to avoid holding all PMs in memory
