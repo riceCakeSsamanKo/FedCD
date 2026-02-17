@@ -99,7 +99,7 @@ FEDCD_GATE_FEATURE_SAMPLES=512
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 0.5 1.0) # (0.1 0.5 1.0)
 # List of distance thresholds for Agglomerative Clustering
-THRESHOLDS=(0.1)
+THRESHOLDS=(0.0)
 CLIENT_COUNTS=(20 50)
 
 echo "============================================================"
