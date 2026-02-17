@@ -17,6 +17,19 @@ DATASET_NAME="${1:-Cifar10_pat_nc20}"
 GLOBAL_ROUNDS="${2:-50}"
 GPU_DEVICE="${GPU_DEVICE:-cuda}"
 
+if [ -n "${PYTHON_BIN:-}" ]; then
+    PYTHON_CMD="$PYTHON_BIN"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+elif [ -x "/data/miniconda3/envs/pfllib/bin/python" ]; then
+    PYTHON_CMD="/data/miniconda3/envs/pfllib/bin/python"
+else
+    echo "[AutoTune][Error] No python interpreter found. Set PYTHON_BIN."
+    exit 1
+fi
+
 if [[ "$DATASET_NAME" =~ _nc([0-9]+)$ ]]; then
     NUM_CLIENTS="${BASH_REMATCH[1]}"
 else
@@ -129,7 +142,7 @@ run_case() {
     echo "[AutoTune] Running case: $case_name"
     echo "============================================================"
     set +e
-    python system/main.py "${COMMON_ARGS[@]}" "$@"
+    "$PYTHON_CMD" system/main.py "${COMMON_ARGS[@]}" "$@"
     local status=$?
     set -e
 
@@ -141,7 +154,7 @@ run_case() {
     fi
 
     local metrics
-    metrics="$(python - "$acc_path" <<'PY'
+    metrics="$("$PYTHON_CMD" - "$acc_path" <<'PY'
 import csv, sys
 acc_path = sys.argv[1]
 if not acc_path:
@@ -163,7 +176,7 @@ PY
     pm_local="$(echo "$metrics" | cut -d',' -f1)"
     gm_global="$(echo "$metrics" | cut -d',' -f2)"
     global_acc="$(echo "$metrics" | cut -d',' -f3)"
-    score="$(python - "$pm_local" "$gm_global" <<'PY'
+    score="$("$PYTHON_CMD" - "$pm_local" "$gm_global" <<'PY'
 import sys
 pm = float(sys.argv[1]); gm = float(sys.argv[2])
 print(f"{0.25*pm + 0.75*gm:.6f}")
@@ -253,7 +266,7 @@ echo ""
 echo "============================================================"
 echo "[AutoTune] Finished. Summary: $SUMMARY_CSV"
 echo "[AutoTune] Top candidates:"
-python - "$SUMMARY_CSV" <<'PY'
+"$PYTHON_CMD" - "$SUMMARY_CSV" <<'PY'
 import csv, sys
 path = sys.argv[1]
 rows = list(csv.DictReader(open(path)))
