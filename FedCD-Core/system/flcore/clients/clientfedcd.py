@@ -210,6 +210,7 @@ class clientFedCD(Client):
         self.pm_logits_weight = float(getattr(args, "fedcd_pm_logits_weight", 0.5))
         self.pm_only_weight = float(getattr(args, "fedcd_pm_only_weight", 1.5))
         self.gm_logits_weight = float(getattr(args, "fedcd_gm_logits_weight", 1.0))
+        self.local_pm_only_objective = bool(getattr(args, "fedcd_local_pm_only_objective", False))
         self.gm_lr_scale = float(getattr(args, "fedcd_gm_lr_scale", 0.1))
         self.gm_update_mode = str(getattr(args, "fedcd_gm_update_mode", "local")).strip().lower()
         if self.gm_update_mode not in {
@@ -502,18 +503,21 @@ class clientFedCD(Client):
                         pm_feat, logits_pm = self._forward_module_with_feature(z_pm, self.personalized_module)
                         fused_logits = self.model.fuse_logits(logits_gm, logits_pm, feat=z)
 
-                        # 3. Loss 계산 (Task Loss + Feature-wise Negative Correlation)
-                        loss = self.fusion_weight * F.nll_loss(fused_logits, y)
-                        if self.local_gm_trainable and self.gm_logits_weight > 0:
-                            loss = loss + self.gm_logits_weight * self.loss_func(logits_gm, y)
-                        if self.pm_logits_weight > 0:
-                            loss = loss + self.pm_logits_weight * self.loss_func(logits_pm, y)
-                        if self.pm_only_weight > 0:
-                            loss = loss + self.pm_only_weight * self.loss_func(logits_pm, y)
-                        if self.nc_weight > 0:
-                            nc_loss = self._feature_negative_correlation_loss(gm_feat, pm_feat)
-                            loss = loss + self.nc_weight * nc_loss
-                        # 필요시 여기에 GM과의 Distillation Loss 추가 가능
+                        # 3. Local objective
+                        # PM-only experimental mode: maximize PM local accuracy only.
+                        if self.local_pm_only_objective:
+                            loss = self.loss_func(logits_pm, y)
+                        else:
+                            loss = self.fusion_weight * F.nll_loss(fused_logits, y)
+                            if self.local_gm_trainable and self.gm_logits_weight > 0:
+                                loss = loss + self.gm_logits_weight * self.loss_func(logits_gm, y)
+                            if self.pm_logits_weight > 0:
+                                loss = loss + self.pm_logits_weight * self.loss_func(logits_pm, y)
+                            if self.pm_only_weight > 0:
+                                loss = loss + self.pm_only_weight * self.loss_func(logits_pm, y)
+                            if self.nc_weight > 0:
+                                nc_loss = self._feature_negative_correlation_loss(gm_feat, pm_feat)
+                                loss = loss + self.nc_weight * nc_loss
                     
                     scaler.scale(loss).backward()
                     scaler.step(self.optimizer)

@@ -499,6 +499,8 @@ if __name__ == "__main__":
                         help="Extra PM-only CE loss weight during local training.")
     parser.add_argument('--fedcd_gm_logits_weight', type=float, default=1.0,
                         help="Auxiliary CE loss weight for GM-only logits during local training.")
+    parser.add_argument('--fedcd_local_pm_only_objective', type=str2bool, default=False,
+                        help="If True, local training optimizes only PM-only CE (ignores fusion/GM losses).")
     parser.add_argument('--fedcd_gm_lr_scale', type=float, default=0.1,
                         help="Local GM learning-rate scale relative to base local lr.")
     parser.add_argument('--fedcd_gm_update_mode', type=str, default="local",
