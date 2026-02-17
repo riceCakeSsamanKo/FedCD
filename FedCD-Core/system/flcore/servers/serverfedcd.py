@@ -213,6 +213,7 @@ class FedCD(Server):
         downlink=0,
         global_test_acc=None,
         gm_only_global_test_acc=None,
+        pm_global_test_acc=None,
     ):
         wall_delta = time.time() - wall_start
         # cpu_delta = time.process_time() - cpu_start
@@ -225,11 +226,16 @@ class FedCD(Server):
             if gm_only_global_test_acc is not None
             else ""
         )
+        pm_only_acc_str = (
+            f"pm_global_acc={pm_global_test_acc:.4f}"
+            if pm_global_test_acc is not None
+            else ""
+        )
         loss_str = f"loss={train_loss:.4f}" if train_loss is not None else ""
         msg = (
             f"[FedCD] Round {round_idx} | {stage} | "
             f"wall={wall_delta:.2f}s "
-            + f"{local_acc_str} {global_acc_str} {gm_only_acc_str} {loss_str}"
+            + f"{local_acc_str} {global_acc_str} {gm_only_acc_str} {pm_only_acc_str} {loss_str}"
         )
         # print(msg)
         self._append_usage_csv(
@@ -237,6 +243,7 @@ class FedCD(Server):
             local_test_acc,
             global_test_acc,
             gm_only_global_test_acc,
+            pm_global_test_acc,
             train_loss,
             uplink,
             downlink,
@@ -248,19 +255,21 @@ class FedCD(Server):
         local_test_acc,
         global_test_acc,
         gm_only_global_test_acc,
+        pm_global_test_acc,
         train_loss,
         uplink,
         downlink,
     ):
         path = self.log_usage_path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        header = "round,local_test_acc,global_test_acc,gm_only_global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n"
+        header = "round,local_test_acc,global_test_acc,gm_only_global_test_acc,pm_global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n"
         
         # Only log rows that have metrics (evaluation stage)
         if (
             local_test_acc is None
             and global_test_acc is None
             and gm_only_global_test_acc is None
+            and pm_global_test_acc is None
             and train_loss is None
         ):
             return
@@ -268,12 +277,13 @@ class FedCD(Server):
         local_acc = f"{local_test_acc:.4f}" if local_test_acc is not None else ""
         global_acc = f"{global_test_acc:.4f}" if global_test_acc is not None else ""
         gm_only_acc = f"{gm_only_global_test_acc:.4f}" if gm_only_global_test_acc is not None else ""
+        pm_only_acc = f"{pm_global_test_acc:.4f}" if pm_global_test_acc is not None else ""
         t_loss = f"{train_loss:.4f}" if train_loss is not None else ""
         uplink_mb = uplink / (1024**2)
         downlink_mb = downlink / (1024**2)
         total_mb = uplink_mb + downlink_mb
         line = (
-            f"{round_idx},{local_acc},{global_acc},{gm_only_acc},{t_loss},"
+            f"{round_idx},{local_acc},{global_acc},{gm_only_acc},{pm_only_acc},{t_loss},"
             f"{uplink_mb:.4f},{downlink_mb:.4f},{total_mb:.4f}\n"
         )
         
@@ -445,12 +455,15 @@ class FedCD(Server):
         avg_loss = sum(losses) / total_samples_train if total_samples_train > 0 else 0.0
         global_test_acc = self.evaluate_global_test_acc()
         gm_only_global_test_acc = self.evaluate_gm_only_global_test_acc()
+        pm_global_test_acc = self.evaluate_pm_only_global_test_acc()
             
         print(f"Server: Overall Averaged Local Test Accuracy: {avg_acc:.4f}")
         if global_test_acc is not None:
             print(f"Server: Overall Averaged Global Test Accuracy: {global_test_acc:.4f}")
         if gm_only_global_test_acc is not None:
             print(f"Server: GM-only Global Test Accuracy: {gm_only_global_test_acc:.4f}")
+        if pm_global_test_acc is not None:
+            print(f"Server: PM-only Global Test Accuracy: {pm_global_test_acc:.4f}")
         print(f"Server: Overall Averaged Test AUC: {avg_auc:.4f}")
         print(f"Server: Overall Averaged Train Loss: {avg_loss:.4f}")
 
@@ -476,6 +489,7 @@ class FedCD(Server):
                 local_test_acc=avg_acc,
                 global_test_acc=global_test_acc,
                 gm_only_global_test_acc=gm_only_global_test_acc,
+                pm_global_test_acc=pm_global_test_acc,
                 train_loss=avg_loss,
                 uplink=uplink,
                 downlink=downlink,
@@ -1263,6 +1277,57 @@ class FedCD(Server):
             client.generalized_module.to("cpu")
             if client.generalized_adapter is not None:
                 client.generalized_adapter.to("cpu")
+            if total > 0:
+                acc_sum += correct / total
+                valid_clients += 1
+
+        if device == "cuda":
+            torch.cuda.empty_cache()
+
+        if valid_clients == 0:
+            return None
+        return acc_sum / valid_clients
+
+    def evaluate_pm_only_global_test_acc(self):
+        if not self.eval_common_global or self.global_test_loader is None:
+            return None
+
+        device = self.device
+        use_non_blocking = device == "cuda" and bool(getattr(self.args, "pin_memory", False))
+        acc_sum = 0.0
+        valid_clients = 0
+
+        for client in self.clients:
+            client.f_ext.to(device)
+            client.personalized_module.to(device)
+            client.f_ext.eval()
+            client.personalized_module.eval()
+            if client.personalized_adapter is not None:
+                client.personalized_adapter.to(device)
+                client.personalized_adapter.eval()
+
+            total = 0
+            correct = 0
+            with torch.no_grad():
+                for x, y in self.global_test_loader:
+                    if type(x) == type([]):
+                        x = x[0]
+                    x = x.to(device, non_blocking=use_non_blocking)
+                    y = y.to(device, non_blocking=use_non_blocking)
+
+                    z = client.f_ext(x)
+                    if z.dim() > 2:
+                        z = torch.flatten(z, 1)
+                    z_pm = client.personalized_adapter(z) if client.personalized_adapter is not None else z
+                    logits = client.personalized_module(z_pm)
+
+                    correct += (torch.argmax(logits, dim=1) == y).sum().item()
+                    total += y.size(0)
+
+            client.f_ext.to("cpu")
+            client.personalized_module.to("cpu")
+            if client.personalized_adapter is not None:
+                client.personalized_adapter.to("cpu")
             if total > 0:
                 acc_sum += correct / total
                 valid_clients += 1
