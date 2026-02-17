@@ -459,7 +459,7 @@ if __name__ == "__main__":
                         help="Initial distance threshold for dynamic clustering. If > 0, num_clusters is ignored.")
     parser.add_argument('--adaptive_threshold', type=str2bool, default=False,
                         help="Enable adaptive threshold adjustment based on client performance trends.")
-    parser.add_argument('--threshold_step', type=float, default=0.05,
+    parser.add_argument('--threshold_step', type=float, default=0.01,
                         help="Step size for increasing/decreasing the clustering threshold (used if rates are not specified).")
     parser.add_argument('--threshold_step_max', type=float, default=0.1,
                         help="Maximum absolute threshold change per ACT update.")
@@ -552,6 +552,8 @@ if __name__ == "__main__":
                         help="Number of samples for server PM-teacher distillation (0 = full proxy dataset).")
     parser.add_argument('--fedcd_pm_teacher_batch_size', type=int, default=256,
                         help="Batch size for server PM-teacher distillation.")
+    parser.add_argument('--fedcd_pm_teacher_epochs', type=int, default=1,
+                        help="Number of epochs over PM-teacher distillation dataset per GM update.")
     parser.add_argument('--fedcd_pm_teacher_proxy_dataset', type=str, default="Cifar100",
                         help="Proxy dataset for PM-teacher distillation (e.g., Cifar100, TinyImagenet).")
     parser.add_argument('--fedcd_pm_teacher_proxy_root', type=str, default="",
@@ -570,6 +572,10 @@ if __name__ == "__main__":
                         help="Exponent for teacher confidence shaping in KL weighting.")
     parser.add_argument('--fedcd_pm_teacher_ensemble_confidence', type=str2bool, default=True,
                         help="Use per-sample teacher confidence when ensembling multiple PM teachers.")
+    parser.add_argument('--fedcd_pm_teacher_topk', type=int, default=0,
+                        help="Top-k PM teachers per sample for GM distillation (0 = use all teachers).")
+    parser.add_argument('--fedcd_pm_teacher_abstain_threshold', type=float, default=0.0,
+                        help="Skip distillation for samples whose best teacher confidence is below this threshold (0~1).")
     parser.add_argument('--fedcd_pm_teacher_rel_weight', type=float, default=0.2,
                         help="Relational KD weight (sample-similarity matching) for PM-teacher GM distillation.")
     parser.add_argument('--fedcd_pm_teacher_rel_batch', type=int, default=64,

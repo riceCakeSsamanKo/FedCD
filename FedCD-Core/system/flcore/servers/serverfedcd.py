@@ -86,6 +86,7 @@ class FedCD(Server):
         self.pm_teacher_ce_weight = float(getattr(args, "fedcd_pm_teacher_ce_weight", 0.2))
         self.pm_teacher_samples = int(getattr(args, "fedcd_pm_teacher_samples", 2000))
         self.pm_teacher_batch_size = int(getattr(args, "fedcd_pm_teacher_batch_size", 256))
+        self.pm_teacher_epochs = max(1, int(getattr(args, "fedcd_pm_teacher_epochs", 1)))
         self.pm_teacher_proxy_dataset = str(getattr(args, "fedcd_pm_teacher_proxy_dataset", "Cifar100"))
         self.pm_teacher_proxy_root = str(getattr(args, "fedcd_pm_teacher_proxy_root", ""))
         self.pm_teacher_proxy_split = str(getattr(args, "fedcd_pm_teacher_proxy_split", "train"))
@@ -99,6 +100,12 @@ class FedCD(Server):
         self.pm_teacher_ensemble_confidence = bool(
             getattr(args, "fedcd_pm_teacher_ensemble_confidence", True)
         )
+        self.pm_teacher_topk = int(getattr(args, "fedcd_pm_teacher_topk", 0))
+        self.pm_teacher_topk = max(0, self.pm_teacher_topk)
+        self.pm_teacher_abstain_threshold = float(
+            getattr(args, "fedcd_pm_teacher_abstain_threshold", 0.0)
+        )
+        self.pm_teacher_abstain_threshold = min(max(self.pm_teacher_abstain_threshold, 0.0), 1.0)
         self.pm_teacher_rel_weight = float(getattr(args, "fedcd_pm_teacher_rel_weight", 0.2))
         self.pm_teacher_rel_batch = int(getattr(args, "fedcd_pm_teacher_rel_batch", 64))
         self.init_pretrain = bool(getattr(args, "fedcd_init_pretrain", True))
@@ -137,7 +144,7 @@ class FedCD(Server):
         if self.adaptive_threshold and self.current_threshold <= 0:
             self.current_threshold = 0.05
             
-        self.threshold_step = float(getattr(args, "threshold_step", 0.05))
+        self.threshold_step = float(getattr(args, "threshold_step", 0.01))
         self.threshold_step_max = float(getattr(args, "threshold_step_max", 0.1))
         self.threshold_step_max = max(self.threshold_step_max, 1e-6)
         self.threshold_step = min(abs(self.threshold_step), self.threshold_step_max)
@@ -1294,6 +1301,10 @@ class FedCD(Server):
                 print("[FedCD] No valid PM teachers for server distillation. Skip GM update.")
                 self.f_ext.to("cpu")
                 return None
+            total_teacher_weight = sum(comp["weight"] for comp in teacher_components)
+            total_teacher_weight = max(float(total_teacher_weight), 1e-12)
+            for comp in teacher_components:
+                comp["norm_weight"] = float(comp["weight"]) / total_teacher_weight
 
             gm_module = copy.deepcopy(self.generalized_module).to(device)
             gm_module.train()
@@ -1308,89 +1319,144 @@ class FedCD(Server):
             optimizer = torch.optim.SGD(student_params, lr=self.pm_teacher_lr)
             scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
-            for x, y in tqdm(self.pm_teacher_loader, desc="Distill GM from PM teachers", leave=False):
-                if type(x) == type([]):
-                    x = x[0]
-                x = x.to(device, non_blocking=(device == "cuda"))
-                if self.pm_teacher_ce_weight > 0:
-                    y = y.to(device, non_blocking=(device == "cuda")).long()
-
-                with torch.no_grad():
-                    z = self.f_ext(x)
-                    if z.dim() > 2:
-                        z = torch.flatten(z, 1)
-
-                    teacher_prob_sum = None
-                    teacher_weight_sum = None
-                    for comp in teacher_components:
-                        pm_adapter = comp["pm_adapter"]
-                        z_pm = pm_adapter(z) if pm_adapter is not None else z
-                        pm_logits = comp["pm_module"](z_pm)
-                        pm_prob = torch.softmax(pm_logits / temp, dim=1)
-                        w = comp["weight"]
-                        if self.pm_teacher_ensemble_confidence:
-                            pm_conf = self._teacher_confidence(pm_prob)
-                            pm_conf = self.pm_teacher_confidence_min + (
-                                1.0 - self.pm_teacher_confidence_min
-                            ) * pm_conf.pow(self.pm_teacher_confidence_power)
-                            sample_w = pm_conf.unsqueeze(1) * w
-                        else:
-                            sample_w = torch.full(
-                                (pm_prob.size(0), 1),
-                                w,
-                                device=pm_prob.device,
-                                dtype=pm_prob.dtype,
-                            )
-                        weighted_prob = pm_prob * sample_w
-                        teacher_prob_sum = weighted_prob if teacher_prob_sum is None else (teacher_prob_sum + weighted_prob)
-                        teacher_weight_sum = sample_w if teacher_weight_sum is None else (teacher_weight_sum + sample_w)
-
-                    if teacher_prob_sum is None or teacher_weight_sum is None:
-                        continue
-                    teacher_prob = teacher_prob_sum / teacher_weight_sum.clamp_min(1e-12)
-
-                with torch.cuda.amp.autocast(enabled=use_amp):
-                    z_gm = gm_adapter(z) if gm_adapter is not None else z
-                    gm_logits = gm_module(z_gm)
-                    student_log_prob = torch.log_softmax(gm_logits / temp, dim=1)
-                    kd_per_sample = F.kl_div(
-                        student_log_prob,
-                        teacher_prob,
-                        reduction="none",
-                    ).sum(dim=1) * (temp * temp)
-                    if self.pm_teacher_confidence_weight:
-                        teacher_conf = self._teacher_confidence(teacher_prob)
-                        # Down-weight uncertain teacher samples under proxy-target domain mismatch.
-                        kd_weight = self.pm_teacher_confidence_min + (
-                            1.0 - self.pm_teacher_confidence_min
-                        ) * teacher_conf.pow(self.pm_teacher_confidence_power)
-                        kd_loss = (kd_per_sample * kd_weight).sum() / kd_weight.sum().clamp_min(1e-12)
-                    else:
-                        kd_loss = kd_per_sample.mean()
-                    ce_loss = gm_logits.new_tensor(0.0)
+            for epoch_idx in range(self.pm_teacher_epochs):
+                desc = (
+                    f"Distill GM from PM teachers [{epoch_idx + 1}/{self.pm_teacher_epochs}]"
+                    if self.pm_teacher_epochs > 1
+                    else "Distill GM from PM teachers"
+                )
+                for x, y in tqdm(self.pm_teacher_loader, desc=desc, leave=False):
+                    if type(x) == type([]):
+                        x = x[0]
+                    x = x.to(device, non_blocking=(device == "cuda"))
                     if self.pm_teacher_ce_weight > 0:
-                        ce_loss = ce_loss_fn(gm_logits, y)
-                    rel_loss = gm_logits.new_tensor(0.0)
-                    if self.pm_teacher_rel_weight > 0:
-                        rel_loss = self._relation_kd_loss(
-                            gm_logits,
+                        y = y.to(device, non_blocking=(device == "cuda")).long()
+
+                    with torch.no_grad():
+                        z = self.f_ext(x)
+                        if z.dim() > 2:
+                            z = torch.flatten(z, 1)
+
+                        teacher_prob_list = []
+                        teacher_score_list = []
+                        teacher_conf_list = []
+                        for comp in teacher_components:
+                            pm_adapter = comp["pm_adapter"]
+                            z_pm = pm_adapter(z) if pm_adapter is not None else z
+                            pm_logits = comp["pm_module"](z_pm)
+                            pm_prob = torch.softmax(pm_logits / temp, dim=1)
+
+                            if self.pm_teacher_ensemble_confidence:
+                                pm_conf = self._teacher_confidence(pm_prob)
+                                pm_conf = self.pm_teacher_confidence_min + (
+                                    1.0 - self.pm_teacher_confidence_min
+                                ) * pm_conf.pow(self.pm_teacher_confidence_power)
+                            else:
+                                pm_conf = torch.ones(
+                                    (pm_prob.size(0),),
+                                    device=pm_prob.device,
+                                    dtype=pm_prob.dtype,
+                                )
+
+                            # Sample-wise teacher score for top-k routing:
+                            # normalized cluster size prior x calibrated confidence.
+                            score = pm_conf * float(comp["norm_weight"])
+                            teacher_prob_list.append(pm_prob)
+                            teacher_score_list.append(score)
+                            teacher_conf_list.append(pm_conf)
+
+                        if not teacher_prob_list:
+                            continue
+
+                        teacher_prob_stack = torch.stack(teacher_prob_list, dim=0)   # [T, B, C]
+                        teacher_score_stack = torch.stack(teacher_score_list, dim=0) # [T, B]
+                        teacher_conf_stack = torch.stack(teacher_conf_list, dim=0)   # [T, B]
+
+                        num_teachers = teacher_score_stack.size(0)
+                        topk = num_teachers if self.pm_teacher_topk <= 0 else min(self.pm_teacher_topk, num_teachers)
+                        if topk < num_teachers:
+                            topk_scores, topk_idx = torch.topk(
+                                teacher_score_stack,
+                                k=topk,
+                                dim=0,
+                                largest=True,
+                                sorted=False,
+                            )
+                            gather_idx = topk_idx.unsqueeze(-1).expand(-1, -1, teacher_prob_stack.size(-1))
+                            selected_prob = teacher_prob_stack.gather(0, gather_idx)
+                            selected_score = topk_scores
+                            selected_conf = teacher_conf_stack.gather(0, topk_idx)
+                        else:
+                            selected_prob = teacher_prob_stack
+                            selected_score = teacher_score_stack
+                            selected_conf = teacher_conf_stack
+
+                        score_sum = selected_score.sum(dim=0)
+                        valid_teacher_mask = score_sum > 1e-12
+                        if self.pm_teacher_abstain_threshold > 0:
+                            max_teacher_conf = selected_conf.max(dim=0).values
+                            valid_teacher_mask = valid_teacher_mask & (
+                                max_teacher_conf >= self.pm_teacher_abstain_threshold
+                            )
+                        if not bool(valid_teacher_mask.any()):
+                            continue
+
+                        teacher_prob = (
+                            selected_prob * selected_score.unsqueeze(-1)
+                        ).sum(dim=0) / score_sum.clamp_min(1e-12).unsqueeze(-1)
+
+                    with torch.cuda.amp.autocast(enabled=use_amp):
+                        z_gm = gm_adapter(z) if gm_adapter is not None else z
+                        gm_logits = gm_module(z_gm)
+                        student_log_prob = torch.log_softmax(gm_logits / temp, dim=1)
+                        kd_per_sample = F.kl_div(
+                            student_log_prob,
                             teacher_prob,
-                            max_samples=self.pm_teacher_rel_batch,
+                            reduction="none",
+                        ).sum(dim=1) * (temp * temp)
+
+                        if self.pm_teacher_confidence_weight:
+                            teacher_conf = self._teacher_confidence(teacher_prob)
+                            # Down-weight uncertain teacher samples under proxy-target domain mismatch.
+                            kd_weight = self.pm_teacher_confidence_min + (
+                                1.0 - self.pm_teacher_confidence_min
+                            ) * teacher_conf.pow(self.pm_teacher_confidence_power)
+                            kd_weight = kd_weight * valid_teacher_mask.to(kd_weight.dtype)
+                            kd_loss = (kd_per_sample * kd_weight).sum() / kd_weight.sum().clamp_min(1e-12)
+                        else:
+                            kd_valid = kd_per_sample[valid_teacher_mask]
+                            if kd_valid.numel() == 0:
+                                continue
+                            kd_loss = kd_valid.mean()
+
+                        ce_loss = gm_logits.new_tensor(0.0)
+                        gm_logits_valid = gm_logits[valid_teacher_mask]
+                        teacher_prob_valid = teacher_prob[valid_teacher_mask]
+                        if self.pm_teacher_ce_weight > 0:
+                            y_valid = y[valid_teacher_mask]
+                            if y_valid.numel() > 0:
+                                ce_loss = ce_loss_fn(gm_logits_valid, y_valid)
+                        rel_loss = gm_logits.new_tensor(0.0)
+                        if self.pm_teacher_rel_weight > 0:
+                            rel_loss = self._relation_kd_loss(
+                                gm_logits_valid,
+                                teacher_prob_valid,
+                                max_samples=self.pm_teacher_rel_batch,
+                            )
+                        loss = (
+                            self.pm_teacher_kl_weight * kd_loss
+                            + self.pm_teacher_ce_weight * ce_loss
+                            + self.pm_teacher_rel_weight * rel_loss
                         )
-                    loss = (
-                        self.pm_teacher_kl_weight * kd_loss
-                        + self.pm_teacher_ce_weight * ce_loss
-                        + self.pm_teacher_rel_weight * rel_loss
-                    )
 
-                if not torch.isfinite(loss):
+                    if not torch.isfinite(loss):
+                        optimizer.zero_grad()
+                        continue
+
                     optimizer.zero_grad()
-                    continue
-
-                optimizer.zero_grad()
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
 
             distilled_state = {
                 f"generalized_module.{k}": v.detach().cpu()
