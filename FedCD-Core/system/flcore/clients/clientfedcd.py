@@ -209,6 +209,7 @@ class clientFedCD(Client):
         if self.gm_update_mode not in {
             "local",
             "server_pm_teacher",
+            "server_pm_fedavg",
             "server_proto_teacher",
             "hybrid_local_proto",
         }:

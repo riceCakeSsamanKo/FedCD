@@ -500,7 +500,7 @@ if __name__ == "__main__":
     parser.add_argument('--fedcd_gm_lr_scale', type=float, default=0.1,
                         help="Local GM learning-rate scale relative to base local lr.")
     parser.add_argument('--fedcd_gm_update_mode', type=str, default="local",
-                        help="GM update mode: local | server_pm_teacher | server_proto_teacher | hybrid_local_proto")
+                        help="GM update mode: local | server_pm_teacher | server_pm_fedavg | server_proto_teacher | hybrid_local_proto")
     parser.add_argument('--fedcd_hybrid_proto_blend', type=float, default=0.35,
                         help="Blend ratio for hybrid_local_proto mode (0=local FedAvg only, 1=prototype-only).")
     parser.add_argument('--fedcd_entropy_temp_pm', type=float, default=1.0,

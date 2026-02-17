@@ -73,6 +73,7 @@ class FedCD(Server):
         if self.gm_update_mode not in {
             "local",
             "server_pm_teacher",
+            "server_pm_fedavg",
             "server_proto_teacher",
             "hybrid_local_proto",
         }:
@@ -673,6 +674,8 @@ class FedCD(Server):
                     global_gm_state = self.aggregate_global_gms(received_gms) if received_gms else None
                 elif self.gm_update_mode == "server_pm_teacher":
                     global_gm_state = self.distill_global_gm_from_pm_teachers(cluster_pms, cluster_counts)
+                elif self.gm_update_mode == "server_pm_fedavg":
+                    global_gm_state = self.update_gm_from_pm_fedavg(cluster_pms, cluster_counts)
                 elif self.gm_update_mode == "server_proto_teacher":
                     global_gm_state = self.update_gm_from_pm_prototypes(received_protos)
                 else:
@@ -692,6 +695,8 @@ class FedCD(Server):
                     print(f"[FedCD] Round {i}: Server-side global GM aggregation/update done")
                 elif self.gm_update_mode == "server_pm_teacher":
                     print(f"[FedCD] Round {i}: Server-side PM-teacher GM distillation/update done")
+                elif self.gm_update_mode == "server_pm_fedavg":
+                    print(f"[FedCD] Round {i}: Server-side PM->GM FedAvg update done")
                 elif self.gm_update_mode == "server_proto_teacher":
                     print(f"[FedCD] Round {i}: Server-side prototype-based GM update done")
                 else:
@@ -910,6 +915,51 @@ class FedCD(Server):
             if acc is not None:
                 avg_state[key] = acc
         return avg_state
+
+    def update_gm_from_pm_fedavg(self, cluster_pms, cluster_counts):
+        """
+        Build GM by FedAveraging uploaded PMs on server.
+        Assumes PM/GM module topology is compatible (e.g., both VGG8 classifiers).
+        """
+        if not cluster_pms:
+            return None
+
+        gm_module_template = self.generalized_module.state_dict()
+        gm_adapter_template = (
+            self.generalized_adapter.state_dict() if self.generalized_adapter is not None else {}
+        )
+
+        cluster_gm_states = {}
+        for cluster_id, state in cluster_pms.items():
+            pm_module_state, pm_adapter_state = self._extract_personalized_state(state)
+            converted = {}
+
+            for key, value in pm_module_state.items():
+                if key in gm_module_template and gm_module_template[key].shape == value.shape:
+                    converted[f"generalized_module.{key}"] = value.detach().cpu()
+
+            if self.generalized_adapter is not None and pm_adapter_state:
+                for key, value in pm_adapter_state.items():
+                    if key in gm_adapter_template and gm_adapter_template[key].shape == value.shape:
+                        converted[f"generalized_adapter.{key}"] = value.detach().cpu()
+
+            if converted:
+                cluster_gm_states[cluster_id] = converted
+
+        if not cluster_gm_states:
+            print("[FedCD] PM->GM FedAvg skipped: no compatible PM states.")
+            return None
+
+        global_gm_state = self._weighted_average_generalized_states(cluster_gm_states, cluster_counts)
+        if not global_gm_state:
+            return None
+
+        for cluster_id in set(self.cluster_map.values()):
+            self.cluster_generalized_states[cluster_id] = {
+                k: v.clone() for k, v in global_gm_state.items()
+            }
+        self._apply_generalized_state_to_server(global_gm_state)
+        return global_gm_state
 
     def _collect_pm_prototype_components(self, received_protos):
         """
