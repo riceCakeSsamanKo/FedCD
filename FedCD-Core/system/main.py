@@ -486,35 +486,24 @@ if __name__ == "__main__":
                         help="Maximum number of clusters allowed in threshold-based dynamic clustering (0 disables cap).")
     parser.add_argument('--fedcd_nc_weight', type=float, default=0.0)
     parser.add_argument('--fedcd_fusion_weight', type=float, default=1.0,
-                        help="Main CE loss weight for fused logits (GM+PM+combiner).")
+                        help="Main CE/NLL loss weight for entropy-mixed GM+PM prediction.")
     parser.add_argument('--fedcd_pm_logits_weight', type=float, default=0.5,
                         help="Auxiliary CE loss weight for PM logits branch during local training.")
-    parser.add_argument('--fedcd_pm_only_weight', '--fedcd_pm_combiner_weight',
-                        dest='fedcd_pm_only_weight', type=float, default=1.5,
-                        help="Auxiliary CE loss weight for PM-only combiner branch during local training.")
+    parser.add_argument('--fedcd_pm_only_weight', type=float, default=1.5,
+                        help="Extra PM-only CE loss weight during local training.")
     parser.add_argument('--fedcd_gm_logits_weight', type=float, default=1.0,
                         help="Auxiliary CE loss weight for GM-only logits during local training.")
+    parser.add_argument('--fedcd_gm_lr_scale', type=float, default=0.1,
+                        help="Local GM learning-rate scale relative to base local lr.")
+    parser.add_argument('--fedcd_entropy_temp_pm', type=float, default=1.0,
+                        help="Temperature for PM probabilities in entropy-based PM/GM mixing.")
+    parser.add_argument('--fedcd_entropy_temp_gm', type=float, default=1.0,
+                        help="Temperature for GM probabilities in entropy-based PM/GM mixing.")
+    parser.add_argument('--fedcd_entropy_min_pm_weight', type=float, default=0.1,
+                        help="Minimum PM mixing weight in entropy gate.")
+    parser.add_argument('--fedcd_entropy_max_pm_weight', type=float, default=0.9,
+                        help="Maximum PM mixing weight in entropy gate.")
     parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
-    parser.add_argument('--broadcast_global_combiner', type=str2bool, default=False,
-                        help="Broadcast distilled global combiner to clients together with GM.")
-    parser.add_argument('--fedcd_distill_lr', type=float, default=0.01,
-                        help="Server distillation learning rate for cluster-wise GM updates.")
-    parser.add_argument('--fedcd_distill_temp', type=float, default=2.0,
-                        help="Temperature for server distillation.")
-    parser.add_argument('--fedcd_distill_kl_weight', type=float, default=1.0,
-                        help="KL loss weight for server distillation.")
-    parser.add_argument('--fedcd_distill_ce_weight', type=float, default=0.2,
-                        help="Pseudo-label CE loss weight for server distillation.")
-    parser.add_argument('--fedcd_prototype_samples', type=int, default=512,
-                        help="Number of local samples used for PM prototype upload each round (0 = full local train set).")
-    parser.add_argument('--fedcd_proto_weight', type=float, default=0.3,
-                        help="Prototype alignment loss weight for server GM distillation.")
-    parser.add_argument('--fedcd_relation_weight', type=float, default=0.1,
-                        help="Prototype relation (class-similarity) loss weight for server GM distillation.")
-    parser.add_argument('--fedcd_combiner_calib_epochs', type=int, default=1,
-                        help="Local combiner-only calibration epochs right after GM broadcast (0 disables).")
-    parser.add_argument('--fedcd_combiner_calib_lr_mult', type=float, default=1.0,
-                        help="Learning-rate multiplier for post-GM combiner calibration.")
     parser.add_argument('--gm_model', type=str, default="VGG16",
                         help="FedCD GM model name")
     parser.add_argument('--pm_model', type=str, default="VGG8",
@@ -523,10 +512,6 @@ if __name__ == "__main__":
                         help="FedCD feature extractor model name")
     parser.add_argument('--fext_dim', type=int, default=512,
                         help="FedCD feature extractor output dimension")
-    parser.add_argument('--proxy_dataset', type=str, default="TinyImagenet",
-                        help="Dataset name for server-side proxy data (e.g. TinyImagenet, Cifar100)")
-    parser.add_argument('--proxy_samples', type=int, default=1000,
-                        help="Number of random samples to use as proxy data")
     parser.add_argument('--eval_common_global', type=str2bool, default=True,
                         help="Evaluate personalized models on the same shared global test subset.")
     parser.add_argument('--global_test_samples', '--common_test_samples', dest='global_test_samples', type=int, default=0,

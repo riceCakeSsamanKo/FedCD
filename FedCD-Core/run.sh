@@ -26,20 +26,15 @@ EVAL_COMMON_GLOBAL=True
 GLOBAL_TEST_SAMPLES=0
 COMMON_EVAL_BATCH_SIZE=256
 
-# Server distillation settings
-FEDCD_DISTILL_LR=0.01
-FEDCD_DISTILL_TEMP=3.0
-FEDCD_DISTILL_KL_WEIGHT=1.0
-FEDCD_DISTILL_CE_WEIGHT=0.05
 FEDCD_FUSION_WEIGHT=0.5
 FEDCD_GM_LOGITS_WEIGHT=1.0
 FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=1.0
-FEDCD_PROTOTYPE_SAMPLES=512
-FEDCD_PROTO_WEIGHT=0.3
-FEDCD_RELATION_WEIGHT=0.1
-FEDCD_COMBINER_CALIB_EPOCHS=1
-FEDCD_COMBINER_CALIB_LR_MULT=1.0
+FEDCD_GM_LR_SCALE=0.1
+FEDCD_ENTROPY_TEMP_PM=1.0
+FEDCD_ENTROPY_TEMP_GM=1.0
+FEDCD_ENTROPY_MIN_PM_WEIGHT=0.1
+FEDCD_ENTROPY_MAX_PM_WEIGHT=0.9
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 0.5 1.0) # (0.1 0.5 1.0)
@@ -52,10 +47,8 @@ echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
 echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Global Test Eval: ${EVAL_COMMON_GLOBAL} (samples=${GLOBAL_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
-echo "Distill: lr=${FEDCD_DISTILL_LR}, temp=${FEDCD_DISTILL_TEMP}, kl=${FEDCD_DISTILL_KL_WEIGHT}, ce=${FEDCD_DISTILL_CE_WEIGHT}"
-echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}"
-echo "Prototype Consensus: samples=${FEDCD_PROTOTYPE_SAMPLES}, proto_w=${FEDCD_PROTO_WEIGHT}, rel_w=${FEDCD_RELATION_WEIGHT}"
-echo "Post-GM Combiner Calibration: epochs=${FEDCD_COMBINER_CALIB_EPOCHS}, lr_mult=${FEDCD_COMBINER_CALIB_LR_MULT}"
+echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}, gm_lr_scale=${FEDCD_GM_LR_SCALE}"
+echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}]"
 echo "============================================================"
 
     for THRESHOLD in "${THRESHOLDS[@]}"
@@ -116,22 +109,16 @@ echo "============================================================"
                 --eval_common_global $EVAL_COMMON_GLOBAL \
                 --global_test_samples $GLOBAL_TEST_SAMPLES \
                 --common_eval_batch_size $COMMON_EVAL_BATCH_SIZE \
-                --fedcd_distill_lr $FEDCD_DISTILL_LR \
-                --fedcd_distill_temp $FEDCD_DISTILL_TEMP \
-                --fedcd_distill_kl_weight $FEDCD_DISTILL_KL_WEIGHT \
-                --fedcd_distill_ce_weight $FEDCD_DISTILL_CE_WEIGHT \
                 --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
                 --fedcd_gm_logits_weight $FEDCD_GM_LOGITS_WEIGHT \
                 --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
                 --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
-                --fedcd_prototype_samples $FEDCD_PROTOTYPE_SAMPLES \
-                --fedcd_proto_weight $FEDCD_PROTO_WEIGHT \
-                --fedcd_relation_weight $FEDCD_RELATION_WEIGHT \
-                --fedcd_combiner_calib_epochs $FEDCD_COMBINER_CALIB_EPOCHS \
-                --fedcd_combiner_calib_lr_mult $FEDCD_COMBINER_CALIB_LR_MULT \
-                --broadcast_global_combiner False \
-                --local_epochs 1 \
-                --proxy_dataset Cifar100 --proxy_samples 2000 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
+                --fedcd_gm_lr_scale $FEDCD_GM_LR_SCALE \
+                --fedcd_entropy_temp_pm $FEDCD_ENTROPY_TEMP_PM \
+                --fedcd_entropy_temp_gm $FEDCD_ENTROPY_TEMP_GM \
+                --fedcd_entropy_min_pm_weight $FEDCD_ENTROPY_MIN_PM_WEIGHT \
+                --fedcd_entropy_max_pm_weight $FEDCD_ENTROPY_MAX_PM_WEIGHT \
+                --local_epochs 1 || echo "Warning: Training (pat) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
             # Copy dataset config to the latest log directory from fl_data
@@ -191,22 +178,16 @@ echo "============================================================"
                     --eval_common_global $EVAL_COMMON_GLOBAL \
                     --global_test_samples $GLOBAL_TEST_SAMPLES \
                     --common_eval_batch_size $COMMON_EVAL_BATCH_SIZE \
-                    --fedcd_distill_lr $FEDCD_DISTILL_LR \
-                    --fedcd_distill_temp $FEDCD_DISTILL_TEMP \
-                    --fedcd_distill_kl_weight $FEDCD_DISTILL_KL_WEIGHT \
-                    --fedcd_distill_ce_weight $FEDCD_DISTILL_CE_WEIGHT \
                     --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
                     --fedcd_gm_logits_weight $FEDCD_GM_LOGITS_WEIGHT \
                     --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
                     --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
-                    --fedcd_prototype_samples $FEDCD_PROTOTYPE_SAMPLES \
-                    --fedcd_proto_weight $FEDCD_PROTO_WEIGHT \
-                    --fedcd_relation_weight $FEDCD_RELATION_WEIGHT \
-                    --fedcd_combiner_calib_epochs $FEDCD_COMBINER_CALIB_EPOCHS \
-                    --fedcd_combiner_calib_lr_mult $FEDCD_COMBINER_CALIB_LR_MULT \
-                    --broadcast_global_combiner False \
-                    --local_epochs 1 \
-                    --proxy_dataset Cifar100 --proxy_samples 2000 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
+                    --fedcd_gm_lr_scale $FEDCD_GM_LR_SCALE \
+                    --fedcd_entropy_temp_pm $FEDCD_ENTROPY_TEMP_PM \
+                    --fedcd_entropy_temp_gm $FEDCD_ENTROPY_TEMP_GM \
+                    --fedcd_entropy_min_pm_weight $FEDCD_ENTROPY_MIN_PM_WEIGHT \
+                    --fedcd_entropy_max_pm_weight $FEDCD_ENTROPY_MAX_PM_WEIGHT \
+                    --local_epochs 1 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
                 ELAPSED_TIME=$(($SECONDS - $START_TIME))
 
                 # Copy dataset config to the latest log directory from fl_data
