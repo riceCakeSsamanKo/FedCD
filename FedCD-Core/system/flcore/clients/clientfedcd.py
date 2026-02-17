@@ -67,6 +67,9 @@ class clientFedCD(Client):
                 getattr(args, "fedcd_pm_combiner_weight", 1.5),
             )
         )
+        self.prototype_samples = int(getattr(args, "fedcd_prototype_samples", 512))
+        self.combiner_calib_epochs = int(getattr(args, "fedcd_combiner_calib_epochs", 1))
+        self.combiner_calib_lr_mult = float(getattr(args, "fedcd_combiner_calib_lr_mult", 1.0))
         self.warmup_epochs = int(getattr(args, "fedcd_warmup_epochs", 0))
         self.generalized_module = self._extract_module(self.gm)
         self.personalized_module = self._extract_module(self.pm)
@@ -437,6 +440,103 @@ class clientFedCD(Client):
         # Backward compatibility for existing call sites.
         self.warmup_personalized_module()
 
+    def calibrate_combiner(self):
+        """
+        Post-GM local calibration:
+        - Freeze f_ext / GM / PM branches
+        - Update combiner only for better alignment with freshly broadcast GM
+        """
+        if self.combiner_calib_epochs <= 0:
+            return
+
+        def _calibrate_once(device, batch_size):
+            self.f_ext.to(device)
+            self.generalized_module.to(device)
+            self.personalized_module.to(device)
+            self.combiner.to(device)
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to(device)
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to(device)
+
+            self.f_ext.eval()
+            self.generalized_module.eval()
+            self.personalized_module.eval()
+            self.combiner.train()
+
+            lr = max(1e-8, self.learning_rate * self.combiner_calib_lr_mult)
+            optimizer = torch.optim.SGD(self.combiner.parameters(), lr=lr)
+            trainloader = self.load_train_data(batch_size=batch_size)
+            use_amp = device == "cuda" and self.use_amp
+            scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+
+            for _ in range(self.combiner_calib_epochs):
+                for x, y in trainloader:
+                    if type(x) == type([]):
+                        x = x[0]
+                    x = self._to_device(x, device)
+                    y = self._to_device(y, device)
+
+                    optimizer.zero_grad()
+                    with torch.cuda.amp.autocast(enabled=use_amp):
+                        z = self.f_ext(x)
+                        if z.dim() > 2:
+                            z = torch.flatten(z, 1)
+
+                        with torch.no_grad():
+                            z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                            logits_gm = self.generalized_module(z_gm)
+                            z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+                            logits_pm = self.personalized_module(z_pm)
+
+                        logits = self.combiner(torch.cat([logits_gm, logits_pm], dim=1))
+                        loss = self.loss_func(logits, y)
+
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+
+            if self.args.avoid_oom:
+                self.f_ext.to("cpu")
+                self.generalized_module.to("cpu")
+                self.personalized_module.to("cpu")
+                self.combiner.to("cpu")
+                if self.generalized_adapter is not None:
+                    self.generalized_adapter.to("cpu")
+                if self.personalized_adapter is not None:
+                    self.personalized_adapter.to("cpu")
+                self.model.to("cpu")
+                if device == "cuda":
+                    torch.cuda.empty_cache()
+
+        batch_size = self.batch_size
+        if self.device == "cuda":
+            if self.gpu_batch_mult > 1:
+                batch_size = batch_size * self.gpu_batch_mult
+            if self.gpu_batch_max > 0:
+                batch_size = min(batch_size, self.gpu_batch_max)
+        if batch_size > self.train_samples:
+            batch_size = self.train_samples
+
+        try:
+            _calibrate_once(self.device, batch_size)
+        except RuntimeError as err:
+            if self.device == "cuda" and self._is_oom(err):
+                print("[Warn] OOM during combiner calibration. Falling back to CPU for this client.")
+                torch.cuda.empty_cache()
+                self.f_ext.to("cpu")
+                self.generalized_module.to("cpu")
+                self.personalized_module.to("cpu")
+                self.combiner.to("cpu")
+                if self.generalized_adapter is not None:
+                    self.generalized_adapter.to("cpu")
+                if self.personalized_adapter is not None:
+                    self.personalized_adapter.to("cpu")
+                self.model.to("cpu")
+                _calibrate_once("cpu", max(1, batch_size // 2))
+                return
+            raise
+
     # [핵심] 서버에서 Generalized Module 파트를 받아 적용
     def set_parameters(self, model):
         # 서버에서 받은 Generalized Module 관련 파라미터를 로드
@@ -594,3 +694,79 @@ class clientFedCD(Client):
             })
         state.update({f"combiner.{k}": v.detach().cpu() for k, v in self.combiner.state_dict().items()})
         return state
+
+    def upload_class_prototypes(self, max_samples=None):
+        """
+        Upload PM-only class prototypes with confidence-weighted sums.
+        - class_logit_conf_sum[c]: sum(logits * confidence) for class c
+        - class_conf_sum[c]: sum(confidence) for class c
+        - class_counts[c]: number of samples for class c
+        """
+        if max_samples is None:
+            max_samples = self.prototype_samples
+        max_samples = int(max_samples) if max_samples is not None else 0
+
+        device = "cpu"
+        self.f_ext.to(device)
+        self.f_ext.eval()
+        self.personalized_module.to(device)
+        self.personalized_module.eval()
+        self.combiner.to(device)
+        self.combiner.eval()
+        if self.personalized_adapter is not None:
+            self.personalized_adapter.to(device)
+            self.personalized_adapter.eval()
+
+        class_logit_conf_sum = torch.zeros(self.num_classes, self.num_classes, device=device)
+        class_conf_sum = torch.zeros(self.num_classes, device=device)
+        class_counts = torch.zeros(self.num_classes, device=device)
+
+        count_seen = 0
+        batch_size = min(self.batch_size, 64)
+        trainloader = self.load_train_data(batch_size=batch_size)
+
+        with torch.no_grad():
+            for x, y in trainloader:
+                if type(x) == type([]):
+                    x = x[0]
+                x = x.to(device)
+                y = y.to(device).long()
+
+                z = self.f_ext(x)
+                if z.dim() > 2:
+                    z = torch.flatten(z, 1)
+                z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+                pm_logits = self.personalized_module(z_pm)
+                gm_zeros = torch.zeros_like(pm_logits)
+                pm_only_logits = self.combiner(torch.cat([gm_zeros, pm_logits], dim=1))
+                pm_only_prob = torch.softmax(pm_only_logits, dim=1)
+                confidence = torch.max(pm_only_prob, dim=1).values
+
+                if max_samples > 0 and count_seen + y.size(0) > max_samples:
+                    keep = max_samples - count_seen
+                    if keep <= 0:
+                        break
+                    y = y[:keep]
+                    pm_only_logits = pm_only_logits[:keep]
+                    confidence = confidence[:keep]
+
+                for c in y.unique():
+                    cls = int(c.item())
+                    mask = (y == c)
+                    if not torch.any(mask):
+                        continue
+                    cls_logits = pm_only_logits[mask]
+                    cls_conf = confidence[mask]
+                    class_logit_conf_sum[cls] += (cls_logits * cls_conf.unsqueeze(1)).sum(dim=0)
+                    class_conf_sum[cls] += cls_conf.sum()
+                    class_counts[cls] += mask.sum()
+
+                count_seen += y.size(0)
+                if max_samples > 0 and count_seen >= max_samples:
+                    break
+
+        return {
+            "class_logit_conf_sum": class_logit_conf_sum.detach().cpu(),
+            "class_conf_sum": class_conf_sum.detach().cpu(),
+            "class_counts": class_counts.detach().cpu(),
+        }

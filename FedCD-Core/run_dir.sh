@@ -32,6 +32,11 @@ FEDCD_DISTILL_CE_WEIGHT=0.05
 FEDCD_FUSION_WEIGHT=1.0
 FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=0.8
+FEDCD_PROTOTYPE_SAMPLES=512
+FEDCD_PROTO_WEIGHT=0.3
+FEDCD_RELATION_WEIGHT=0.1
+FEDCD_COMBINER_CALIB_EPOCHS=1
+FEDCD_COMBINER_CALIB_LR_MULT=1.0
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 1.0) # (0.1 0.5 1.0)
@@ -46,6 +51,8 @@ echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Global Test Eval: ${EVAL_COMMON_GLOBAL} (samples=${GLOBAL_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
 echo "Distill: lr=${FEDCD_DISTILL_LR}, temp=${FEDCD_DISTILL_TEMP}, kl=${FEDCD_DISTILL_KL_WEIGHT}, ce=${FEDCD_DISTILL_CE_WEIGHT}"
 echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}"
+echo "Prototype Consensus: samples=${FEDCD_PROTOTYPE_SAMPLES}, proto_w=${FEDCD_PROTO_WEIGHT}, rel_w=${FEDCD_RELATION_WEIGHT}"
+echo "Post-GM Combiner Calibration: epochs=${FEDCD_COMBINER_CALIB_EPOCHS}, lr_mult=${FEDCD_COMBINER_CALIB_LR_MULT}"
 echo "============================================================"
 
 for ALPHA in "${ALPHAS[@]}"
@@ -113,6 +120,11 @@ do
                 --fedcd_fusion_weight $FEDCD_FUSION_WEIGHT \
                 --fedcd_pm_logits_weight $FEDCD_PM_LOGITS_WEIGHT \
                 --fedcd_pm_only_weight $FEDCD_PM_ONLY_WEIGHT \
+                --fedcd_prototype_samples $FEDCD_PROTOTYPE_SAMPLES \
+                --fedcd_proto_weight $FEDCD_PROTO_WEIGHT \
+                --fedcd_relation_weight $FEDCD_RELATION_WEIGHT \
+                --fedcd_combiner_calib_epochs $FEDCD_COMBINER_CALIB_EPOCHS \
+                --fedcd_combiner_calib_lr_mult $FEDCD_COMBINER_CALIB_LR_MULT \
                 --broadcast_global_combiner False \
                 --local_epochs 1 \
                 --proxy_dataset Cifar100 --proxy_samples 2000 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."

@@ -6,6 +6,7 @@ import os
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 import torchvision
@@ -76,6 +77,12 @@ class FedCD(Server):
         self.distill_temp = float(getattr(args, "fedcd_distill_temp", 2.0))
         self.distill_kl_weight = float(getattr(args, "fedcd_distill_kl_weight", 1.0))
         self.distill_ce_weight = float(getattr(args, "fedcd_distill_ce_weight", 0.2))
+        self.prototype_samples = int(getattr(args, "fedcd_prototype_samples", 512))
+        self.proto_weight = float(getattr(args, "fedcd_proto_weight", 0.3))
+        self.relation_weight = float(getattr(args, "fedcd_relation_weight", 0.1))
+        self.cluster_proto_info = {}
+        self.global_proto_info = None
+        self.cluster_teacher_confidence = {}
 
         # [ACT] Adaptive Clustering Threshold Initialization
         self.adaptive_threshold = bool(getattr(args, "adaptive_threshold", False))
@@ -426,11 +433,15 @@ class FedCD(Server):
 
             # 2. PM 수집 (Receive PMs)
             received_pms = []
+            received_prototypes = []
             total_uplink_bytes = 0
             for client in tqdm(self.selected_clients, desc=f"Round {i} Collecting PMs", leave=False):
                 pm_state = client.upload_parameters()
+                proto_state = client.upload_class_prototypes(self.prototype_samples)
                 received_pms.append((client.id, pm_state))
+                received_prototypes.append((client.id, proto_state))
                 total_uplink_bytes += sum(v.numel() * v.element_size() for v in pm_state.values())
+                total_uplink_bytes += sum(v.numel() * v.element_size() for v in proto_state.values())
             
             round_uplink += total_uplink_bytes
 
@@ -440,7 +451,9 @@ class FedCD(Server):
 
             # 2.5 클러스터링 갱신 및 상세 로깅
             if i % self.cluster_period == 0:
-                self.cluster_map = self.cluster_clients_by_distribution()
+                prev_cluster_map = dict(self.cluster_map)
+                raw_cluster_map = self.cluster_clients_by_distribution()
+                self.cluster_map = self._align_cluster_labels(prev_cluster_map, raw_cluster_map)
                 self._ensure_cluster_generalized_states()
                 
                 # 상세 클러스터링 현황 로깅
@@ -454,6 +467,17 @@ class FedCD(Server):
                 for c_id in sorted(cluster_groups.keys()):
                     clients_in_cluster = sorted(cluster_groups[c_id])
                     print(f"  Cluster {c_id} ({len(clients_in_cluster)} clients): {clients_in_cluster}")
+
+            (
+                self.cluster_proto_info,
+                self.global_proto_info,
+                self.cluster_teacher_confidence,
+            ) = self.aggregate_cluster_prototypes(received_prototypes)
+            if self.cluster_teacher_confidence:
+                conf_msg = ", ".join(
+                    f"{cid}:{conf:.3f}" for cid, conf in sorted(self.cluster_teacher_confidence.items())
+                )
+                print(f"[FedCD] Prototype consensus confidence: {conf_msg}")
 
             # 3. 클러스터 내 PM 집계 및 배포
             cluster_pms = self.aggregate_cluster_pms(received_pms)
@@ -470,6 +494,11 @@ class FedCD(Server):
                 cluster_gm_states = self.aggregate_and_distill(cluster_pms, cluster_counts)
                 # Distilled cluster GM을 각 클러스터 클라이언트에 배포
                 downlink_bytes = self.send_cluster_gms(cluster_gm_states)
+                calib_epochs = int(getattr(self.args, "fedcd_combiner_calib_epochs", 1))
+                if calib_epochs > 0:
+                    print(f"[FedCD] Round {i}: Combiner-only calibration on selected clients (epochs={calib_epochs})")
+                    for client in tqdm(self.selected_clients, desc=f"Round {i} Combiner Calibration", leave=False):
+                        client.calibrate_combiner()
                 # Optional: broadcast global combiner if enabled
                 if self.broadcast_global_combiner:
                     self.update_global_combiner(cluster_pms, cluster_counts)
@@ -585,6 +614,100 @@ class FedCD(Server):
             count = cluster_counts.get(cluster_id, 1)
             cluster_avg[cluster_id] = {k: v / count for k, v in sum_state.items()}
         return cluster_avg
+
+    def aggregate_cluster_prototypes(self, received_prototypes):
+        """
+        Aggregate confidence-weighted PM-only class prototypes by cluster.
+        Returns:
+          cluster_proto_info: {
+            cluster_id: {
+              "prototypes": Tensor[num_classes, num_classes],
+              "valid_mask": Tensor[num_classes] (bool),
+              "confidence": float
+            }
+          }
+          global_proto_info: same schema as cluster entry
+          cluster_teacher_confidence: {cluster_id: float}
+        """
+        cluster_logit_conf_sum = {}
+        cluster_conf_sum = {}
+        cluster_counts_sum = {}
+
+        global_logit_conf_sum = None
+        global_conf_sum = None
+        global_counts_sum = None
+
+        for client_id, proto in received_prototypes:
+            cluster_id = self.cluster_map.get(client_id, 0)
+            lcs = proto.get("class_logit_conf_sum", None)
+            cfs = proto.get("class_conf_sum", None)
+            cnt = proto.get("class_counts", None)
+            if lcs is None or cfs is None or cnt is None:
+                continue
+
+            lcs = lcs.float().cpu()
+            cfs = cfs.float().cpu()
+            cnt = cnt.float().cpu()
+
+            if cluster_id not in cluster_logit_conf_sum:
+                cluster_logit_conf_sum[cluster_id] = lcs.clone()
+                cluster_conf_sum[cluster_id] = cfs.clone()
+                cluster_counts_sum[cluster_id] = cnt.clone()
+            else:
+                cluster_logit_conf_sum[cluster_id] += lcs
+                cluster_conf_sum[cluster_id] += cfs
+                cluster_counts_sum[cluster_id] += cnt
+
+            if global_logit_conf_sum is None:
+                global_logit_conf_sum = lcs.clone()
+                global_conf_sum = cfs.clone()
+                global_counts_sum = cnt.clone()
+            else:
+                global_logit_conf_sum += lcs
+                global_conf_sum += cfs
+                global_counts_sum += cnt
+
+        cluster_proto_info = {}
+        cluster_teacher_confidence = {}
+
+        for cluster_id in cluster_logit_conf_sum.keys():
+            conf_sum = cluster_conf_sum[cluster_id]
+            counts = cluster_counts_sum[cluster_id]
+            valid = (counts > 0) & (conf_sum > 0)
+
+            prototypes = torch.zeros_like(cluster_logit_conf_sum[cluster_id])
+            if torch.any(valid):
+                denom = conf_sum.unsqueeze(1).clamp_min(1e-12)
+                prototypes = cluster_logit_conf_sum[cluster_id] / denom
+
+            class_conf_mean = conf_sum / counts.clamp_min(1.0)
+            confidence = float(class_conf_mean[valid].mean().item()) if torch.any(valid) else 1.0
+            # Clamp to a safe range for teacher weighting.
+            confidence = max(0.05, min(1.0, confidence))
+
+            cluster_proto_info[cluster_id] = {
+                "prototypes": prototypes,
+                "valid_mask": valid,
+                "confidence": confidence,
+            }
+            cluster_teacher_confidence[cluster_id] = confidence
+
+        global_proto_info = None
+        if global_logit_conf_sum is not None:
+            global_valid = (global_counts_sum > 0) & (global_conf_sum > 0)
+            global_proto = torch.zeros_like(global_logit_conf_sum)
+            if torch.any(global_valid):
+                global_proto = global_logit_conf_sum / global_conf_sum.unsqueeze(1).clamp_min(1e-12)
+            global_conf_mean = global_conf_sum / global_counts_sum.clamp_min(1.0)
+            global_confidence = float(global_conf_mean[global_valid].mean().item()) if torch.any(global_valid) else 1.0
+            global_confidence = max(0.05, min(1.0, global_confidence))
+            global_proto_info = {
+                "prototypes": global_proto,
+                "valid_mask": global_valid,
+                "confidence": global_confidence,
+            }
+
+        return cluster_proto_info, global_proto_info, cluster_teacher_confidence
 
     def send_cluster_pms(self, cluster_pms):
         # [Info] Calculate and print Cluster PM Size (Assuming all clusters have same model size)
@@ -781,6 +904,81 @@ class FedCD(Server):
 
         return {cid: int(label) for cid, label in zip(client_ids, labels)}
 
+    def _align_cluster_labels(self, prev_cluster_map, new_cluster_map):
+        """
+        Keep cluster IDs temporally stable by matching new labels to previous labels
+        using maximum client overlap (Hungarian if available, otherwise greedy).
+        """
+        if not prev_cluster_map or not new_cluster_map:
+            return new_cluster_map
+
+        prev_labels = sorted(set(prev_cluster_map.values()))
+        new_labels = sorted(set(new_cluster_map.values()))
+        if not prev_labels or not new_labels:
+            return new_cluster_map
+
+        prev_groups = {label: set() for label in prev_labels}
+        new_groups = {label: set() for label in new_labels}
+        for cid, label in prev_cluster_map.items():
+            prev_groups[label].add(cid)
+        for cid, label in new_cluster_map.items():
+            new_groups[label].add(cid)
+
+        overlap = np.zeros((len(prev_labels), len(new_labels)), dtype=np.int64)
+        for i, old_label in enumerate(prev_labels):
+            for j, new_label in enumerate(new_labels):
+                overlap[i, j] = len(prev_groups[old_label] & new_groups[new_label])
+
+        remap = {}
+        used_old = set()
+        used_new = set()
+        try:
+            from scipy.optimize import linear_sum_assignment
+            row_ind, col_ind = linear_sum_assignment(-overlap)
+            for r, c in zip(row_ind, col_ind):
+                if overlap[r, c] <= 0:
+                    continue
+                old_label = prev_labels[r]
+                new_label = new_labels[c]
+                remap[new_label] = old_label
+                used_old.add(old_label)
+                used_new.add(new_label)
+        except Exception:
+            pairs = []
+            for i, old_label in enumerate(prev_labels):
+                for j, new_label in enumerate(new_labels):
+                    score = overlap[i, j]
+                    if score > 0:
+                        pairs.append((score, old_label, new_label))
+            pairs.sort(reverse=True)
+            for _, old_label, new_label in pairs:
+                if old_label in used_old or new_label in used_new:
+                    continue
+                remap[new_label] = old_label
+                used_old.add(old_label)
+                used_new.add(new_label)
+
+        next_label = (max(prev_labels) + 1) if prev_labels else 0
+        assigned_targets = set(remap.values())
+        for new_label in new_labels:
+            if new_label in remap:
+                continue
+            while next_label in assigned_targets:
+                next_label += 1
+            remap[new_label] = next_label
+            assigned_targets.add(next_label)
+
+        aligned_cluster_map = {
+            cid: int(remap[new_label])
+            for cid, new_label in new_cluster_map.items()
+        }
+
+        if any(remap[nl] != nl for nl in new_labels):
+            remap_msg = ", ".join(f"{nl}->{remap[nl]}" for nl in sorted(remap.keys()))
+            print(f"[FedCD] Aligned cluster labels: {remap_msg}")
+
+        return aligned_cluster_map
+
     def _build_global_test_loader(self):
         # Build one shared test subset so all clients are evaluated on exactly the same data.
         shared_test_data = []
@@ -924,7 +1122,9 @@ class FedCD(Server):
         def _build_teacher_components(device):
             teacher_components = {}
             for cluster_id, state in cluster_pm_states.items():
-                weight = float(cluster_counts.get(cluster_id, 1))
+                base_weight = float(cluster_counts.get(cluster_id, 1))
+                conf_gate = float(self.cluster_teacher_confidence.get(cluster_id, 1.0))
+                weight = base_weight * conf_gate
                 if weight <= 0:
                     continue
 
@@ -1029,6 +1229,12 @@ class FedCD(Server):
             return teacher_components
 
         def _distill_once(device):
+            def _relation_matrix(x):
+                if x.size(0) < 2:
+                    return None
+                x = F.normalize(x, p=2, dim=1)
+                return torch.matmul(x, x.t())
+
             self.f_ext.to(device)
             self.f_ext.eval()
             use_amp = device == "cuda" and bool(getattr(self.args, "amp", False))
@@ -1075,6 +1281,14 @@ class FedCD(Server):
                 target_pm_module = target["pm_module"]
                 target_pm_adapter = target["pm_adapter"]
                 target_combiner = target["combiner"]
+                target_proto_info = self.cluster_proto_info.get(target_cluster_id, None)
+                if target_proto_info is None:
+                    target_proto_info = self.global_proto_info
+                proto_targets = None
+                proto_valid = None
+                if target_proto_info is not None:
+                    proto_targets = target_proto_info["prototypes"].to(device)
+                    proto_valid = target_proto_info["valid_mask"].to(device)
 
                 student_params = list(gm_module.parameters())
                 if gm_adapter is not None:
@@ -1141,10 +1355,42 @@ class FedCD(Server):
                         student_log_prob = torch.log_softmax(student_logits / temp, dim=1)
                         kd_loss = kl_loss_fn(student_log_prob, teacher_prob_ensemble) * (temp * temp)
                         ce_loss = student_logits.new_tensor(0.0)
+                        pseudo_labels = torch.argmax(teacher_prob_ensemble, dim=1)
                         if self.distill_ce_weight > 0:
-                            pseudo_labels = torch.argmax(teacher_prob_ensemble, dim=1)
                             ce_loss = ce_loss_fn(student_logits, pseudo_labels)
-                        loss = self.distill_kl_weight * kd_loss + self.distill_ce_weight * ce_loss
+                        proto_loss = student_logits.new_tensor(0.0)
+                        relation_loss = student_logits.new_tensor(0.0)
+                        if proto_targets is not None and proto_valid is not None and self.proto_weight > 0:
+                            target_logits_proto = proto_targets.to(dtype=gm_logits.dtype)
+                            cls_losses = []
+                            cls_centers = []
+                            proto_centers = []
+                            for cls in range(self.num_classes):
+                                if not bool(proto_valid[cls].item()):
+                                    continue
+                                cls_mask = (pseudo_labels == cls)
+                                if not torch.any(cls_mask):
+                                    continue
+                                gm_center = gm_logits[cls_mask].mean(dim=0)
+                                proto_center = target_logits_proto[cls]
+                                cls_losses.append(F.mse_loss(gm_center, proto_center))
+                                if self.relation_weight > 0:
+                                    cls_centers.append(gm_center)
+                                    proto_centers.append(proto_center)
+                            if cls_losses:
+                                proto_loss = torch.stack(cls_losses).mean()
+                            if self.relation_weight > 0 and len(cls_centers) >= 2:
+                                student_rel = _relation_matrix(torch.stack(cls_centers, dim=0))
+                                target_rel = _relation_matrix(torch.stack(proto_centers, dim=0))
+                                if student_rel is not None and target_rel is not None:
+                                    relation_loss = F.mse_loss(student_rel, target_rel)
+
+                        loss = (
+                            self.distill_kl_weight * kd_loss
+                            + self.distill_ce_weight * ce_loss
+                            + self.proto_weight * proto_loss
+                            + self.relation_weight * relation_loss
+                        )
 
                     if not torch.isfinite(loss):
                         optimizer.zero_grad()

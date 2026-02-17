@@ -503,6 +503,16 @@ if __name__ == "__main__":
                         help="KL loss weight for server distillation.")
     parser.add_argument('--fedcd_distill_ce_weight', type=float, default=0.2,
                         help="Pseudo-label CE loss weight for server distillation.")
+    parser.add_argument('--fedcd_prototype_samples', type=int, default=512,
+                        help="Number of local samples used for PM prototype upload each round (0 = full local train set).")
+    parser.add_argument('--fedcd_proto_weight', type=float, default=0.3,
+                        help="Prototype alignment loss weight for server GM distillation.")
+    parser.add_argument('--fedcd_relation_weight', type=float, default=0.1,
+                        help="Prototype relation (class-similarity) loss weight for server GM distillation.")
+    parser.add_argument('--fedcd_combiner_calib_epochs', type=int, default=1,
+                        help="Local combiner-only calibration epochs right after GM broadcast (0 disables).")
+    parser.add_argument('--fedcd_combiner_calib_lr_mult', type=float, default=1.0,
+                        help="Learning-rate multiplier for post-GM combiner calibration.")
     parser.add_argument('--gm_model', type=str, default="VGG16",
                         help="FedCD GM model name")
     parser.add_argument('--pm_model', type=str, default="VGG8",
