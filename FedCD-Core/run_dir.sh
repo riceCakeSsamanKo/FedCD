@@ -25,12 +25,13 @@ AVOID_OOM=True
 EVAL_COMMON_GLOBAL=True
 GLOBAL_TEST_SAMPLES=0
 COMMON_EVAL_BATCH_SIZE=256
+FEDCD_ENABLE_CLUSTERING=True
 FEDCD_FUSION_WEIGHT=1.0
 FEDCD_GM_LOGITS_WEIGHT=1.0
 FEDCD_PM_LOGITS_WEIGHT=0.3
 FEDCD_PM_ONLY_WEIGHT=0.8
 FEDCD_GM_LR_SCALE=0.1
-FEDCD_GM_UPDATE_MODE="server_pm_teacher"
+FEDCD_GM_UPDATE_MODE="server_proto_teacher"
 FEDCD_PM_TEACHER_LR=0.01
 FEDCD_PM_TEACHER_TEMP=2.0
 FEDCD_PM_TEACHER_KL_WEIGHT=1.0
@@ -45,10 +46,23 @@ FEDCD_PM_TEACHER_ALLOW_TEST_FALLBACK=False
 FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT=True
 FEDCD_PM_TEACHER_CONFIDENCE_MIN=0.05
 FEDCD_PM_TEACHER_CONFIDENCE_POWER=1.0
+FEDCD_PROTO_TEACHER_LR=0.01
+FEDCD_PROTO_TEACHER_STEPS=200
+FEDCD_PROTO_TEACHER_BATCH_SIZE=256
+FEDCD_PROTO_TEACHER_TEMP=2.0
+FEDCD_PROTO_TEACHER_CE_WEIGHT=1.0
+FEDCD_PROTO_TEACHER_KL_WEIGHT=0.5
+FEDCD_PROTO_TEACHER_NOISE_SCALE=1.0
+FEDCD_PROTO_TEACHER_MIN_COUNT=1
+FEDCD_PROTO_TEACHER_CLIENT_SAMPLES=0
 FEDCD_ENTROPY_TEMP_PM=1.0
 FEDCD_ENTROPY_TEMP_GM=1.0
-FEDCD_ENTROPY_MIN_PM_WEIGHT=0.1
-FEDCD_ENTROPY_MAX_PM_WEIGHT=0.9
+FEDCD_ENTROPY_MIN_PM_WEIGHT=0.25
+FEDCD_ENTROPY_MAX_PM_WEIGHT=0.55
+FEDCD_ENTROPY_GATE_TAU=0.15
+FEDCD_ENTROPY_PM_BIAS=0.0
+FEDCD_ENTROPY_GM_BIAS=0.10
+FEDCD_ENTROPY_DISAGREE_GM_BOOST=0.10
 
 # List of Dirichlet alpha values to test
 ALPHAS=(0.1 1.0) # (0.1 0.5 1.0)
@@ -61,9 +75,11 @@ echo "Starting Experiment Suite for FedCD (Adaptive Threshold - ACT)"
 echo "Tested Alphas: ${ALPHAS[*]}"
 echo "Initial Thresholds to Test: ${THRESHOLDS[*]}"
 echo "Global Test Eval: ${EVAL_COMMON_GLOBAL} (samples=${GLOBAL_TEST_SAMPLES}, batch=${COMMON_EVAL_BATCH_SIZE})"
+echo "Clustering Enabled: ${FEDCD_ENABLE_CLUSTERING}"
 echo "Local Loss Weights: fusion=${FEDCD_FUSION_WEIGHT}, gm_logits=${FEDCD_GM_LOGITS_WEIGHT}, pm_logits=${FEDCD_PM_LOGITS_WEIGHT}, pm_only=${FEDCD_PM_ONLY_WEIGHT}, gm_lr_scale=${FEDCD_GM_LR_SCALE}"
 echo "GM Update Mode: ${FEDCD_GM_UPDATE_MODE} (pm_teacher: lr=${FEDCD_PM_TEACHER_LR}, temp=${FEDCD_PM_TEACHER_TEMP}, kl=${FEDCD_PM_TEACHER_KL_WEIGHT}, ce=${FEDCD_PM_TEACHER_CE_WEIGHT}, samples=${FEDCD_PM_TEACHER_SAMPLES}, batch=${FEDCD_PM_TEACHER_BATCH_SIZE}, proxy=${FEDCD_PM_TEACHER_PROXY_DATASET}/${FEDCD_PM_TEACHER_PROXY_SPLIT}, conf_w=${FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT})"
-echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}]"
+echo "Prototype Teacher: lr=${FEDCD_PROTO_TEACHER_LR}, steps=${FEDCD_PROTO_TEACHER_STEPS}, batch=${FEDCD_PROTO_TEACHER_BATCH_SIZE}, temp=${FEDCD_PROTO_TEACHER_TEMP}, ce=${FEDCD_PROTO_TEACHER_CE_WEIGHT}, kl=${FEDCD_PROTO_TEACHER_KL_WEIGHT}, noise=${FEDCD_PROTO_TEACHER_NOISE_SCALE}, min_count=${FEDCD_PROTO_TEACHER_MIN_COUNT}, client_samples=${FEDCD_PROTO_TEACHER_CLIENT_SAMPLES}"
+echo "Entropy Gate: temp_pm=${FEDCD_ENTROPY_TEMP_PM}, temp_gm=${FEDCD_ENTROPY_TEMP_GM}, pm_range=[${FEDCD_ENTROPY_MIN_PM_WEIGHT},${FEDCD_ENTROPY_MAX_PM_WEIGHT}], gate_tau=${FEDCD_ENTROPY_GATE_TAU}, pm_bias=${FEDCD_ENTROPY_PM_BIAS}, gm_bias=${FEDCD_ENTROPY_GM_BIAS}, disagree_gm_boost=${FEDCD_ENTROPY_DISAGREE_GM_BOOST}"
 echo "============================================================"
 
 for ALPHA in "${ALPHAS[@]}"
@@ -102,6 +118,7 @@ do
                 -gr $GLOBAL_ROUNDS \
                 -nc $NUM_CLIENTS \
                 --cluster_threshold $THRESHOLD \
+                --fedcd_enable_clustering $FEDCD_ENABLE_CLUSTERING \
                 --adaptive_threshold True \
                 --threshold_step 0.05 \
                 --threshold_decay 0.9 \
@@ -144,10 +161,23 @@ do
                 --fedcd_pm_teacher_confidence_weight $FEDCD_PM_TEACHER_CONFIDENCE_WEIGHT \
                 --fedcd_pm_teacher_confidence_min $FEDCD_PM_TEACHER_CONFIDENCE_MIN \
                 --fedcd_pm_teacher_confidence_power $FEDCD_PM_TEACHER_CONFIDENCE_POWER \
+                --fedcd_proto_teacher_lr $FEDCD_PROTO_TEACHER_LR \
+                --fedcd_proto_teacher_steps $FEDCD_PROTO_TEACHER_STEPS \
+                --fedcd_proto_teacher_batch_size $FEDCD_PROTO_TEACHER_BATCH_SIZE \
+                --fedcd_proto_teacher_temp $FEDCD_PROTO_TEACHER_TEMP \
+                --fedcd_proto_teacher_ce_weight $FEDCD_PROTO_TEACHER_CE_WEIGHT \
+                --fedcd_proto_teacher_kl_weight $FEDCD_PROTO_TEACHER_KL_WEIGHT \
+                --fedcd_proto_teacher_noise_scale $FEDCD_PROTO_TEACHER_NOISE_SCALE \
+                --fedcd_proto_teacher_min_count $FEDCD_PROTO_TEACHER_MIN_COUNT \
+                --fedcd_proto_teacher_client_samples $FEDCD_PROTO_TEACHER_CLIENT_SAMPLES \
                 --fedcd_entropy_temp_pm $FEDCD_ENTROPY_TEMP_PM \
                 --fedcd_entropy_temp_gm $FEDCD_ENTROPY_TEMP_GM \
                 --fedcd_entropy_min_pm_weight $FEDCD_ENTROPY_MIN_PM_WEIGHT \
                 --fedcd_entropy_max_pm_weight $FEDCD_ENTROPY_MAX_PM_WEIGHT \
+                --fedcd_entropy_gate_tau $FEDCD_ENTROPY_GATE_TAU \
+                --fedcd_entropy_pm_bias $FEDCD_ENTROPY_PM_BIAS \
+                --fedcd_entropy_gm_bias $FEDCD_ENTROPY_GM_BIAS \
+                --fedcd_entropy_disagree_gm_boost $FEDCD_ENTROPY_DISAGREE_GM_BOOST \
                 --local_epochs 1 || echo "Warning: Training (dir) failed for $NUM_CLIENTS clients. Skipping..."
             ELAPSED_TIME=$(($SECONDS - $START_TIME))
 

@@ -27,13 +27,20 @@ class FedCD(Server):
         print("Finished creating server and clients.")
         
         # FedCD clustering config
+        self.enable_clustering = bool(getattr(args, "fedcd_enable_clustering", True))
         self.num_clusters = max(1, int(getattr(args, "num_clusters", 1)))
+        if not self.enable_clustering:
+            self.num_clusters = 1
         self.max_dynamic_clusters = max(0, int(getattr(args, "max_dynamic_clusters", self.num_clusters)))
         self.cluster_period = max(1, int(getattr(args, "cluster_period", 1)))
         self.pm_period = max(1, int(getattr(args, "pm_period", 1)))
         self.global_period = max(1, int(getattr(args, "global_period", 1)))
         self.cluster_sample_size = int(getattr(args, "cluster_sample_size", 512))
         self.cluster_map = {c.id: (c.id % self.num_clusters) for c in self.clients}
+        if not self.enable_clustering:
+            self.cluster_map = {c.id: 0 for c in self.clients}
+            self.max_dynamic_clusters = 0
+            print("[FedCD] Clustering disabled: all clients are treated as one cluster.")
         self.log_usage = bool(getattr(args, "log_usage", False))
         self.log_usage_every = max(1, int(getattr(args, "log_usage_every", 1)))
         self.log_usage_path = str(getattr(args, "log_usage_path", "logs/result.csv"))
@@ -47,6 +54,7 @@ class FedCD(Server):
         )
         self.common_eval_batch_size = int(getattr(args, "common_eval_batch_size", 256))
         self.global_test_loader = self._build_global_test_loader() if self.eval_common_global else None
+        self.last_global_gate_stats = None
         # Backward-compatible alias
         self.common_test_loader = self.global_test_loader
         self.f_ext = self._build_f_ext(args)
@@ -62,7 +70,7 @@ class FedCD(Server):
         self.cluster_generalized_states = {}
         self._initialize_cluster_generalized_states()
         self.gm_update_mode = str(getattr(args, "fedcd_gm_update_mode", "local")).strip().lower()
-        if self.gm_update_mode not in {"local", "server_pm_teacher"}:
+        if self.gm_update_mode not in {"local", "server_pm_teacher", "server_proto_teacher"}:
             raise ValueError(f"Unknown fedcd_gm_update_mode: {self.gm_update_mode}")
         self.pm_teacher_lr = float(getattr(args, "fedcd_pm_teacher_lr", 0.01))
         self.pm_teacher_temp = float(getattr(args, "fedcd_pm_teacher_temp", 2.0))
@@ -80,12 +88,21 @@ class FedCD(Server):
         self.pm_teacher_confidence_min = min(max(self.pm_teacher_confidence_min, 0.0), 1.0)
         self.pm_teacher_confidence_power = float(getattr(args, "fedcd_pm_teacher_confidence_power", 1.0))
         self.pm_teacher_confidence_power = max(self.pm_teacher_confidence_power, 1e-6)
+        self.proto_teacher_lr = float(getattr(args, "fedcd_proto_teacher_lr", 0.01))
+        self.proto_teacher_steps = int(getattr(args, "fedcd_proto_teacher_steps", 200))
+        self.proto_teacher_batch_size = int(getattr(args, "fedcd_proto_teacher_batch_size", 256))
+        self.proto_teacher_temp = float(getattr(args, "fedcd_proto_teacher_temp", 2.0))
+        self.proto_teacher_ce_weight = float(getattr(args, "fedcd_proto_teacher_ce_weight", 1.0))
+        self.proto_teacher_kl_weight = float(getattr(args, "fedcd_proto_teacher_kl_weight", 0.5))
+        self.proto_teacher_noise_scale = float(getattr(args, "fedcd_proto_teacher_noise_scale", 1.0))
+        self.proto_teacher_min_count = float(getattr(args, "fedcd_proto_teacher_min_count", 1.0))
+        self.proto_teacher_client_samples = int(getattr(args, "fedcd_proto_teacher_client_samples", 0))
         self.pm_teacher_loader = None
         if self.gm_update_mode == "server_pm_teacher":
             self.pm_teacher_loader = self._build_pm_teacher_loader()
 
         # [ACT] Adaptive Clustering Threshold Initialization
-        self.adaptive_threshold = bool(getattr(args, "adaptive_threshold", False))
+        self.adaptive_threshold = bool(getattr(args, "adaptive_threshold", False)) and self.enable_clustering
         self.current_threshold = float(getattr(args, "cluster_threshold", 0.0))
         # If ACT is enabled but initial threshold is 0, start with a small value
         if self.adaptive_threshold and self.current_threshold <= 0:
@@ -355,6 +372,7 @@ class FedCD(Server):
             # 2. PM 수집 (Receive PMs)
             received_pms = []
             received_gms = []
+            received_protos = []
             total_uplink_bytes = 0
             for client in tqdm(self.selected_clients, desc=f"Round {i} Collecting PMs", leave=False):
                 pm_state = client.upload_parameters()
@@ -365,6 +383,11 @@ class FedCD(Server):
                     if gm_state:
                         received_gms.append((client.id, gm_state, float(getattr(client, "train_samples", 1))))
                         total_uplink_bytes += sum(v.numel() * v.element_size() for v in gm_state.values())
+                elif self.gm_update_mode == "server_proto_teacher":
+                    proto_state = client.upload_pm_prototypes(max_samples=self.proto_teacher_client_samples)
+                    if proto_state:
+                        received_protos.append((client.id, proto_state))
+                        total_uplink_bytes += sum(v.numel() * v.element_size() for v in proto_state.values())
             
             round_uplink += total_uplink_bytes
 
@@ -373,7 +396,7 @@ class FedCD(Server):
                 print(f"[FedCD] Round {i} Total Uplink Size: {total_uplink_bytes / (1024**2):.2f} MB (Avg: {avg_uplink / (1024**2):.2f} MB/client)")
 
             # 2.5 클러스터링 갱신 및 상세 로깅
-            if i % self.cluster_period == 0:
+            if self.enable_clustering and i % self.cluster_period == 0:
                 prev_cluster_map = dict(self.cluster_map)
                 raw_cluster_map = self.cluster_clients_by_distribution()
                 self.cluster_map = self._align_cluster_labels(prev_cluster_map, raw_cluster_map)
@@ -405,8 +428,10 @@ class FedCD(Server):
             if i % self.global_period == 0:
                 if self.gm_update_mode == "local":
                     global_gm_state = self.aggregate_global_gms(received_gms) if received_gms else None
-                else:
+                elif self.gm_update_mode == "server_pm_teacher":
                     global_gm_state = self.distill_global_gm_from_pm_teachers(cluster_pms, cluster_counts)
+                else:
+                    global_gm_state = self.update_gm_from_pm_prototypes(received_protos)
                 if global_gm_state:
                     if self.gm_update_mode == "local":
                         self._apply_generalized_state_to_server(global_gm_state)
@@ -420,8 +445,10 @@ class FedCD(Server):
                 round_downlink += downlink_bytes
                 if self.gm_update_mode == "local":
                     print(f"[FedCD] Round {i}: Server-side global GM aggregation/update done")
-                else:
+                elif self.gm_update_mode == "server_pm_teacher":
                     print(f"[FedCD] Round {i}: Server-side PM-teacher GM distillation/update done")
+                else:
+                    print(f"[FedCD] Round {i}: Server-side prototype-based GM update done")
                 # Warm-up Personalized Module after GM update
                 if getattr(self.args, "fedcd_warmup_epochs", 0) > 0:
                     for client in tqdm(self.selected_clients, desc=f"Round {i} PM Warm-up", leave=False):
@@ -460,6 +487,16 @@ class FedCD(Server):
         print(f"Server: Overall Averaged Local Test Accuracy: {avg_acc:.4f}")
         if global_test_acc is not None:
             print(f"Server: Overall Averaged Global Test Accuracy: {global_test_acc:.4f}")
+            if self.last_global_gate_stats is not None:
+                gate = self.last_global_gate_stats
+                print(
+                    "Server: Fusion PM Weight (mean/min/max): "
+                    f"{gate['pm_weight_mean']:.4f}/{gate['pm_weight_min']:.4f}/{gate['pm_weight_max']:.4f}"
+                )
+                print(
+                    "Server: Fusion Argmax Agreement (with PM/GM): "
+                    f"{gate['agree_with_pm']:.4f}/{gate['agree_with_gm']:.4f}"
+                )
         if gm_only_global_test_acc is not None:
             print(f"Server: GM-only Global Test Accuracy: {gm_only_global_test_acc:.4f}")
         if pm_global_test_acc is not None:
@@ -622,6 +659,161 @@ class FedCD(Server):
             if acc is not None:
                 avg_state[key] = acc
         return avg_state
+
+    def _aggregate_pm_prototypes(self, received_protos):
+        if not received_protos:
+            return None
+        agg = None
+        for _, state in received_protos:
+            if not state:
+                continue
+            if agg is None:
+                agg = {k: v.detach().cpu().float().clone() for k, v in state.items()}
+            else:
+                for key, value in state.items():
+                    if key not in agg:
+                        agg[key] = value.detach().cpu().float().clone()
+                    else:
+                        agg[key] += value.detach().cpu().float()
+        return agg
+
+    def update_gm_from_pm_prototypes(self, received_protos):
+        proto = self._aggregate_pm_prototypes(received_protos)
+        if proto is None:
+            return None
+
+        required = {"counts", "feat_sum", "feat_sq_sum", "logit_sum"}
+        if not required.issubset(set(proto.keys())):
+            print("[FedCD] Incomplete PM prototype payload. Skip prototype GM update.")
+            return None
+
+        counts = proto["counts"].float()
+        feat_sum = proto["feat_sum"].float()
+        feat_sq_sum = proto["feat_sq_sum"].float()
+        logit_sum = proto["logit_sum"].float()
+
+        if counts.numel() == 0:
+            print("[FedCD] Empty PM prototype counts. Skip prototype GM update.")
+            return None
+        if feat_sum.dim() != 2 or feat_sq_sum.dim() != 2 or logit_sum.dim() != 2:
+            print("[FedCD] Invalid PM prototype tensor shapes. Skip prototype GM update.")
+            return None
+
+        valid = counts >= float(self.proto_teacher_min_count)
+        if int(valid.sum().item()) == 0:
+            print("[FedCD] No class has enough PM prototype samples. Skip prototype GM update.")
+            return None
+
+        denom = counts.unsqueeze(1).clamp_min(1e-12)
+        feat_mean = feat_sum / denom
+        feat_var = (feat_sq_sum / denom) - feat_mean.pow(2)
+        feat_var = feat_var.clamp_min(1e-6)
+        teacher_logits_mean = logit_sum / denom
+
+        valid_classes = int(valid.sum().item())
+        total_proto_samples = float(counts.sum().item())
+        print(
+            f"[FedCD] Prototype GM update: valid_classes={valid_classes}/{counts.numel()}, "
+            f"total_proto_samples={total_proto_samples:.0f}"
+        )
+
+        def _update_once(device):
+            use_amp = device == "cuda" and bool(getattr(self.args, "amp", False))
+            temp = max(1e-6, float(self.proto_teacher_temp))
+
+            gm_module = copy.deepcopy(self.generalized_module).to(device)
+            gm_module.train()
+            gm_adapter = None
+            if self.generalized_adapter is not None:
+                gm_adapter = copy.deepcopy(self.generalized_adapter).to(device)
+                gm_adapter.train()
+
+            params = list(gm_module.parameters())
+            if gm_adapter is not None:
+                params += list(gm_adapter.parameters())
+            optimizer = torch.optim.SGD(params, lr=self.proto_teacher_lr)
+            scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+            ce_loss_fn = nn.CrossEntropyLoss()
+
+            valid_idx = torch.nonzero(valid, as_tuple=False).view(-1)
+            class_probs = counts[valid_idx].float()
+            class_probs = class_probs / class_probs.sum().clamp_min(1e-12)
+
+            feat_mean_dev = feat_mean.to(device)
+            feat_var_dev = feat_var.to(device)
+            teacher_logits_dev = teacher_logits_mean.to(device)
+
+            steps = max(1, int(self.proto_teacher_steps))
+            batch_size = max(1, int(self.proto_teacher_batch_size))
+            noise_scale = max(0.0, float(self.proto_teacher_noise_scale))
+
+            for _ in range(steps):
+                sampled_pos = torch.multinomial(class_probs, batch_size, replacement=True)
+                labels = valid_idx[sampled_pos].to(device).long()
+
+                mu = feat_mean_dev[labels]
+                if noise_scale > 0:
+                    std = torch.sqrt(feat_var_dev[labels])
+                    z = mu + noise_scale * std * torch.randn_like(mu)
+                else:
+                    z = mu
+
+                with torch.cuda.amp.autocast(enabled=use_amp):
+                    z_gm = gm_adapter(z) if gm_adapter is not None else z
+                    gm_logits = gm_module(z_gm)
+
+                    loss = gm_logits.new_tensor(0.0)
+                    if self.proto_teacher_ce_weight > 0:
+                        loss = loss + self.proto_teacher_ce_weight * ce_loss_fn(gm_logits, labels)
+                    if self.proto_teacher_kl_weight > 0:
+                        teacher_prob = torch.softmax(teacher_logits_dev[labels] / temp, dim=1)
+                        student_log_prob = torch.log_softmax(gm_logits / temp, dim=1)
+                        kl_loss = F.kl_div(student_log_prob, teacher_prob, reduction="batchmean") * (temp * temp)
+                        loss = loss + self.proto_teacher_kl_weight * kl_loss
+
+                if not torch.isfinite(loss):
+                    optimizer.zero_grad()
+                    continue
+
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+
+            updated_state = {
+                f"generalized_module.{k}": v.detach().cpu()
+                for k, v in gm_module.state_dict().items()
+            }
+            if gm_adapter is not None:
+                updated_state.update({
+                    f"generalized_adapter.{k}": v.detach().cpu()
+                    for k, v in gm_adapter.state_dict().items()
+                })
+                gm_adapter.to("cpu")
+            gm_module.to("cpu")
+            if device == "cuda" and self.args.avoid_oom:
+                torch.cuda.empty_cache()
+            return updated_state
+
+        try:
+            updated_state = _update_once(self.device)
+        except RuntimeError as err:
+            if self.device == "cuda" and "out of memory" in str(err).lower():
+                print("[Warn] OOM during prototype GM update. Falling back to CPU.")
+                torch.cuda.empty_cache()
+                updated_state = _update_once("cpu")
+            else:
+                raise
+
+        if not updated_state:
+            return None
+
+        for cluster_id in set(self.cluster_map.values()):
+            self.cluster_generalized_states[cluster_id] = {
+                k: v.clone() for k, v in updated_state.items()
+            }
+        self._apply_generalized_state_to_server(updated_state)
+        return updated_state
 
     def _extract_personalized_state(self, state):
         personalized_module_state = {
@@ -1202,12 +1394,20 @@ class FedCD(Server):
 
     def evaluate_global_test_acc(self):
         if not self.eval_common_global or self.global_test_loader is None:
+            self.last_global_gate_stats = None
             return None
 
         acc_sum = 0.0
         valid_clients = 0
         device = self.device
         use_non_blocking = device == "cuda" and bool(getattr(self.args, "pin_memory", False))
+        pm_weight_sum = 0.0
+        pm_weight_min = float("inf")
+        pm_weight_max = float("-inf")
+        pm_weight_count = 0
+        agree_with_pm = 0
+        agree_with_gm = 0
+        agree_count = 0
 
         for client in self.clients:
             client.model.to(device)
@@ -1221,9 +1421,22 @@ class FedCD(Server):
                         x = x[0]
                     x = x.to(device, non_blocking=use_non_blocking)
                     y = y.to(device, non_blocking=use_non_blocking)
-                    output = client.model(x)
-                    correct += (torch.argmax(output, dim=1) == y).sum().item()
+                    output, gm_logits, pm_logits, pm_weight = client.infer_fused_logits_with_gate(x)
+                    pred_fused = torch.argmax(output, dim=1)
+                    pred_pm = torch.argmax(pm_logits, dim=1)
+                    pred_gm = torch.argmax(gm_logits, dim=1)
+
+                    correct += (pred_fused == y).sum().item()
                     total += y.size(0)
+                    agree_with_pm += (pred_fused == pred_pm).sum().item()
+                    agree_with_gm += (pred_fused == pred_gm).sum().item()
+                    agree_count += y.size(0)
+
+                    pw = pm_weight.view(-1)
+                    pm_weight_sum += pw.sum().item()
+                    pm_weight_count += pw.numel()
+                    pm_weight_min = min(pm_weight_min, pw.min().item())
+                    pm_weight_max = max(pm_weight_max, pw.max().item())
 
             client.model.to("cpu")
             if total > 0:
@@ -1232,6 +1445,17 @@ class FedCD(Server):
 
         if device == "cuda":
             torch.cuda.empty_cache()
+
+        if pm_weight_count > 0:
+            self.last_global_gate_stats = {
+                "pm_weight_mean": pm_weight_sum / pm_weight_count,
+                "pm_weight_min": pm_weight_min,
+                "pm_weight_max": pm_weight_max,
+                "agree_with_pm": agree_with_pm / max(agree_count, 1),
+                "agree_with_gm": agree_with_gm / max(agree_count, 1),
+            }
+        else:
+            self.last_global_gate_stats = None
 
         if valid_clients == 0:
             return None

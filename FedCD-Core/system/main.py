@@ -481,6 +481,8 @@ if __name__ == "__main__":
     parser.add_argument('--pm_period', type=int, default=1,
                         help="PM aggregation/broadcast period (global rounds)")
     parser.add_argument('--global_period', type=int, default=4)
+    parser.add_argument('--fedcd_enable_clustering', type=str2bool, default=True,
+                        help="Enable periodic client clustering by distribution similarity.")
     parser.add_argument('--cluster_sample_size', type=int, default=512)
     parser.add_argument('--max_dynamic_clusters', type=int, default=5,
                         help="Maximum number of clusters allowed in threshold-based dynamic clustering (0 disables cap).")
@@ -496,7 +498,7 @@ if __name__ == "__main__":
     parser.add_argument('--fedcd_gm_lr_scale', type=float, default=0.1,
                         help="Local GM learning-rate scale relative to base local lr.")
     parser.add_argument('--fedcd_gm_update_mode', type=str, default="local",
-                        help="GM update mode: local | server_pm_teacher")
+                        help="GM update mode: local | server_pm_teacher | server_proto_teacher")
     parser.add_argument('--fedcd_entropy_temp_pm', type=float, default=1.0,
                         help="Temperature for PM probabilities in entropy-based PM/GM mixing.")
     parser.add_argument('--fedcd_entropy_temp_gm', type=float, default=1.0,
@@ -505,6 +507,14 @@ if __name__ == "__main__":
                         help="Minimum PM mixing weight in entropy gate.")
     parser.add_argument('--fedcd_entropy_max_pm_weight', type=float, default=0.9,
                         help="Maximum PM mixing weight in entropy gate.")
+    parser.add_argument('--fedcd_entropy_gate_tau', type=float, default=0.2,
+                        help="Temperature for PM-vs-GM confidence gate (smaller = harder switching).")
+    parser.add_argument('--fedcd_entropy_pm_bias', type=float, default=0.0,
+                        help="Additive PM confidence bias in entropy gate.")
+    parser.add_argument('--fedcd_entropy_gm_bias', type=float, default=0.0,
+                        help="Additive GM confidence bias in entropy gate.")
+    parser.add_argument('--fedcd_entropy_disagree_gm_boost', type=float, default=0.0,
+                        help="Extra PM-weight reduction when PM/GM disagree and GM confidence is higher.")
     parser.add_argument('--fedcd_warmup_epochs', type=int, default=0)
     parser.add_argument('--fedcd_pm_teacher_lr', type=float, default=0.01,
                         help="Server PM-teacher distillation learning rate for GM update.")
@@ -534,6 +544,24 @@ if __name__ == "__main__":
                         help="Minimum per-sample KL weight when confidence weighting is enabled.")
     parser.add_argument('--fedcd_pm_teacher_confidence_power', type=float, default=1.0,
                         help="Exponent for teacher confidence shaping in KL weighting.")
+    parser.add_argument('--fedcd_proto_teacher_lr', type=float, default=0.01,
+                        help="Server prototype-teacher learning rate for GM update.")
+    parser.add_argument('--fedcd_proto_teacher_steps', type=int, default=200,
+                        help="Optimization steps for prototype-based server GM update.")
+    parser.add_argument('--fedcd_proto_teacher_batch_size', type=int, default=256,
+                        help="Batch size for synthetic prototype sampling during GM update.")
+    parser.add_argument('--fedcd_proto_teacher_temp', type=float, default=2.0,
+                        help="Temperature for prototype-teacher KL loss.")
+    parser.add_argument('--fedcd_proto_teacher_ce_weight', type=float, default=1.0,
+                        help="CE loss weight (pseudo labels from class prototypes).")
+    parser.add_argument('--fedcd_proto_teacher_kl_weight', type=float, default=0.5,
+                        help="KL loss weight (PM class-logit targets) for prototype teacher.")
+    parser.add_argument('--fedcd_proto_teacher_noise_scale', type=float, default=1.0,
+                        help="Noise scale for Gaussian prototype sampling.")
+    parser.add_argument('--fedcd_proto_teacher_min_count', type=float, default=1.0,
+                        help="Minimum class sample count required to use class prototype.")
+    parser.add_argument('--fedcd_proto_teacher_client_samples', type=int, default=0,
+                        help="Per-client max samples for prototype upload (0 = full local train set).")
     parser.add_argument('--gm_model', type=str, default="VGG16",
                         help="FedCD GM model name")
     parser.add_argument('--pm_model', type=str, default="VGG8",

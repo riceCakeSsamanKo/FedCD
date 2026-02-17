@@ -3,8 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+from torch.utils.data import DataLoader
 from flcore.clients.clientbase import Client
 from flcore.trainmodel.models import SmallFExt
+from utils.data_utils import read_client_data
 
 class PMWrapper(nn.Module):
     def __init__(
@@ -18,6 +20,10 @@ class PMWrapper(nn.Module):
         entropy_temp_gm=1.0,
         entropy_min_pm_weight=0.1,
         entropy_max_pm_weight=0.9,
+        entropy_gate_tau=0.2,
+        entropy_pm_bias=0.0,
+        entropy_gm_bias=0.0,
+        entropy_disagree_gm_boost=0.0,
     ):
         super().__init__()
         self.f_ext = f_ext
@@ -29,6 +35,10 @@ class PMWrapper(nn.Module):
         self.entropy_temp_gm = max(float(entropy_temp_gm), 1e-6)
         self.entropy_min_pm_weight = float(entropy_min_pm_weight)
         self.entropy_max_pm_weight = float(entropy_max_pm_weight)
+        self.entropy_gate_tau = max(float(entropy_gate_tau), 1e-6)
+        self.entropy_pm_bias = float(entropy_pm_bias)
+        self.entropy_gm_bias = float(entropy_gm_bias)
+        self.entropy_disagree_gm_boost = max(float(entropy_disagree_gm_boost), 0.0)
 
     @staticmethod
     def _normalized_entropy(prob):
@@ -40,15 +50,27 @@ class PMWrapper(nn.Module):
 
     def mix_prob(self, gm_logits, pm_logits):
         # Entropy-based confidence gating:
-        # lower PM entropy -> higher PM weight, higher entropy -> rely more on GM.
+        # Use relative confidence (PM vs GM) so GM can dominate when PM is uncertain.
         pm_prob = torch.softmax(pm_logits / self.entropy_temp_pm, dim=1)
         gm_prob = torch.softmax(gm_logits / self.entropy_temp_gm, dim=1)
+        eps = 1e-12
         pm_conf = 1.0 - self._normalized_entropy(pm_prob)
+        gm_conf = 1.0 - self._normalized_entropy(gm_prob)
+        rel_pm_conf = torch.sigmoid(
+            ((pm_conf + self.entropy_pm_bias) - (gm_conf + self.entropy_gm_bias))
+            / self.entropy_gate_tau
+        )
         if self.entropy_max_pm_weight > self.entropy_min_pm_weight:
             span = self.entropy_max_pm_weight - self.entropy_min_pm_weight
-            pm_weight = self.entropy_min_pm_weight + span * pm_conf
+            pm_weight = self.entropy_min_pm_weight + span * rel_pm_conf
         else:
-            pm_weight = pm_conf
+            pm_weight = rel_pm_conf
+        if self.entropy_disagree_gm_boost > 0:
+            pred_pm = torch.argmax(pm_prob, dim=1, keepdim=True)
+            pred_gm = torch.argmax(gm_prob, dim=1, keepdim=True)
+            disagree = (pred_pm != pred_gm).float()
+            gm_better = (gm_conf > pm_conf).float()
+            pm_weight = pm_weight - self.entropy_disagree_gm_boost * disagree * gm_better
         pm_weight = pm_weight.clamp(0.0, 1.0)
         gm_weight = 1.0 - pm_weight
         mixed_prob = gm_weight * gm_prob + pm_weight * pm_prob
@@ -96,13 +118,17 @@ class clientFedCD(Client):
         self.gm_logits_weight = float(getattr(args, "fedcd_gm_logits_weight", 1.0))
         self.gm_lr_scale = float(getattr(args, "fedcd_gm_lr_scale", 0.1))
         self.gm_update_mode = str(getattr(args, "fedcd_gm_update_mode", "local")).strip().lower()
-        if self.gm_update_mode not in {"local", "server_pm_teacher"}:
+        if self.gm_update_mode not in {"local", "server_pm_teacher", "server_proto_teacher"}:
             raise ValueError(f"Unknown fedcd_gm_update_mode: {self.gm_update_mode}")
         self.local_gm_trainable = (self.gm_update_mode == "local")
         self.entropy_temp_pm = float(getattr(args, "fedcd_entropy_temp_pm", 1.0))
         self.entropy_temp_gm = float(getattr(args, "fedcd_entropy_temp_gm", 1.0))
         self.entropy_min_pm_weight = float(getattr(args, "fedcd_entropy_min_pm_weight", 0.1))
         self.entropy_max_pm_weight = float(getattr(args, "fedcd_entropy_max_pm_weight", 0.9))
+        self.entropy_gate_tau = float(getattr(args, "fedcd_entropy_gate_tau", 0.2))
+        self.entropy_pm_bias = float(getattr(args, "fedcd_entropy_pm_bias", 0.0))
+        self.entropy_gm_bias = float(getattr(args, "fedcd_entropy_gm_bias", 0.0))
+        self.entropy_disagree_gm_boost = float(getattr(args, "fedcd_entropy_disagree_gm_boost", 0.0))
         self.warmup_epochs = int(getattr(args, "fedcd_warmup_epochs", 0))
         self.generalized_module = self._extract_module(self.gm)
         self.personalized_module = self._extract_module(self.pm)
@@ -119,6 +145,10 @@ class clientFedCD(Client):
             entropy_temp_gm=self.entropy_temp_gm,
             entropy_min_pm_weight=self.entropy_min_pm_weight,
             entropy_max_pm_weight=self.entropy_max_pm_weight,
+            entropy_gate_tau=self.entropy_gate_tau,
+            entropy_pm_bias=self.entropy_pm_bias,
+            entropy_gm_bias=self.entropy_gm_bias,
+            entropy_disagree_gm_boost=self.entropy_disagree_gm_boost,
         )
 
         # Local GM training can be toggled by fedcd_gm_update_mode.
@@ -608,6 +638,18 @@ class clientFedCD(Client):
             param_groups.append({"params": gm_params, "lr": gm_lr})
         return torch.optim.SGD(param_groups, lr=self.learning_rate)
 
+    def infer_fused_logits_with_gate(self, x):
+        z = self.f_ext(x)
+        if z.dim() > 2:
+            z = torch.flatten(z, 1)
+        z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+        gm_logits = self.generalized_module(z_gm)
+        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+        pm_logits = self.personalized_module(z_pm)
+        mixed_prob, pm_weight = self.model.mix_prob(gm_logits, pm_logits)
+        fused_logits = torch.log(mixed_prob.clamp_min(1e-12))
+        return fused_logits, gm_logits, pm_logits, pm_weight
+
     def upload_parameters(self):
         # 업링크 비용 절감: Personalized Module만 전송
         state = {}
@@ -635,3 +677,99 @@ class clientFedCD(Client):
                 for k, v in self.generalized_adapter.state_dict().items()
             })
         return state
+
+    def upload_pm_prototypes(self, max_samples=0):
+        """
+        Upload PM knowledge as class-wise prototype statistics on shared f_ext space.
+        Returns:
+            {
+              "counts": [C],
+              "feat_sum": [C, D],
+              "feat_sq_sum": [C, D],
+              "logit_sum": [C, C],
+            }
+        """
+        train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
+        loader_kwargs = {
+            "batch_size": min(self.batch_size, max(1, self.train_samples)),
+            "drop_last": False,
+            "shuffle": False,
+            "num_workers": self.num_workers,
+            "pin_memory": self.pin_memory and self.device == "cuda",
+        }
+        if self.num_workers > 0:
+            loader_kwargs["persistent_workers"] = True
+            loader_kwargs["prefetch_factor"] = self.prefetch_factor
+        trainloader = DataLoader(train_data, **loader_kwargs)
+
+        device = "cpu"
+        self.f_ext.to(device)
+        self.f_ext.eval()
+        self.personalized_module.to(device)
+        self.personalized_module.eval()
+        if self.personalized_adapter is not None:
+            self.personalized_adapter.to(device)
+            self.personalized_adapter.eval()
+
+        C = int(self.num_classes)
+        counts = torch.zeros(C, dtype=torch.float32)
+        feat_sum = None
+        feat_sq_sum = None
+        logit_sum = torch.zeros(C, C, dtype=torch.float32)
+        seen = 0
+
+        with torch.no_grad():
+            for x, y in trainloader:
+                if type(x) == type([]):
+                    x = x[0]
+                x = x.to(device)
+                y = y.to(device).long()
+
+                z = self.f_ext(x)
+                if z.dim() > 2:
+                    z = torch.flatten(z, 1)
+
+                if feat_sum is None:
+                    D = z.size(1)
+                    feat_sum = torch.zeros(C, D, dtype=torch.float32)
+                    feat_sq_sum = torch.zeros(C, D, dtype=torch.float32)
+
+                z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+                pm_logits = self.personalized_module(z_pm)
+
+                if max_samples > 0 and seen + y.size(0) > max_samples:
+                    keep = max_samples - seen
+                    if keep <= 0:
+                        break
+                    y = y[:keep]
+                    z = z[:keep]
+                    pm_logits = pm_logits[:keep]
+
+                for cls in y.unique():
+                    cls_id = int(cls.item())
+                    m = (y == cls)
+                    cnt = int(m.sum().item())
+                    if cnt <= 0:
+                        continue
+                    z_cls = z[m]
+                    counts[cls_id] += float(cnt)
+                    feat_sum[cls_id] += z_cls.sum(dim=0).float()
+                    feat_sq_sum[cls_id] += (z_cls * z_cls).sum(dim=0).float()
+                    logit_sum[cls_id] += pm_logits[m].sum(dim=0).float()
+
+                seen += y.size(0)
+                if max_samples > 0 and seen >= max_samples:
+                    break
+
+        if feat_sum is None:
+            # Edge case: no data
+            D = int(getattr(self.f_ext, "out_dim", 0))
+            feat_sum = torch.zeros(C, D, dtype=torch.float32)
+            feat_sq_sum = torch.zeros(C, D, dtype=torch.float32)
+
+        return {
+            "counts": counts.cpu(),
+            "feat_sum": feat_sum.cpu(),
+            "feat_sq_sum": feat_sq_sum.cpu(),
+            "logit_sum": logit_sum.cpu(),
+        }
