@@ -30,7 +30,7 @@ if [ "$MAX_CONCURRENT" -lt 1 ]; then
 fi
 
 GLOBAL_ROUNDS="${GLOBAL_ROUNDS:-100}"
-LOCAL_EPOCHS="${LOCAL_EPOCHS:-5}"
+LOCAL_EPOCHS="${LOCAL_EPOCHS:-1}"
 TOTAL_DATA=50000
 
 # Scenarios (same coverage as run.sh)
@@ -42,18 +42,19 @@ else
 fi
 
 # Sweep knobs (PM/GM-centric)
-LOCAL_LRS=(0.004 0.005 0.006)
-PM_TEACHER_LRS=(0.006 0.008)
-PM_TEACHER_EPOCHS=(4 6)
+LOCAL_LRS=(0.005)
+# Keep local/distill LRs identical as requested.
+PM_TEACHER_LRS=(0.005)
+PM_TEACHER_EPOCHS=(5)
+PM_TEACHER_TEMPS=(1.5 2.0 3.0)
+PM_TEACHER_TOPKS=(3 5)
+PM_TEACHER_ABSTAINS=(0.2 0.3)
 
 # Fixed best-known values from time_194429
-PM_TEACHER_TEMP=2.0
 PM_TEACHER_KL_WEIGHT=1.0
 PM_TEACHER_CE_WEIGHT=0.0
 PM_TEACHER_SAMPLES=50000
 PM_TEACHER_BATCH_SIZE=256
-PM_TEACHER_TOPK=5
-PM_TEACHER_ABSTAIN=0.3
 PM_TEACHER_CONF_MIN=0.1
 PM_TEACHER_CONF_POWER=2.0
 PM_TEACHER_REL_WEIGHT=0.1
@@ -64,7 +65,7 @@ RUN_ROOT="logs/FedCD/grid_194429_${STAMP}"
 mkdir -p "$RUN_ROOT"
 MANIFEST="$RUN_ROOT/manifest.csv"
 
-echo "exp_id,dataset,nc,local_lr,pm_teacher_lr,pm_teacher_epochs,gpu_id,log_file" > "$MANIFEST"
+echo "exp_id,dataset,nc,local_lr,pm_teacher_lr,pm_teacher_epochs,pm_teacher_temp,pm_teacher_topk,pm_teacher_abstain,gpu_id,log_file" > "$MANIFEST"
 
 echo "============================================================"
 echo "FedCD Grid Search (base: time_194429)"
@@ -74,6 +75,9 @@ echo "SCENARIOS=${SCENARIOS[*]}, NCS=${NCS[*]}"
 echo "LOCAL_LRS=${LOCAL_LRS[*]}"
 echo "PM_TEACHER_LRS=${PM_TEACHER_LRS[*]}"
 echo "PM_TEACHER_EPOCHS=${PM_TEACHER_EPOCHS[*]}"
+echo "PM_TEACHER_TEMPS=${PM_TEACHER_TEMPS[*]}"
+echo "PM_TEACHER_TOPKS=${PM_TEACHER_TOPKS[*]}"
+echo "PM_TEACHER_ABSTAINS=${PM_TEACHER_ABSTAINS[*]}"
 echo "RUN_ROOT=$RUN_ROOT"
 echo "============================================================"
 
@@ -97,7 +101,10 @@ launch_one() {
     local local_lr="$3"
     local pm_t_lr="$4"
     local pm_t_ep="$5"
-    local exp_id="$6"
+    local pm_t_temp="$6"
+    local pm_t_topk="$7"
+    local pm_t_abstain="$8"
+    local exp_id="$9"
 
     local avg_data_per_client=$((TOTAL_DATA / nc))
     local cluster_sample_size=512
@@ -107,8 +114,8 @@ launch_one() {
 
     local log_file="$RUN_ROOT/${exp_id}.log"
 
-    echo "${exp_id},${dataset},${nc},${local_lr},${pm_t_lr},${pm_t_ep},${GPU_ID},${log_file}" >> "$MANIFEST"
-    echo "[Launch] $exp_id | $dataset | lr=$local_lr | pm_t_lr=$pm_t_lr | pm_t_ep=$pm_t_ep"
+    echo "${exp_id},${dataset},${nc},${local_lr},${pm_t_lr},${pm_t_ep},${pm_t_temp},${pm_t_topk},${pm_t_abstain},${GPU_ID},${log_file}" >> "$MANIFEST"
+    echo "[Launch] $exp_id | $dataset | lr=$local_lr | pm_t_lr=$pm_t_lr | pm_t_ep=$pm_t_ep | temp=$pm_t_temp | topk=$pm_t_topk | abstain=$pm_t_abstain"
 
     if [ "$MAX_CONCURRENT" -le 1 ]; then
         CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_CMD" -u system/main.py \
@@ -153,7 +160,7 @@ launch_one() {
             --fedcd_local_pm_only_objective True \
             --fedcd_gm_update_mode server_pm_teacher \
             --fedcd_pm_teacher_lr "$pm_t_lr" \
-            --fedcd_pm_teacher_temp "$PM_TEACHER_TEMP" \
+            --fedcd_pm_teacher_temp "$pm_t_temp" \
             --fedcd_pm_teacher_kl_weight "$PM_TEACHER_KL_WEIGHT" \
             --fedcd_pm_teacher_ce_weight "$PM_TEACHER_CE_WEIGHT" \
             --fedcd_pm_teacher_epochs "$pm_t_ep" \
@@ -167,8 +174,8 @@ launch_one() {
             --fedcd_pm_teacher_confidence_min "$PM_TEACHER_CONF_MIN" \
             --fedcd_pm_teacher_confidence_power "$PM_TEACHER_CONF_POWER" \
             --fedcd_pm_teacher_ensemble_confidence True \
-            --fedcd_pm_teacher_topk "$PM_TEACHER_TOPK" \
-            --fedcd_pm_teacher_abstain_threshold "$PM_TEACHER_ABSTAIN" \
+            --fedcd_pm_teacher_topk "$pm_t_topk" \
+            --fedcd_pm_teacher_abstain_threshold "$pm_t_abstain" \
             --fedcd_pm_teacher_rel_weight "$PM_TEACHER_REL_WEIGHT" \
             --fedcd_pm_teacher_rel_batch "$PM_TEACHER_REL_BATCH" \
             --fedcd_init_pretrain True \
@@ -226,7 +233,7 @@ launch_one() {
                 --fedcd_local_pm_only_objective True \
                 --fedcd_gm_update_mode server_pm_teacher \
                 --fedcd_pm_teacher_lr "$pm_t_lr" \
-                --fedcd_pm_teacher_temp "$PM_TEACHER_TEMP" \
+                --fedcd_pm_teacher_temp "$pm_t_temp" \
                 --fedcd_pm_teacher_kl_weight "$PM_TEACHER_KL_WEIGHT" \
                 --fedcd_pm_teacher_ce_weight "$PM_TEACHER_CE_WEIGHT" \
                 --fedcd_pm_teacher_epochs "$pm_t_ep" \
@@ -240,8 +247,8 @@ launch_one() {
                 --fedcd_pm_teacher_confidence_min "$PM_TEACHER_CONF_MIN" \
                 --fedcd_pm_teacher_confidence_power "$PM_TEACHER_CONF_POWER" \
                 --fedcd_pm_teacher_ensemble_confidence True \
-                --fedcd_pm_teacher_topk "$PM_TEACHER_TOPK" \
-                --fedcd_pm_teacher_abstain_threshold "$PM_TEACHER_ABSTAIN" \
+                --fedcd_pm_teacher_topk "$pm_t_topk" \
+                --fedcd_pm_teacher_abstain_threshold "$pm_t_abstain" \
                 --fedcd_pm_teacher_rel_weight "$PM_TEACHER_REL_WEIGHT" \
                 --fedcd_pm_teacher_rel_batch "$PM_TEACHER_REL_BATCH" \
                 --fedcd_init_pretrain True \
@@ -265,16 +272,22 @@ for nc in "${NCS[@]}"; do
         for local_lr in "${LOCAL_LRS[@]}"; do
             for pm_t_lr in "${PM_TEACHER_LRS[@]}"; do
                 for pm_t_ep in "${PM_TEACHER_EPOCHS[@]}"; do
-                    exp_idx=$((exp_idx + 1))
-                    exp_id="$(printf "exp_%03d_%s_nc%s_lr%s_tlr%s_tep%s" "$exp_idx" "$scenario" "$nc" "$local_lr" "$pm_t_lr" "$pm_t_ep")"
-                    launch_one "$dataset_name" "$nc" "$local_lr" "$pm_t_lr" "$pm_t_ep" "$exp_id"
-                    if [ "$MAX_CONCURRENT" -gt 1 ]; then
-                        running_jobs=$((running_jobs + 1))
-                        if [ "$running_jobs" -ge "$MAX_CONCURRENT" ]; then
-                            wait -n || true
-                            running_jobs=$((running_jobs - 1))
-                        fi
-                    fi
+                    for pm_t_temp in "${PM_TEACHER_TEMPS[@]}"; do
+                        for pm_t_topk in "${PM_TEACHER_TOPKS[@]}"; do
+                            for pm_t_abstain in "${PM_TEACHER_ABSTAINS[@]}"; do
+                                exp_idx=$((exp_idx + 1))
+                                exp_id="$(printf "exp_%03d_%s_nc%s_lr%s_tlr%s_tep%s_t%s_k%s_a%s" "$exp_idx" "$scenario" "$nc" "$local_lr" "$pm_t_lr" "$pm_t_ep" "$pm_t_temp" "$pm_t_topk" "$pm_t_abstain")"
+                                launch_one "$dataset_name" "$nc" "$local_lr" "$pm_t_lr" "$pm_t_ep" "$pm_t_temp" "$pm_t_topk" "$pm_t_abstain" "$exp_id"
+                                if [ "$MAX_CONCURRENT" -gt 1 ]; then
+                                    running_jobs=$((running_jobs + 1))
+                                    if [ "$running_jobs" -ge "$MAX_CONCURRENT" ]; then
+                                        wait -n || true
+                                        running_jobs=$((running_jobs - 1))
+                                    fi
+                                fi
+                            done
+                        done
+                    done
                 done
             done
         done
