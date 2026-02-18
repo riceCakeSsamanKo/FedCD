@@ -1,0 +1,5 @@
+case_name,status,score,pm_local_test_acc,gm_only_global_test_acc,global_test_acc,acc_csv_path
+proto_strong_kl,ok,0.398150,0.8,0.2642,0.2552,logs/FedCD/GM_VGG8_PM_VGG8_Fext_SmallFExt/pat/NC_20/date_20260217/time_170122/acc.csv
+proto_balanced_ce,ok,0.400400,0.8021,0.2665,0.2584,logs/FedCD/GM_VGG8_PM_VGG8_Fext_SmallFExt/pat/NC_20/date_20260217/time_175403/acc.csv
+pm_teacher_topk3,ok,0.405750,0.7956,0.2758,0.1688,logs/FedCD/GM_VGG8_PM_VGG8_Fext_SmallFExt/pat/NC_20/date_20260217/time_184645/acc.csv
+pm_teacher_topk5,ok,0.438825,0.8019,0.3178,0.1613,logs/FedCD/GM_VGG8_PM_VGG8_Fext_SmallFExt/pat/NC_20/date_20260217/time_194429/acc.csv
