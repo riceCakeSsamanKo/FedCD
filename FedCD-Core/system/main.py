@@ -485,6 +485,8 @@ if __name__ == "__main__":
     parser.add_argument('--global_period', type=int, default=4)
     parser.add_argument('--fedcd_enable_clustering', type=str2bool, default=True,
                         help="Enable periodic client clustering by distribution similarity.")
+    parser.add_argument('--fedcd_enable_pm_aggregation', type=str2bool, default=True,
+                        help="Enable cluster-wise PM aggregation and PM broadcast to clients.")
     parser.add_argument('--cluster_sample_size', type=int, default=512)
     parser.add_argument('--max_dynamic_clusters', type=int, default=5,
                         help="Maximum number of clusters allowed in threshold-based dynamic clustering (0 disables cap).")

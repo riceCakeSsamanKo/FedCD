@@ -28,6 +28,7 @@ class FedCD(Server):
         
         # FedCD clustering config
         self.enable_clustering = bool(getattr(args, "fedcd_enable_clustering", True))
+        self.enable_pm_aggregation = bool(getattr(args, "fedcd_enable_pm_aggregation", True))
         self.num_clusters = max(1, int(getattr(args, "num_clusters", 1)))
         if not self.enable_clustering:
             self.num_clusters = 1
@@ -41,6 +42,8 @@ class FedCD(Server):
             self.cluster_map = {c.id: 0 for c in self.clients}
             self.max_dynamic_clusters = 0
             print("[FedCD] Clustering disabled: all clients are treated as one cluster.")
+        if not self.enable_pm_aggregation:
+            print("[FedCD] PM aggregation disabled: PM stays local per client.")
         self.log_usage = bool(getattr(args, "log_usage", False))
         self.log_usage_every = max(1, int(getattr(args, "log_usage_every", 1)))
         self.log_usage_path = str(getattr(args, "log_usage_path", "logs/result.csv"))
@@ -785,13 +788,14 @@ class FedCD(Server):
                     print(f"  Cluster {c_id} ({len(clients_in_cluster)} clients): {clients_in_cluster}")
 
             # 3. 클러스터 내 PM 집계 및 배포
-            cluster_pms = self.aggregate_cluster_pms(received_pms)
-            cluster_counts = self._get_cluster_client_counts(received_pms)
+            need_cluster_pm = self.enable_pm_aggregation or self.gm_update_mode == "server_pm_fedavg"
+            cluster_pms = self.aggregate_cluster_pms(received_pms) if need_cluster_pm else {}
+            cluster_counts = self._get_cluster_client_counts(received_pms) if need_cluster_pm else {}
             pm_client_weights = {
                 int(c.id): float(max(1, getattr(c, "train_samples", 1)))
                 for c in self.selected_clients
             }
-            if i % self.pm_period == 0 and cluster_pms:
+            if self.enable_pm_aggregation and i % self.pm_period == 0 and cluster_pms:
                 downlink_bytes = self.send_cluster_pms(cluster_pms)
                 round_downlink += downlink_bytes
                 print(f"[FedCD] Round {i}: PM aggregation and cluster update done")
