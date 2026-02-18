@@ -24,7 +24,10 @@ fi
 # Minimal arguments only + PM/GM-related sweep knobs.
 # ------------------------------------------------------------------------------
 GPU_ID="${GPU_ID:-0}"                 # single physical GPU
-MAX_CONCURRENT="${MAX_CONCURRENT:-2}" # same GPU concurrent jobs
+MAX_CONCURRENT="${MAX_CONCURRENT:-1}" # default sequential to avoid log-path collisions
+if [ "$MAX_CONCURRENT" -lt 1 ]; then
+    MAX_CONCURRENT=1
+fi
 
 GLOBAL_ROUNDS="${GLOBAL_ROUNDS:-100}"
 LOCAL_EPOCHS="${LOCAL_EPOCHS:-5}"
@@ -32,7 +35,11 @@ TOTAL_DATA=50000
 
 # Scenarios (same coverage as run.sh)
 NCS=(20 50)
-SCENARIOS=("pat" "dir0.1" "dir0.5" "dir1.0")
+if [ -n "${SCENARIO_FILTER:-}" ]; then
+    SCENARIOS=("${SCENARIO_FILTER}")
+else
+    SCENARIOS=("pat" "dir0.1" "dir0.5" "dir1.0")
+fi
 
 # Sweep knobs (PM/GM-centric)
 LOCAL_LRS=(0.004 0.005 0.006)
@@ -103,7 +110,7 @@ launch_one() {
     echo "${exp_id},${dataset},${nc},${local_lr},${pm_t_lr},${pm_t_ep},${GPU_ID},${log_file}" >> "$MANIFEST"
     echo "[Launch] $exp_id | $dataset | lr=$local_lr | pm_t_lr=$pm_t_lr | pm_t_ep=$pm_t_ep"
 
-    (
+    if [ "$MAX_CONCURRENT" -le 1 ]; then
         CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_CMD" -u system/main.py \
             -data "$dataset" \
             -algo FedCD \
@@ -175,7 +182,81 @@ launch_one() {
             --fedcd_init_diversity_weight 0.05 \
             --fedcd_search_enable False \
             > "$log_file" 2>&1
-    ) &
+    else
+        (
+            CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_CMD" -u system/main.py \
+                -data "$dataset" \
+                -algo FedCD \
+                --gm_model VGG8 \
+                --pm_model VGG8 \
+                --fext_model SmallFExt \
+                --fext_dim 512 \
+                -gr "$GLOBAL_ROUNDS" \
+                -nc "$nc" \
+                -jr 1.0 \
+                -lr "$local_lr" \
+                --local_epochs "$LOCAL_EPOCHS" \
+                --cluster_threshold 0.1 \
+                --fedcd_enable_clustering True \
+                --fedcd_enable_pm_aggregation True \
+                --adaptive_threshold True \
+                --threshold_step 0.01 \
+                --threshold_step_max 0.1 \
+                --threshold_decay 0.9 \
+                --act_window_size 5 \
+                --cluster_period 2 \
+                --pm_period 1 \
+                --global_period 2 \
+                --cluster_sample_size "$cluster_sample_size" \
+                --max_dynamic_clusters 0 \
+                -dev cuda \
+                -did 0 \
+                -nw 0 \
+                --pin_memory True \
+                --prefetch_factor 2 \
+                --amp True \
+                --tf32 True \
+                --gpu_batch_mult 1 \
+                --gpu_batch_max 0 \
+                --log_usage True \
+                --avoid_oom True \
+                --eval_common_global True \
+                --global_test_samples 0 \
+                --common_eval_batch_size 256 \
+                --fedcd_local_pm_only_objective True \
+                --fedcd_gm_update_mode server_pm_teacher \
+                --fedcd_pm_teacher_lr "$pm_t_lr" \
+                --fedcd_pm_teacher_temp "$PM_TEACHER_TEMP" \
+                --fedcd_pm_teacher_kl_weight "$PM_TEACHER_KL_WEIGHT" \
+                --fedcd_pm_teacher_ce_weight "$PM_TEACHER_CE_WEIGHT" \
+                --fedcd_pm_teacher_epochs "$pm_t_ep" \
+                --fedcd_pm_teacher_samples "$PM_TEACHER_SAMPLES" \
+                --fedcd_pm_teacher_batch_size "$PM_TEACHER_BATCH_SIZE" \
+                --fedcd_pm_teacher_proxy_dataset Cifar100 \
+                --fedcd_pm_teacher_proxy_split train \
+                --fedcd_pm_teacher_proxy_download False \
+                --fedcd_pm_teacher_allow_test_fallback False \
+                --fedcd_pm_teacher_confidence_weight True \
+                --fedcd_pm_teacher_confidence_min "$PM_TEACHER_CONF_MIN" \
+                --fedcd_pm_teacher_confidence_power "$PM_TEACHER_CONF_POWER" \
+                --fedcd_pm_teacher_ensemble_confidence True \
+                --fedcd_pm_teacher_topk "$PM_TEACHER_TOPK" \
+                --fedcd_pm_teacher_abstain_threshold "$PM_TEACHER_ABSTAIN" \
+                --fedcd_pm_teacher_rel_weight "$PM_TEACHER_REL_WEIGHT" \
+                --fedcd_pm_teacher_rel_batch "$PM_TEACHER_REL_BATCH" \
+                --fedcd_init_pretrain True \
+                --fedcd_init_epochs 5 \
+                --fedcd_init_lr 0.005 \
+                --fedcd_init_samples 50000 \
+                --fedcd_init_batch_size 256 \
+                --fedcd_init_ce_weight 1.0 \
+                --fedcd_init_kd_weight 1.0 \
+                --fedcd_init_entropy_weight 0.05 \
+                --fedcd_init_diversity_weight 0.05 \
+                --fedcd_search_enable False \
+                > "$log_file" 2>&1
+        ) &
+    fi
 }
 
 for nc in "${NCS[@]}"; do
@@ -187,10 +268,12 @@ for nc in "${NCS[@]}"; do
                     exp_idx=$((exp_idx + 1))
                     exp_id="$(printf "exp_%03d_%s_nc%s_lr%s_tlr%s_tep%s" "$exp_idx" "$scenario" "$nc" "$local_lr" "$pm_t_lr" "$pm_t_ep")"
                     launch_one "$dataset_name" "$nc" "$local_lr" "$pm_t_lr" "$pm_t_ep" "$exp_id"
-                    running_jobs=$((running_jobs + 1))
-                    if [ "$running_jobs" -ge "$MAX_CONCURRENT" ]; then
-                        wait -n || true
-                        running_jobs=$((running_jobs - 1))
+                    if [ "$MAX_CONCURRENT" -gt 1 ]; then
+                        running_jobs=$((running_jobs + 1))
+                        if [ "$running_jobs" -ge "$MAX_CONCURRENT" ]; then
+                            wait -n || true
+                            running_jobs=$((running_jobs - 1))
+                        fi
                     fi
                 done
             done
@@ -198,7 +281,9 @@ for nc in "${NCS[@]}"; do
     done
 done
 
-wait
+if [ "$MAX_CONCURRENT" -gt 1 ]; then
+    wait
+fi
 
 echo "============================================================"
 echo "All grid jobs finished."
