@@ -787,6 +787,10 @@ class FedCD(Server):
             # 3. 클러스터 내 PM 집계 및 배포
             cluster_pms = self.aggregate_cluster_pms(received_pms)
             cluster_counts = self._get_cluster_client_counts(received_pms)
+            pm_client_weights = {
+                int(c.id): float(max(1, getattr(c, "train_samples", 1)))
+                for c in self.selected_clients
+            }
             if i % self.pm_period == 0 and cluster_pms:
                 downlink_bytes = self.send_cluster_pms(cluster_pms)
                 round_downlink += downlink_bytes
@@ -799,7 +803,7 @@ class FedCD(Server):
                 if self.gm_update_mode == "local":
                     global_gm_state = self.aggregate_global_gms(received_gms) if received_gms else None
                 elif self.gm_update_mode == "server_pm_teacher":
-                    global_gm_state = self.distill_global_gm_from_pm_teachers(cluster_pms, cluster_counts)
+                    global_gm_state = self.distill_global_gm_from_pm_teachers(received_pms, pm_client_weights)
                 elif self.gm_update_mode == "server_pm_fedavg":
                     global_gm_state = self.update_gm_from_pm_fedavg(cluster_pms, cluster_counts)
                 elif self.gm_update_mode == "server_proto_teacher":
@@ -1395,12 +1399,14 @@ class FedCD(Server):
 
         return personalized_module_state, personalized_adapter_state
 
-    def distill_global_gm_from_pm_teachers(self, cluster_pms, cluster_counts):
-        if not cluster_pms:
+    def distill_global_gm_from_pm_teachers(self, received_pms, client_weights=None):
+        if not received_pms:
             return None
         if self.pm_teacher_loader is None:
             print("[FedCD] PM-teacher distillation loader is unavailable. Skip GM update.")
             return None
+        if client_weights is None:
+            client_weights = {}
 
         def _distill_once(device):
             self.f_ext.to(device)
@@ -1410,7 +1416,7 @@ class FedCD(Server):
             ce_loss_fn = nn.CrossEntropyLoss()
 
             teacher_components = []
-            for cluster_id, state in cluster_pms.items():
+            for client_id, state in received_pms:
                 pm_module_state, pm_adapter_state = self._extract_personalized_state(state)
                 if not pm_module_state:
                     continue
@@ -1430,7 +1436,7 @@ class FedCD(Server):
                     for p in pm_adapter.parameters():
                         p.requires_grad = False
 
-                teacher_weight = float(cluster_counts.get(cluster_id, 1))
+                teacher_weight = float(client_weights.get(int(client_id), 1.0))
                 teacher_components.append({
                     "weight": max(teacher_weight, 1e-12),
                     "pm_module": pm_module,
@@ -1499,7 +1505,7 @@ class FedCD(Server):
                                 )
 
                             # Sample-wise teacher score for top-k routing:
-                            # normalized cluster size prior x calibrated confidence.
+                            # normalized client-data prior x calibrated confidence.
                             score = pm_conf * float(comp["norm_weight"])
                             teacher_prob_list.append(pm_prob)
                             teacher_score_list.append(score)
