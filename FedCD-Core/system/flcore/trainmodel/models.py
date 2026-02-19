@@ -208,15 +208,16 @@ class FedAvgCNN(nn.Module):
 # ====================================================================================================================
 
 class VGG8(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, classifier_hidden=256):
         super().__init__()
         cfg = [64, 'M', 128, 'M', 256, 256, 'M']
         self.features = self._make_layers(cfg)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        classifier_hidden = int(classifier_hidden)
         self.classifier = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(256, classifier_hidden),
             nn.ReLU(True),
-            nn.Linear(256, num_classes),
+            nn.Linear(classifier_hidden, num_classes),
         )
 
     def forward(self, x):

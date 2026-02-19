@@ -130,6 +130,9 @@ def run(args):
 
         if model_name == "VGG8":
             return VGG8(num_classes=args.num_classes).to(args.device)
+        
+        if model_name == "VGG8W768":
+            return VGG8(num_classes=args.num_classes, classifier_hidden=768).to(args.device)
 
         if model_name == "AlexNet":
             return alexnet(pretrained=False, num_classes=args.num_classes).to(args.device)

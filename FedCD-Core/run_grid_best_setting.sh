@@ -121,8 +121,8 @@ launch_one() {
         CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_CMD" -u system/main.py \
             -data "$dataset" \
             -algo FedCD \
-            --gm_model VGG8 \
-            --pm_model VGG8 \
+            --gm_model VGG8W768 \
+            --pm_model VGG8W768 \
             --fext_model SmallFExt \
             --fext_dim 512 \
             -gr "$GLOBAL_ROUNDS" \
@@ -194,8 +194,8 @@ launch_one() {
             CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_CMD" -u system/main.py \
                 -data "$dataset" \
                 -algo FedCD \
-                --gm_model VGG8 \
-                --pm_model VGG8 \
+                --gm_model VGG8W768 \
+                --pm_model VGG8W768 \
                 --fext_model SmallFExt \
                 --fext_dim 512 \
                 -gr "$GLOBAL_ROUNDS" \

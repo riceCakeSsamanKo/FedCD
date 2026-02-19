@@ -25,6 +25,25 @@ class FedKD(Server):
         self.energy = self.T_start
         self.compressed_param = {}
 
+    @staticmethod
+    def _tensor_like_nbytes(value):
+        if isinstance(value, np.ndarray):
+            return int(value.nbytes)
+        if isinstance(value, (list, tuple)):
+            return sum(FedKD._tensor_like_nbytes(v) for v in value)
+        if isinstance(value, dict):
+            return sum(FedKD._tensor_like_nbytes(v) for v in value.values())
+        try:
+            return int(np.asarray(value).nbytes)
+        except Exception:
+            return 0
+
+    def _compressed_param_mb(self, param_dict):
+        if not param_dict:
+            return 0.0
+        total_bytes = sum(self._tensor_like_nbytes(v) for v in param_dict.values())
+        return total_bytes / (1024 * 1024)
+
 
     def train(self):
         for i in range(self.global_rounds+1):
@@ -80,13 +99,17 @@ class FedKD(Server):
     def send_models(self):
         assert (len(self.clients) > 0)
 
-        for client in self.clients:
+        clients = self.clients
+        for client in clients:
             start_time = time.time()
             
             client.set_parameters(self.compressed_param, self.energy)
 
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+
+        downlink_per_client_mb = self._compressed_param_mb(self.compressed_param)
+        self.downlink_MB += len(clients) * downlink_per_client_mb
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)
@@ -96,6 +119,7 @@ class FedKD(Server):
 
         self.uploaded_ids = []
         self.uploaded_models = []
+        uploaded_mb = 0.0
         for client in active_clients:
             try:
                 client_time_cost = client.train_time_cost['total_cost'] / client.train_time_cost['num_rounds'] + \
@@ -104,6 +128,7 @@ class FedKD(Server):
                 client_time_cost = 0
             if client_time_cost <= self.time_threthold:
                 self.uploaded_ids.append(client.id)
+                uploaded_mb += self._compressed_param_mb(client.compressed_param)
                 # recover
                 for k in client.compressed_param.keys():
                     if len(client.compressed_param[k]) == 3:
@@ -113,6 +138,8 @@ class FedKD(Server):
                                 client.compressed_param[k][2])
             
                 self.uploaded_models.append(client.compressed_param)
+
+        self.uplink_MB += uploaded_mb
 
     def aggregate_parameters(self):
         assert (len(self.uploaded_models) > 0)
