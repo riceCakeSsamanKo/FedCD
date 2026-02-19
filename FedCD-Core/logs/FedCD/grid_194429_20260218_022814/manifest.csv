@@ -1,0 +1,10 @@
+exp_id,dataset,nc,local_lr,pm_teacher_lr,pm_teacher_epochs,pm_teacher_temp,pm_teacher_topk,pm_teacher_abstain,gpu_id,log_file
+exp_001_dir0.5_nc20_lr0.005_tlr0.005_tep5_t1.5_k3_a0.2,Cifar10_dir0.5_nc20,20,0.005,0.005,5,1.5,3,0.2,0,logs/FedCD/grid_194429_20260218_022814/exp_001_dir0.5_nc20_lr0.005_tlr0.005_tep5_t1.5_k3_a0.2.log
+exp_002_dir0.5_nc20_lr0.005_tlr0.005_tep5_t1.5_k3_a0.3,Cifar10_dir0.5_nc20,20,0.005,0.005,5,1.5,3,0.3,0,logs/FedCD/grid_194429_20260218_022814/exp_002_dir0.5_nc20_lr0.005_tlr0.005_tep5_t1.5_k3_a0.3.log
+exp_003_dir0.5_nc20_lr0.005_tlr0.005_tep5_t1.5_k5_a0.2,Cifar10_dir0.5_nc20,20,0.005,0.005,5,1.5,5,0.2,0,logs/FedCD/grid_194429_20260218_022814/exp_003_dir0.5_nc20_lr0.005_tlr0.005_tep5_t1.5_k5_a0.2.log
+exp_004_dir0.5_nc20_lr0.005_tlr0.005_tep5_t1.5_k5_a0.3,Cifar10_dir0.5_nc20,20,0.005,0.005,5,1.5,5,0.3,0,logs/FedCD/grid_194429_20260218_022814/exp_004_dir0.5_nc20_lr0.005_tlr0.005_tep5_t1.5_k5_a0.3.log
+exp_005_dir0.5_nc20_lr0.005_tlr0.005_tep5_t2.0_k3_a0.2,Cifar10_dir0.5_nc20,20,0.005,0.005,5,2.0,3,0.2,0,logs/FedCD/grid_194429_20260218_022814/exp_005_dir0.5_nc20_lr0.005_tlr0.005_tep5_t2.0_k3_a0.2.log
+exp_006_dir0.5_nc20_lr0.005_tlr0.005_tep5_t2.0_k3_a0.3,Cifar10_dir0.5_nc20,20,0.005,0.005,5,2.0,3,0.3,0,logs/FedCD/grid_194429_20260218_022814/exp_006_dir0.5_nc20_lr0.005_tlr0.005_tep5_t2.0_k3_a0.3.log
+exp_007_dir0.5_nc20_lr0.005_tlr0.005_tep5_t2.0_k5_a0.2,Cifar10_dir0.5_nc20,20,0.005,0.005,5,2.0,5,0.2,0,logs/FedCD/grid_194429_20260218_022814/exp_007_dir0.5_nc20_lr0.005_tlr0.005_tep5_t2.0_k5_a0.2.log
+exp_008_dir0.5_nc20_lr0.005_tlr0.005_tep5_t2.0_k5_a0.3,Cifar10_dir0.5_nc20,20,0.005,0.005,5,2.0,5,0.3,0,logs/FedCD/grid_194429_20260218_022814/exp_008_dir0.5_nc20_lr0.005_tlr0.005_tep5_t2.0_k5_a0.3.log
+exp_009_dir0.5_nc20_lr0.005_tlr0.005_tep5_t3.0_k3_a0.2,Cifar10_dir0.5_nc20,20,0.005,0.005,5,3.0,3,0.2,0,logs/FedCD/grid_194429_20260218_022814/exp_009_dir0.5_nc20_lr0.005_tlr0.005_tep5_t3.0_k3_a0.2.log
