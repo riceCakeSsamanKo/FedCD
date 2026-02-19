@@ -100,6 +100,12 @@ class FedCD(Server):
         self.pm_teacher_proxy_split = str(getattr(args, "fedcd_pm_teacher_proxy_split", "train"))
         self.pm_teacher_proxy_download = bool(getattr(args, "fedcd_pm_teacher_proxy_download", False))
         self.pm_teacher_allow_test_fallback = bool(getattr(args, "fedcd_pm_teacher_allow_test_fallback", False))
+        self.pm_teacher_source = str(getattr(args, "fedcd_pm_teacher_source", "cluster")).strip().lower()
+        if self.pm_teacher_source not in {"cluster", "client"}:
+            raise ValueError(
+                "fedcd_pm_teacher_source must be one of: cluster | client "
+                f"(got: {self.pm_teacher_source})"
+            )
         self.pm_teacher_confidence_weight = bool(getattr(args, "fedcd_pm_teacher_confidence_weight", True))
         self.pm_teacher_confidence_min = float(getattr(args, "fedcd_pm_teacher_confidence_min", 0.05))
         self.pm_teacher_confidence_min = min(max(self.pm_teacher_confidence_min, 0.0), 1.0)
@@ -114,6 +120,30 @@ class FedCD(Server):
             getattr(args, "fedcd_pm_teacher_abstain_threshold", 0.0)
         )
         self.pm_teacher_abstain_threshold = min(max(self.pm_teacher_abstain_threshold, 0.0), 1.0)
+        self.pm_teacher_teacher_abstain_threshold = float(
+            getattr(args, "fedcd_pm_teacher_teacher_abstain_threshold", 0.0)
+        )
+        self.pm_teacher_teacher_abstain_threshold = min(
+            max(self.pm_teacher_teacher_abstain_threshold, 0.0), 1.0
+        )
+        self.pm_teacher_min_active_teachers = int(
+            getattr(args, "fedcd_pm_teacher_min_active_teachers", 1)
+        )
+        self.pm_teacher_min_active_teachers = max(1, self.pm_teacher_min_active_teachers)
+        self.pm_teacher_consensus_min_ratio = float(
+            getattr(args, "fedcd_pm_teacher_consensus_min_ratio", 0.0)
+        )
+        self.pm_teacher_consensus_min_ratio = min(max(self.pm_teacher_consensus_min_ratio, 0.0), 1.0)
+        self.pm_teacher_correct_only = bool(
+            getattr(args, "fedcd_pm_teacher_correct_only", False)
+        )
+        if self.pm_teacher_correct_only:
+            print(
+                "[FedCD] fedcd_pm_teacher_correct_only=True: "
+                "use a label-compatible proxy dataset (e.g., Cifar10 for Cifar10 task)."
+            )
+        if self.gm_update_mode == "server_pm_teacher":
+            print(f"[FedCD] PM-teacher source for GM distillation: {self.pm_teacher_source}")
         self.pm_teacher_rel_weight = float(getattr(args, "fedcd_pm_teacher_rel_weight", 0.2))
         self.pm_teacher_rel_batch = int(getattr(args, "fedcd_pm_teacher_rel_batch", 64))
         self.init_pretrain = bool(getattr(args, "fedcd_init_pretrain", True))
@@ -788,13 +818,23 @@ class FedCD(Server):
                     print(f"  Cluster {c_id} ({len(clients_in_cluster)} clients): {clients_in_cluster}")
 
             # 3. 클러스터 내 PM 집계 및 배포
-            need_cluster_pm = self.enable_pm_aggregation or self.gm_update_mode == "server_pm_fedavg"
+            need_cluster_pm = (
+                self.enable_pm_aggregation
+                or self.gm_update_mode == "server_pm_fedavg"
+                or (self.gm_update_mode == "server_pm_teacher" and self.pm_teacher_source == "cluster")
+            )
             cluster_pms = self.aggregate_cluster_pms(received_pms) if need_cluster_pm else {}
             cluster_counts = self._get_cluster_client_counts(received_pms) if need_cluster_pm else {}
             pm_client_weights = {
                 int(c.id): float(max(1, getattr(c, "train_samples", 1)))
                 for c in self.selected_clients
             }
+            cluster_teacher_weights = {}
+            for client in self.selected_clients:
+                cluster_id = self.cluster_map.get(client.id, 0)
+                cluster_teacher_weights[cluster_id] = cluster_teacher_weights.get(cluster_id, 0.0) + float(
+                    max(1, getattr(client, "train_samples", 1))
+                )
             if self.enable_pm_aggregation and i % self.pm_period == 0 and cluster_pms:
                 downlink_bytes = self.send_cluster_pms(cluster_pms)
                 round_downlink += downlink_bytes
@@ -807,7 +847,19 @@ class FedCD(Server):
                 if self.gm_update_mode == "local":
                     global_gm_state = self.aggregate_global_gms(received_gms) if received_gms else None
                 elif self.gm_update_mode == "server_pm_teacher":
-                    global_gm_state = self.distill_global_gm_from_pm_teachers(received_pms, pm_client_weights)
+                    if self.pm_teacher_source == "cluster":
+                        teacher_states = [(int(cluster_id), state) for cluster_id, state in cluster_pms.items()]
+                        teacher_weights = {
+                            int(cluster_id): float(max(1.0, cluster_teacher_weights.get(cluster_id, 1.0)))
+                            for cluster_id in cluster_pms.keys()
+                        }
+                        global_gm_state = self.distill_global_gm_from_pm_teachers(
+                            teacher_states, teacher_weights
+                        )
+                    else:
+                        global_gm_state = self.distill_global_gm_from_pm_teachers(
+                            received_pms, pm_client_weights
+                        )
                 elif self.gm_update_mode == "server_pm_fedavg":
                     global_gm_state = self.update_gm_from_pm_fedavg(cluster_pms, cluster_counts)
                 elif self.gm_update_mode == "server_proto_teacher":
@@ -1479,7 +1531,7 @@ class FedCD(Server):
                     if type(x) == type([]):
                         x = x[0]
                     x = x.to(device, non_blocking=(device == "cuda"))
-                    if self.pm_teacher_ce_weight > 0:
+                    if self.pm_teacher_ce_weight > 0 or self.pm_teacher_correct_only:
                         y = y.to(device, non_blocking=(device == "cuda")).long()
 
                     with torch.no_grad():
@@ -1521,6 +1573,16 @@ class FedCD(Server):
                         teacher_prob_stack = torch.stack(teacher_prob_list, dim=0)   # [T, B, C]
                         teacher_score_stack = torch.stack(teacher_score_list, dim=0) # [T, B]
                         teacher_conf_stack = torch.stack(teacher_conf_list, dim=0)   # [T, B]
+                        teacher_pred_stack = torch.argmax(teacher_prob_stack, dim=2) # [T, B]
+
+                        if self.pm_teacher_teacher_abstain_threshold > 0:
+                            # Teacher-level abstain: drop low-confidence PM teacher votes per sample.
+                            teacher_active_mask = (
+                                teacher_conf_stack >= self.pm_teacher_teacher_abstain_threshold
+                            )
+                            teacher_score_stack = teacher_score_stack * teacher_active_mask.to(
+                                teacher_score_stack.dtype
+                            )
 
                         num_teachers = teacher_score_stack.size(0)
                         topk = num_teachers if self.pm_teacher_topk <= 0 else min(self.pm_teacher_topk, num_teachers)
@@ -1536,17 +1598,44 @@ class FedCD(Server):
                             selected_prob = teacher_prob_stack.gather(0, gather_idx)
                             selected_score = topk_scores
                             selected_conf = teacher_conf_stack.gather(0, topk_idx)
+                            selected_pred = teacher_pred_stack.gather(0, topk_idx)
                         else:
                             selected_prob = teacher_prob_stack
                             selected_score = teacher_score_stack
                             selected_conf = teacher_conf_stack
+                            selected_pred = teacher_pred_stack
 
                         score_sum = selected_score.sum(dim=0)
+                        active_teacher_mask = selected_score > 1e-12
+                        active_teacher_count = active_teacher_mask.sum(dim=0)
                         valid_teacher_mask = score_sum > 1e-12
+                        valid_teacher_mask = valid_teacher_mask & (
+                            active_teacher_count >= self.pm_teacher_min_active_teachers
+                        )
                         if self.pm_teacher_abstain_threshold > 0:
-                            max_teacher_conf = selected_conf.max(dim=0).values
+                            selected_conf_active = torch.where(
+                                active_teacher_mask,
+                                selected_conf,
+                                torch.full_like(selected_conf, -1.0),
+                            )
+                            max_teacher_conf = selected_conf_active.max(dim=0).values
                             valid_teacher_mask = valid_teacher_mask & (
                                 max_teacher_conf >= self.pm_teacher_abstain_threshold
+                            )
+                        if self.pm_teacher_consensus_min_ratio > 0:
+                            vote_score = torch.zeros(
+                                (selected_score.size(1), selected_prob.size(2)),
+                                device=selected_score.device,
+                                dtype=selected_score.dtype,
+                            )
+                            vote_score.scatter_add_(
+                                1,
+                                selected_pred.transpose(0, 1),
+                                selected_score.transpose(0, 1),
+                            )
+                            consensus_ratio = vote_score.max(dim=1).values / score_sum.clamp_min(1e-12)
+                            valid_teacher_mask = valid_teacher_mask & (
+                                consensus_ratio >= self.pm_teacher_consensus_min_ratio
                             )
                         if not bool(valid_teacher_mask.any()):
                             continue
@@ -1554,6 +1643,12 @@ class FedCD(Server):
                         teacher_prob = (
                             selected_prob * selected_score.unsqueeze(-1)
                         ).sum(dim=0) / score_sum.clamp_min(1e-12).unsqueeze(-1)
+                        if self.pm_teacher_correct_only:
+                            label_mask = (y >= 0) & (y < teacher_prob.size(1))
+                            teacher_pred = torch.argmax(teacher_prob, dim=1)
+                            valid_teacher_mask = valid_teacher_mask & label_mask & teacher_pred.eq(y)
+                            if not bool(valid_teacher_mask.any()):
+                                continue
 
                     with torch.cuda.amp.autocast(enabled=use_amp):
                         z_gm = gm_adapter(z) if gm_adapter is not None else z

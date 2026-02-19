@@ -36,6 +36,9 @@ class FedAS(Server):
 
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)    
+
+        # FedAS uses custom dispatch path; track downlink explicitly.
+        self.downlink_MB += len(selected_ids) * self.model_size_MB
     
     def aggregate_wrt_fisher(self):
         assert (len(self.uploaded_models) > 0)
@@ -139,4 +142,3 @@ class FedAS(Server):
         avg_fim_histories = np.mean(avg_fim_histories, axis=0)
         formatted_avg = [f"{value:.1f}" for value in avg_fim_histories]
         print(f"Avg Sum_T_FIM : {formatted_avg}")
-

@@ -67,6 +67,10 @@ class Server(object):
         self.model_size_MB = sum(p.numel() for p in self.global_model.parameters()) * 4 / (1024 * 1024)
         self.uplink_MB = 0
         self.downlink_MB = 0
+        # Track last logged cumulative values so CSV records per-eval communication
+        # (FedCD-style) instead of lifetime cumulative totals.
+        self._last_logged_uplink_MB = 0.0
+        self._last_logged_downlink_MB = 0.0
         self.eval_common_global = bool(getattr(args, "eval_common_global", True))
         self.global_test_samples = int(
             getattr(args, "global_test_samples", getattr(args, "common_test_samples", 0))
@@ -301,6 +305,10 @@ class Server(object):
     def evaluate_common_test_acc(self):
         return self.evaluate_global_test_acc()
 
+    def avg_generalization_metrics(self):
+        # Compatibility helper for algorithms (e.g., FedAS) that expect this API.
+        return self.evaluate_global_test_acc()
+
     def train_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
             return [0], [1], [0]
@@ -373,12 +381,16 @@ class Server(object):
                 f.write("round,local_test_acc,global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n")
         
         round_num = len(self.rs_test_acc)
-        total_mb = self.uplink_MB + self.downlink_MB
+        round_uplink = max(0.0, self.uplink_MB - self._last_logged_uplink_MB)
+        round_downlink = max(0.0, self.downlink_MB - self._last_logged_downlink_MB)
+        total_mb = round_uplink + round_downlink
+        self._last_logged_uplink_MB = self.uplink_MB
+        self._last_logged_downlink_MB = self.downlink_MB
         global_str = f"{global_test_acc:.4f}" if global_test_acc is not None else ""
         with open(file_path, "a") as f:
             f.write(
                 f"{round_num},{local_test_acc:.4f},{global_str},{train_loss:.4f},"
-                f"{self.uplink_MB:.2f},{self.downlink_MB:.2f},{total_mb:.2f}\n"
+                f"{round_uplink:.2f},{round_downlink:.2f},{total_mb:.2f}\n"
             )
 
     def print_(self, local_test_acc, test_auc, train_loss):

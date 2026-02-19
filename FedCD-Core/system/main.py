@@ -6,6 +6,7 @@ import os
 import time
 import json
 import warnings
+import re
 import numpy as np
 import torchvision
 import logging
@@ -130,9 +131,18 @@ def run(args):
 
         if model_name == "VGG8":
             return VGG8(num_classes=args.num_classes).to(args.device)
-        
-        if model_name == "VGG8W768":
-            return VGG8(num_classes=args.num_classes, classifier_hidden=768).to(args.device)
+
+        if model_name.startswith("VGG8W"):
+            match = re.fullmatch(r"VGG8W(\d+)", model_name)
+            if match is None:
+                raise ValueError(
+                    f"Invalid model name: {model_name}. "
+                    "Use VGG8 or VGG8W<hidden>, e.g., VGG8W768."
+                )
+            hidden_dim = int(match.group(1))
+            if hidden_dim <= 0:
+                raise ValueError(f"Invalid VGG8 hidden width: {hidden_dim}")
+            return VGG8(num_classes=args.num_classes, classifier_hidden=hidden_dim).to(args.device)
 
         if model_name == "AlexNet":
             return alexnet(pretrained=False, num_classes=args.num_classes).to(args.device)
@@ -571,6 +581,8 @@ if __name__ == "__main__":
                         help="Download proxy dataset when supported (CIFAR10/100).")
     parser.add_argument('--fedcd_pm_teacher_allow_test_fallback', type=str2bool, default=False,
                         help="Allow fallback to target test-union distill set if proxy cannot be loaded.")
+    parser.add_argument('--fedcd_pm_teacher_source', type=str, default="cluster",
+                        help="Teacher source for server_pm_teacher GM distillation: cluster | client.")
     parser.add_argument('--fedcd_pm_teacher_confidence_weight', type=str2bool, default=True,
                         help="Enable teacher-confidence weighting for KL distillation.")
     parser.add_argument('--fedcd_pm_teacher_confidence_min', type=float, default=0.05,
@@ -583,6 +595,14 @@ if __name__ == "__main__":
                         help="Top-k PM teachers per sample for GM distillation (0 = use all teachers).")
     parser.add_argument('--fedcd_pm_teacher_abstain_threshold', type=float, default=0.0,
                         help="Skip distillation for samples whose best teacher confidence is below this threshold (0~1).")
+    parser.add_argument('--fedcd_pm_teacher_teacher_abstain_threshold', type=float, default=0.0,
+                        help="Drop individual PM teachers for a sample when teacher confidence is below this threshold (0~1).")
+    parser.add_argument('--fedcd_pm_teacher_min_active_teachers', type=int, default=1,
+                        help="Minimum number of active PM teachers required per sample after filtering.")
+    parser.add_argument('--fedcd_pm_teacher_consensus_min_ratio', type=float, default=0.0,
+                        help="Minimum weighted teacher majority ratio per sample for distillation (0~1, 0 disables).")
+    parser.add_argument('--fedcd_pm_teacher_correct_only', type=str2bool, default=False,
+                        help="Distill only samples whose PM-teacher ensemble top-1 matches label (requires label-compatible proxy dataset).")
     parser.add_argument('--fedcd_pm_teacher_rel_weight', type=float, default=0.2,
                         help="Relational KD weight (sample-similarity matching) for PM-teacher GM distillation.")
     parser.add_argument('--fedcd_pm_teacher_rel_batch', type=int, default=64,
