@@ -33,7 +33,7 @@ for algo in "${algorithms[@]}"; do
         GR=100
         LR=0.005
         LBS=128
-        LS=1
+        LS=2
         JOIN_RATIO=1.0
         EXTRA_ARGS=()
 
