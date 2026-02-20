@@ -1,0 +1,2249 @@
+
+[Info] Experiment logs will be saved to: /home/mulsoap0504/FedCD/FedCD-Baseline/logs/FedAvg/GM_VGG8/pat/NC_20/date_20260219/time_060305
+
+==================================================
+goal = train
+device = cuda
+device_id = 0
+dataset = Cifar10_pat_nc20
+num_classes = 10
+model = VGG8
+batch_size = 128
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 5
+top_cnt = 100
+local_epochs = 2
+algorithm = FedAvg
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 20
+prev = 0
+times = 1
+eval_gap = 1
+eval_common_global = True
+global_test_samples = 0
+common_eval_batch_size = 256
+save_folder_name = items
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+exp_dir = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/FedAvg/GM_VGG8/pat/NC_20/date_20260219/time_060305
+log_path = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/FedAvg/GM_VGG8/pat/NC_20/date_20260219/time_060305/acc.csv
+==================================================
+
+============= Running time: 0th =============
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=10, bias=True)
+  )
+)
+[Baseline] Global Test Set Size: 10000
+
+Join ratio / total clients: 1.0 / 20
+Finished creating server and clients.
+Global Rounds:   0%|          | 0/6 [00:00<?, ?it/s]
+Distributing models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                           [A
+-------------Round number: 0-------------
+
+Evaluate global model
+
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+Testing clients:   5%|▌         | 1/20 [00:00<00:14,  1.34it/s][A
+Testing clients:  15%|█▌        | 3/20 [00:00<00:04,  4.11it/s][A
+Testing clients:  25%|██▌       | 5/20 [00:01<00:02,  6.61it/s][A
+Testing clients:  35%|███▌      | 7/20 [00:01<00:01,  8.78it/s][A
+Testing clients:  45%|████▌     | 9/20 [00:01<00:01,  9.56it/s][A
+Testing clients:  55%|█████▌    | 11/20 [00:01<00:00, 10.98it/s][A
+Testing clients:  65%|██████▌   | 13/20 [00:01<00:00, 12.14it/s][A
+Testing clients:  75%|███████▌  | 15/20 [00:01<00:00, 13.07it/s][A
+Testing clients:  85%|████████▌ | 17/20 [00:01<00:00, 13.87it/s][A
+Testing clients:  95%|█████████▌| 19/20 [00:01<00:00, 14.40it/s][A
+                                                                [A
+Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s][A
+Calculating train metrics:   5%|▌         | 1/20 [00:00<00:05,  3.48it/s][A
+Calculating train metrics:  10%|█         | 2/20 [00:00<00:05,  3.58it/s][A
+Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.60it/s][A
+Calculating train metrics:  20%|██        | 4/20 [00:01<00:04,  3.62it/s][A
+Calculating train metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.61it/s][A
+Calculating train metrics:  30%|███       | 6/20 [00:01<00:03,  3.61it/s][A
+Calculating train metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.61it/s][A
+Calculating train metrics:  40%|████      | 8/20 [00:02<00:03,  3.60it/s][A
+Calculating train metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.59it/s][A
+Calculating train metrics:  50%|█████     | 10/20 [00:02<00:02,  3.58it/s][A
+Calculating train metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.44it/s][A
+Calculating train metrics:  60%|██████    | 12/20 [00:03<00:02,  3.48it/s][A
+Calculating train metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.50it/s][A
+Calculating train metrics:  70%|███████   | 14/20 [00:03<00:01,  3.52it/s][A
+Calculating train metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.52it/s][A
+Calculating train metrics:  80%|████████  | 16/20 [00:04<00:01,  3.53it/s][A
+Calculating train metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.56it/s][A
+Calculating train metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.57it/s][A
+Calculating train metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.60it/s][A
+Calculating train metrics: 100%|██████████| 20/20 [00:05<00:00,  3.61it/s][A
+                                                                          [AAveraged Train Loss: 2.3035
+Averaged Local Test Accuracy: 0.1000
+Averaged Global Test Accuracy: 0.1000
+Averaged Test AUC: 0.5009
+Std Test Accuracy: 0.2000
+Std Test AUC: 0.1982
+
+Training clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:   5%|▌         | 1/20 [00:00<00:02,  9.08it/s][A[A
+
+Client 7 Training:  30%|███       | 6/20 [00:00<00:00, 30.27it/s][A[A
+
+Client 7 Training:  55%|█████▌    | 11/20 [00:00<00:00, 36.44it/s][A[A
+
+Client 7 Training:  80%|████████  | 16/20 [00:00<00:00, 39.35it/s][A[A
+
+                                                                  [A[A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.09it/s][A[A
+
+Client 7 Training:  50%|█████     | 10/20 [00:00<00:00, 44.68it/s][A[A
+
+Client 7 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.51it/s][A[A
+
+Client 7 Training: 100%|██████████| 20/20 [00:00<00:00, 44.98it/s][A[A
+
+                                                                  [A[A
+Training clients:   5%|▌         | 1/20 [00:01<00:23,  1.21s/it][A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  25%|██▌       | 5/20 [00:00<00:00, 45.00it/s][A[A
+
+Client 9 Training:  50%|█████     | 10/20 [00:00<00:00, 45.11it/s][A[A
+
+Client 9 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.64it/s][A[A
+
+Client 9 Training: 100%|██████████| 20/20 [00:00<00:00, 44.58it/s][A[A
+
+                                                                  [A[A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.24it/s][A[A
+
+Client 9 Training:  50%|█████     | 10/20 [00:00<00:00, 43.94it/s][A[A
+
+Client 9 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.02it/s][A[A
+
+Client 9 Training: 100%|██████████| 20/20 [00:00<00:00, 44.24it/s][A[A
+
+                                                                  [A[A
+Training clients:  10%|█         | 2/20 [00:02<00:20,  1.15s/it][A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.88it/s][A[A
+
+Client 3 Training:  50%|█████     | 10/20 [00:00<00:00, 43.84it/s][A[A
+
+Client 3 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.03it/s][A[A
+
+Client 3 Training: 100%|██████████| 20/20 [00:00<00:00, 44.60it/s][A[A
+
+                                                                  [A[A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.03it/s][A[A
+
+Client 3 Training:  50%|█████     | 10/20 [00:00<00:00, 44.66it/s][A[A
+
+Client 3 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.51it/s][A[A
+
+Client 3 Training: 100%|██████████| 20/20 [00:00<00:00, 44.53it/s][A[A
+
+                                                                  [A[A
+Training clients:  15%|█▌        | 3/20 [00:03<00:19,  1.13s/it][A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.76it/s][A[A
+
+Client 13 Training:  50%|█████     | 10/20 [00:00<00:00, 44.92it/s][A[A
+
+Client 13 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.86it/s][A[A
+
+Client 13 Training: 100%|██████████| 20/20 [00:00<00:00, 45.56it/s][A[A
+
+                                                                   [A[A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  15%|█▌        | 3/20 [00:00<00:00, 23.55it/s][A[A
+
+Client 13 Training:  40%|████      | 8/20 [00:00<00:00, 34.37it/s][A[A
+
+Client 13 Training:  65%|██████▌   | 13/20 [00:00<00:00, 38.44it/s][A[A
+
+Client 13 Training:  90%|█████████ | 18/20 [00:00<00:00, 40.40it/s][A[A
+
+                                                                   [A[A
+Training clients:  20%|██        | 4/20 [00:04<00:19,  1.21s/it][A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.92it/s][A[A
+
+Client 6 Training:  50%|█████     | 10/20 [00:00<00:00, 45.58it/s][A[A
+
+Client 6 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.86it/s][A[A
+
+Client 6 Training: 100%|██████████| 20/20 [00:00<00:00, 45.23it/s][A[A
+
+                                                                  [A[A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.49it/s][A[A
+
+Client 6 Training:  50%|█████     | 10/20 [00:00<00:00, 44.32it/s][A[A
+
+Client 6 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.61it/s][A[A
+
+Client 6 Training: 100%|██████████| 20/20 [00:00<00:00, 44.63it/s][A[A
+
+                                                                  [A[A
+Training clients:  25%|██▌       | 5/20 [00:05<00:17,  1.17s/it][A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.68it/s][A[A
+
+Client 11 Training:  50%|█████     | 10/20 [00:00<00:00, 43.70it/s][A[A
+
+Client 11 Training:  75%|███████▌  | 15/20 [00:00<00:00, 43.97it/s][A[A
+
+Client 11 Training: 100%|██████████| 20/20 [00:00<00:00, 44.10it/s][A[A
+
+                                                                   [A[A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.72it/s][A[A
+
+Client 11 Training:  50%|█████     | 10/20 [00:00<00:00, 44.79it/s][A[A
+
+Client 11 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.23it/s][A[A
+
+Client 11 Training: 100%|██████████| 20/20 [00:00<00:00, 44.00it/s][A[A
+
+                                                                   [A[A
+Training clients:  30%|███       | 6/20 [00:06<00:16,  1.15s/it][A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  25%|██▌       | 5/20 [00:00<00:00, 42.99it/s][A[A
+
+Client 2 Training:  50%|█████     | 10/20 [00:00<00:00, 43.30it/s][A[A
+
+Client 2 Training:  75%|███████▌  | 15/20 [00:00<00:00, 43.70it/s][A[A
+
+Client 2 Training: 100%|██████████| 20/20 [00:00<00:00, 44.12it/s][A[A
+
+                                                                  [A[A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.19it/s][A[A
+
+Client 2 Training:  50%|█████     | 10/20 [00:00<00:00, 44.18it/s][A[A
+
+Client 2 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.44it/s][A[A
+
+Client 2 Training: 100%|██████████| 20/20 [00:00<00:00, 44.85it/s][A[A
+
+                                                                  [A[A
+Training clients:  35%|███▌      | 7/20 [00:08<00:14,  1.13s/it][A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.82it/s][A[A
+
+Client 15 Training:  50%|█████     | 10/20 [00:00<00:00, 44.29it/s][A[A
+
+Client 15 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.14it/s][A[A
+
+Client 15 Training: 100%|██████████| 20/20 [00:00<00:00, 44.22it/s][A[A
+
+                                                                   [A[A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.51it/s][A[A
+
+Client 15 Training:  50%|█████     | 10/20 [00:00<00:00, 43.80it/s][A[A
+
+Client 15 Training:  75%|███████▌  | 15/20 [00:00<00:00, 43.94it/s][A[A
+
+Client 15 Training: 100%|██████████| 20/20 [00:00<00:00, 44.22it/s][A[A
+
+                                                                   [A[A
+Training clients:  40%|████      | 8/20 [00:09<00:13,  1.13s/it][A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.17it/s][A[A
+
+Client 19 Training:  50%|█████     | 10/20 [00:00<00:00, 44.41it/s][A[A
+
+Client 19 Training:  75%|███████▌  | 15/20 [00:00<00:00, 45.05it/s][A[A
+
+Client 19 Training: 100%|██████████| 20/20 [00:00<00:00, 36.25it/s][A[A
+
+                                                                   [A[A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.41it/s][A[A
+
+Client 19 Training:  50%|█████     | 10/20 [00:00<00:00, 43.90it/s][A[A
+
+Client 19 Training:  75%|███████▌  | 15/20 [00:00<00:00, 43.78it/s][A[A
+
+Client 19 Training: 100%|██████████| 20/20 [00:00<00:00, 44.32it/s][A[A
+
+                                                                   [A[A
+Training clients:  45%|████▌     | 9/20 [00:10<00:12,  1.14s/it][A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.58it/s][A[A
+
+Client 5 Training:  50%|█████     | 10/20 [00:00<00:00, 45.10it/s][A[A
+
+Client 5 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.59it/s][A[A
+
+Client 5 Training: 100%|██████████| 20/20 [00:00<00:00, 44.55it/s][A[A
+
+                                                                  [A[A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  25%|██▌       | 5/20 [00:00<00:00, 45.01it/s][A[A
+
+Client 5 Training:  50%|█████     | 10/20 [00:00<00:00, 44.06it/s][A[A
+
+Client 5 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.04it/s][A[A
+
+Client 5 Training: 100%|██████████| 20/20 [00:00<00:00, 44.10it/s][A[A
+
+                                                                  [A[A
+Training clients:  50%|█████     | 10/20 [00:11<00:11,  1.14s/it][A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.47it/s][A[A
+
+Client 14 Training:  50%|█████     | 10/20 [00:00<00:00, 44.20it/s][A[A
+
+Client 14 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.32it/s][A[A
+
+Client 14 Training: 100%|██████████| 20/20 [00:00<00:00, 44.29it/s][A[A
+
+                                                                   [A[A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.93it/s][A[A
+
+Client 14 Training:  50%|█████     | 10/20 [00:00<00:00, 44.58it/s][A[A
+
+Client 14 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.54it/s][A[A
+
+Client 14 Training: 100%|██████████| 20/20 [00:00<00:00, 43.98it/s][A[A
+
+                                                                   [A[A
+Training clients:  55%|█████▌    | 11/20 [00:12<00:10,  1.14s/it][A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.36it/s][A[A
+
+Client 1 Training:  50%|█████     | 10/20 [00:00<00:00, 44.45it/s][A[A
+
+Client 1 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.18it/s][A[A
+
+Client 1 Training: 100%|██████████| 20/20 [00:00<00:00, 44.21it/s][A[A
+
+                                                                  [A[A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  25%|██▌       | 5/20 [00:00<00:00, 48.77it/s][A[A
+
+Client 1 Training:  50%|█████     | 10/20 [00:00<00:00, 46.84it/s][A[A
+
+Client 1 Training:  75%|███████▌  | 15/20 [00:00<00:00, 47.16it/s][A[A
+
+Client 1 Training: 100%|██████████| 20/20 [00:00<00:00, 45.89it/s][A[A
+
+                                                                  [A[A
+Training clients:  60%|██████    | 12/20 [00:13<00:08,  1.12s/it][A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.43it/s][A[A
+
+Client 16 Training:  50%|█████     | 10/20 [00:00<00:00, 43.25it/s][A[A
+
+Client 16 Training:  75%|███████▌  | 15/20 [00:00<00:00, 43.92it/s][A[A
+
+Client 16 Training: 100%|██████████| 20/20 [00:00<00:00, 44.25it/s][A[A
+
+                                                                   [A[A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  25%|██▌       | 5/20 [00:00<00:00, 45.12it/s][A[A
+
+Client 16 Training:  50%|█████     | 10/20 [00:00<00:00, 44.98it/s][A[A
+
+Client 16 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.36it/s][A[A
+
+Client 16 Training: 100%|██████████| 20/20 [00:00<00:00, 44.51it/s][A[A
+
+                                                                   [A[A
+Training clients:  65%|██████▌   | 13/20 [00:14<00:07,  1.12s/it][A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  25%|██▌       | 5/20 [00:00<00:00, 42.62it/s][A[A
+
+Client 8 Training:  50%|█████     | 10/20 [00:00<00:00, 43.30it/s][A[A
+
+Client 8 Training:  75%|███████▌  | 15/20 [00:00<00:00, 34.24it/s][A[A
+
+Client 8 Training: 100%|██████████| 20/20 [00:00<00:00, 37.64it/s][A[A
+
+                                                                  [A[A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.64it/s][A[A
+
+Client 8 Training:  50%|█████     | 10/20 [00:00<00:00, 44.76it/s][A[A
+
+Client 8 Training:  75%|███████▌  | 15/20 [00:00<00:00, 43.96it/s][A[A
+
+Client 8 Training: 100%|██████████| 20/20 [00:00<00:00, 44.28it/s][A[A
+
+                                                                  [A[A
+Training clients:  70%|███████   | 14/20 [00:16<00:06,  1.14s/it][A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  25%|██▌       | 5/20 [00:00<00:00, 42.87it/s][A[A
+
+Client 18 Training:  50%|█████     | 10/20 [00:00<00:00, 43.98it/s][A[A
+
+Client 18 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.33it/s][A[A
+
+Client 18 Training: 100%|██████████| 20/20 [00:00<00:00, 44.70it/s][A[A
+
+                                                                   [A[A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.67it/s][A[A
+
+Client 18 Training:  50%|█████     | 10/20 [00:00<00:00, 43.45it/s][A[A
+
+Client 18 Training:  75%|███████▌  | 15/20 [00:00<00:00, 43.65it/s][A[A
+
+Client 18 Training: 100%|██████████| 20/20 [00:00<00:00, 43.86it/s][A[A
+
+                                                                   [A[A
+Training clients:  75%|███████▌  | 15/20 [00:17<00:05,  1.13s/it][A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.09it/s][A[A
+
+Client 0 Training:  50%|█████     | 10/20 [00:00<00:00, 44.49it/s][A[A
+
+Client 0 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.63it/s][A[A
+
+Client 0 Training: 100%|██████████| 20/20 [00:00<00:00, 44.50it/s][A[A
+
+                                                                  [A[A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.17it/s][A[A
+
+Client 0 Training:  50%|█████     | 10/20 [00:00<00:00, 44.47it/s][A[A
+
+Client 0 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.84it/s][A[A
+
+Client 0 Training: 100%|██████████| 20/20 [00:00<00:00, 44.56it/s][A[A
+
+                                                                  [A[A
+Training clients:  80%|████████  | 16/20 [00:18<00:04,  1.13s/it][A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.88it/s][A[A
+
+Client 12 Training:  50%|█████     | 10/20 [00:00<00:00, 44.05it/s][A[A
+
+Client 12 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.27it/s][A[A
+
+Client 12 Training: 100%|██████████| 20/20 [00:00<00:00, 44.60it/s][A[A
+
+                                                                   [A[A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  25%|██▌       | 5/20 [00:00<00:00, 44.46it/s][A[A
+
+Client 12 Training:  50%|█████     | 10/20 [00:00<00:00, 45.14it/s][A[A
+
+Client 12 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.29it/s][A[A
+
+Client 12 Training: 100%|██████████| 20/20 [00:00<00:00, 44.31it/s][A[A
+
+                                                                   [A[A
+Training clients:  85%|████████▌ | 17/20 [00:19<00:03,  1.12s/it][A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.79it/s][A[A
+
+Client 17 Training:  50%|█████     | 10/20 [00:00<00:00, 44.01it/s][A[A
+
+Client 17 Training:  75%|███████▌  | 15/20 [00:00<00:00, 43.78it/s][A[A
+
+Client 17 Training: 100%|██████████| 20/20 [00:00<00:00, 44.05it/s][A[A
+
+                                                                   [A[A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  25%|██▌       | 5/20 [00:00<00:00, 46.02it/s][A[A
+
+Client 17 Training:  50%|█████     | 10/20 [00:00<00:00, 45.35it/s][A[A
+
+Client 17 Training:  75%|███████▌  | 15/20 [00:00<00:00, 45.27it/s][A[A
+
+Client 17 Training: 100%|██████████| 20/20 [00:00<00:00, 44.81it/s][A[A
+
+                                                                   [A[A
+Training clients:  90%|█████████ | 18/20 [00:20<00:02,  1.12s/it][A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  25%|██▌       | 5/20 [00:00<00:00, 43.93it/s][A[A
+
+Client 10 Training:  50%|█████     | 10/20 [00:00<00:00, 43.99it/s][A[A
+
+Client 10 Training:  75%|███████▌  | 15/20 [00:00<00:00, 44.02it/s][A[A
+
+Client 10 Training: 100%|██████████| 20/20 [00:00<00:00, 44.28it/s][A[A
+
+                                                                   [A[A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  20%|██        | 4/20 [00:00<00:00, 31.49it/s][A[A
+
+Client 10 Training:  40%|████      | 8/20 [00:00<00:00, 32.07it/s][A[A
+
+Client 10 Training:  85%|████████▌ | 17/20 [00:00<00:00, 53.66it/s][A[A
+
+                                                                   [A[A
+Training clients:  95%|█████████▌| 19/20 [00:21<00:01,  1.10s/it][A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  60%|██████    | 12/20 [00:00<00:00, 112.05it/s][A[A
+
+                                                                   [A[A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  60%|██████    | 12/20 [00:00<00:00, 112.52it/s][A[A
+
+                                                                   [A[A
+Training clients: 100%|██████████| 20/20 [00:22<00:00,  1.07it/s][A
+                                                                 [A
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                         [A
+Aggregating models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                          [A------------------------- time cost ------------------------- 33.230308055877686
+Global Rounds:  17%|█▋        | 1/6 [00:33<02:46, 33.23s/it]
+Distributing models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                           [A
+-------------Round number: 1-------------
+
+Evaluate global model
+
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+Testing clients:  10%|█         | 2/20 [00:00<00:01, 16.11it/s][A
+Testing clients:  20%|██        | 4/20 [00:00<00:00, 17.23it/s][A
+Testing clients:  30%|███       | 6/20 [00:00<00:00, 17.13it/s][A
+Testing clients:  40%|████      | 8/20 [00:00<00:00, 17.31it/s][A
+Testing clients:  50%|█████     | 10/20 [00:00<00:00, 17.40it/s][A
+Testing clients:  60%|██████    | 12/20 [00:00<00:00, 17.55it/s][A
+Testing clients:  70%|███████   | 14/20 [00:00<00:00, 17.51it/s][A
+Testing clients:  80%|████████  | 16/20 [00:00<00:00, 17.14it/s][A
+Testing clients:  90%|█████████ | 18/20 [00:01<00:00, 16.83it/s][A
+Testing clients: 100%|██████████| 20/20 [00:01<00:00, 17.18it/s][A
+                                                                [A
+Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s][A
+Calculating train metrics:   5%|▌         | 1/20 [00:00<00:04,  3.98it/s][A
+Calculating train metrics:  10%|█         | 2/20 [00:00<00:04,  3.90it/s][A
+Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.87it/s][A
+Calculating train metrics:  20%|██        | 4/20 [00:01<00:04,  3.82it/s][A
+Calculating train metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.70it/s][A
+Calculating train metrics:  30%|███       | 6/20 [00:01<00:03,  3.72it/s][A
+Calculating train metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.74it/s][A
+Calculating train metrics:  40%|████      | 8/20 [00:02<00:03,  3.77it/s][A
+Calculating train metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.76it/s][A
+Calculating train metrics:  50%|█████     | 10/20 [00:02<00:02,  3.76it/s][A
+Calculating train metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.76it/s][A
+Calculating train metrics:  60%|██████    | 12/20 [00:03<00:02,  3.81it/s][A
+Calculating train metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.81it/s][A
+Calculating train metrics:  70%|███████   | 14/20 [00:03<00:01,  3.74it/s][A
+Calculating train metrics:  75%|███████▌  | 15/20 [00:03<00:01,  3.75it/s][A
+Calculating train metrics:  80%|████████  | 16/20 [00:04<00:01,  3.82it/s][A
+Calculating train metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.83it/s][A
+Calculating train metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.89it/s][A
+Calculating train metrics:  95%|█████████▌| 19/20 [00:04<00:00,  3.88it/s][A
+Calculating train metrics: 100%|██████████| 20/20 [00:05<00:00,  3.93it/s][A
+                                                                          [AAveraged Train Loss: 2.2146
+Averaged Local Test Accuracy: 0.4150
+Averaged Global Test Accuracy: 0.1115
+Averaged Test AUC: 0.6154
+Std Test Accuracy: 0.1571
+Std Test AUC: 0.1375
+
+Training clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.72it/s][A[A
+
+                                                                   [A[A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  60%|██████    | 12/20 [00:00<00:00, 114.00it/s][A[A
+
+                                                                   [A[A
+Training clients:   5%|▌         | 1/20 [00:00<00:10,  1.77it/s][A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.36it/s][A[A
+
+                                                                    [A[A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  60%|██████    | 12/20 [00:00<00:00, 111.13it/s][A[A
+
+                                                                    [A[A
+Training clients:  10%|█         | 2/20 [00:01<00:10,  1.78it/s][A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.24it/s][A[A
+
+                                                                   [A[A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  60%|██████    | 12/20 [00:00<00:00, 113.76it/s][A[A
+
+                                                                   [A[A
+Training clients:  15%|█▌        | 3/20 [00:01<00:09,  1.74it/s][A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  55%|█████▌    | 11/20 [00:00<00:00, 104.08it/s][A[A
+
+                                                                    [A[A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  55%|█████▌    | 11/20 [00:00<00:00, 97.72it/s][A[A
+
+                                                                   [A[A
+Training clients:  20%|██        | 4/20 [00:02<00:09,  1.71it/s][A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  60%|██████    | 12/20 [00:00<00:00, 111.49it/s][A[A
+
+                                                                    [A[A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  35%|███▌      | 7/20 [00:00<00:00, 59.91it/s][A[A
+
+Client 18 Training:  90%|█████████ | 18/20 [00:00<00:00, 85.87it/s][A[A
+
+                                                                   [A[A
+Training clients:  25%|██▌       | 5/20 [00:02<00:09,  1.67it/s][A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.20it/s][A[A
+
+                                                                    [A[A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.02it/s][A[A
+
+                                                                    [A[A
+Training clients:  30%|███       | 6/20 [00:03<00:08,  1.70it/s][A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.12it/s][A[A
+
+                                                                   [A[A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  60%|██████    | 12/20 [00:00<00:00, 112.92it/s][A[A
+
+                                                                   [A[A
+Training clients:  35%|███▌      | 7/20 [00:04<00:07,  1.71it/s][A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.16it/s][A[A
+
+                                                                   [A[A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  60%|██████    | 12/20 [00:00<00:00, 113.76it/s][A[A
+
+                                                                   [A[A
+Training clients:  40%|████      | 8/20 [00:04<00:06,  1.72it/s][A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 111.00it/s][A[A
+
+                                                                    [A[A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 112.35it/s][A[A
+
+                                                                    [A[A
+Training clients:  45%|████▌     | 9/20 [00:05<00:06,  1.73it/s][A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  55%|█████▌    | 11/20 [00:00<00:00, 105.65it/s][A[A
+
+                                                                    [A[A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  60%|██████    | 12/20 [00:00<00:00, 114.41it/s][A[A
+
+                                                                    [A[A
+Training clients:  50%|█████     | 10/20 [00:05<00:05,  1.74it/s][A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  60%|██████    | 12/20 [00:00<00:00, 112.16it/s][A[A
+
+                                                                   [A[A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  60%|██████    | 12/20 [00:00<00:00, 114.32it/s][A[A
+
+                                                                   [A[A
+Training clients:  55%|█████▌    | 11/20 [00:06<00:05,  1.75it/s][A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.08it/s][A[A
+
+                                                                    [A[A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  60%|██████    | 12/20 [00:00<00:00, 113.80it/s][A[A
+
+                                                                    [A[A
+Training clients:  60%|██████    | 12/20 [00:06<00:04,  1.74it/s][A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  60%|██████    | 12/20 [00:00<00:00, 110.97it/s][A[A
+
+                                                                    [A[A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  60%|██████    | 12/20 [00:00<00:00, 111.86it/s][A[A
+
+                                                                    [A[A
+Training clients:  65%|██████▌   | 13/20 [00:07<00:04,  1.74it/s][A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  25%|██▌       | 5/20 [00:00<00:00, 47.52it/s][A[A
+
+Client 0 Training:  80%|████████  | 16/20 [00:00<00:00, 82.69it/s][A[A
+
+                                                                  [A[A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  60%|██████    | 12/20 [00:00<00:00, 110.27it/s][A[A
+
+                                                                   [A[A
+Training clients:  70%|███████   | 14/20 [00:08<00:03,  1.68it/s][A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.92it/s][A[A
+
+                                                                   [A[A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.63it/s][A[A
+
+                                                                   [A[A
+Training clients:  75%|███████▌  | 15/20 [00:08<00:02,  1.70it/s][A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.98it/s][A[A
+
+                                                                    [A[A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.41it/s][A[A
+
+                                                                    [A[A
+Training clients:  80%|████████  | 16/20 [00:09<00:02,  1.71it/s][A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.07it/s][A[A
+
+                                                                   [A[A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  60%|██████    | 12/20 [00:00<00:00, 111.03it/s][A[A
+
+                                                                   [A[A
+Training clients:  85%|████████▌ | 17/20 [00:09<00:01,  1.74it/s][A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.06it/s][A[A
+
+                                                                    [A[A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  60%|██████    | 12/20 [00:00<00:00, 112.40it/s][A[A
+
+                                                                    [A[A
+Training clients:  90%|█████████ | 18/20 [00:10<00:01,  1.74it/s][A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  60%|██████    | 12/20 [00:00<00:00, 110.73it/s][A[A
+
+                                                                   [A[A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  60%|██████    | 12/20 [00:00<00:00, 113.32it/s][A[A
+
+                                                                   [A[A
+Training clients:  95%|█████████▌| 19/20 [00:11<00:00,  1.61it/s][A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  45%|████▌     | 9/20 [00:00<00:00, 87.44it/s][A[A
+
+Client 1 Training:  95%|█████████▌| 19/20 [00:00<00:00, 81.56it/s][A[A
+
+                                                                  [A[A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.53it/s][A[A
+
+                                                                   [A[A
+Training clients: 100%|██████████| 20/20 [00:11<00:00,  1.60it/s][A
+                                                                 [A
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                         [A
+Aggregating models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                          [A------------------------- time cost ------------------------- 21.18281888961792
+Global Rounds:  33%|███▎      | 2/6 [00:54<01:44, 26.14s/it]
+Distributing models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                           [A
+-------------Round number: 2-------------
+
+Evaluate global model
+
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+Testing clients:  10%|█         | 2/20 [00:00<00:00, 18.29it/s][A
+Testing clients:  20%|██        | 4/20 [00:00<00:00, 18.27it/s][A
+Testing clients:  30%|███       | 6/20 [00:00<00:00, 18.16it/s][A
+Testing clients:  40%|████      | 8/20 [00:00<00:00, 17.95it/s][A
+Testing clients:  50%|█████     | 10/20 [00:00<00:00, 17.81it/s][A
+Testing clients:  60%|██████    | 12/20 [00:00<00:00, 17.73it/s][A
+Testing clients:  70%|███████   | 14/20 [00:00<00:00, 17.46it/s][A
+Testing clients:  80%|████████  | 16/20 [00:00<00:00, 17.35it/s][A
+Testing clients:  90%|█████████ | 18/20 [00:01<00:00, 17.45it/s][A
+Testing clients: 100%|██████████| 20/20 [00:01<00:00, 17.60it/s][A
+                                                                [A
+Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s][A
+Calculating train metrics:   5%|▌         | 1/20 [00:00<00:04,  3.83it/s][A
+Calculating train metrics:  10%|█         | 2/20 [00:00<00:04,  3.84it/s][A
+Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.85it/s][A
+Calculating train metrics:  20%|██        | 4/20 [00:01<00:04,  3.87it/s][A
+Calculating train metrics:  25%|██▌       | 5/20 [00:01<00:03,  3.88it/s][A
+Calculating train metrics:  30%|███       | 6/20 [00:01<00:03,  3.86it/s][A
+Calculating train metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.86it/s][A
+Calculating train metrics:  40%|████      | 8/20 [00:02<00:03,  3.86it/s][A
+Calculating train metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.85it/s][A
+Calculating train metrics:  50%|█████     | 10/20 [00:02<00:02,  3.83it/s][A
+Calculating train metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.82it/s][A
+Calculating train metrics:  60%|██████    | 12/20 [00:03<00:02,  3.82it/s][A
+Calculating train metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.79it/s][A
+Calculating train metrics:  70%|███████   | 14/20 [00:03<00:01,  3.72it/s][A
+Calculating train metrics:  75%|███████▌  | 15/20 [00:03<00:01,  3.56it/s][A
+Calculating train metrics:  80%|████████  | 16/20 [00:04<00:01,  3.64it/s][A
+Calculating train metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.69it/s][A
+Calculating train metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.71it/s][A
+Calculating train metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.73it/s][A
+Calculating train metrics: 100%|██████████| 20/20 [00:05<00:00,  3.76it/s][A
+                                                                          [AAveraged Train Loss: 2.1670
+Averaged Local Test Accuracy: 0.4239
+Averaged Global Test Accuracy: 0.1382
+Averaged Test AUC: 0.6723
+Std Test Accuracy: 0.0907
+Std Test AUC: 0.0947
+
+Training clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  55%|█████▌    | 11/20 [00:00<00:00, 105.93it/s][A[A
+
+                                                                    [A[A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  60%|██████    | 12/20 [00:00<00:00, 112.21it/s][A[A
+
+                                                                    [A[A
+Training clients:   5%|▌         | 1/20 [00:00<00:11,  1.69it/s][A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.20it/s][A[A
+
+                                                                   [A[A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  60%|██████    | 12/20 [00:00<00:00, 111.72it/s][A[A
+
+                                                                   [A[A
+Training clients:  10%|█         | 2/20 [00:01<00:10,  1.72it/s][A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.92it/s][A[A
+
+                                                                   [A[A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  60%|██████    | 12/20 [00:00<00:00, 111.45it/s][A[A
+
+                                                                   [A[A
+Training clients:  15%|█▌        | 3/20 [00:01<00:09,  1.73it/s][A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.50it/s][A[A
+
+                                                                   [A[A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  60%|██████    | 12/20 [00:00<00:00, 111.81it/s][A[A
+
+                                                                   [A[A
+Training clients:  20%|██        | 4/20 [00:02<00:09,  1.74it/s][A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.30it/s][A[A
+
+                                                                   [A[A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  60%|██████    | 12/20 [00:00<00:00, 110.05it/s][A[A
+
+                                                                   [A[A
+Training clients:  25%|██▌       | 5/20 [00:02<00:08,  1.74it/s][A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  30%|███       | 6/20 [00:00<00:00, 56.34it/s][A[A
+
+Client 11 Training:  85%|████████▌ | 17/20 [00:00<00:00, 86.46it/s][A[A
+
+                                                                   [A[A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.60it/s][A[A
+
+                                                                    [A[A
+Training clients:  30%|███       | 6/20 [00:03<00:08,  1.68it/s][A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  60%|██████    | 12/20 [00:00<00:00, 111.73it/s][A[A
+
+                                                                    [A[A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  60%|██████    | 12/20 [00:00<00:00, 112.18it/s][A[A
+
+                                                                    [A[A
+Training clients:  35%|███▌      | 7/20 [00:04<00:07,  1.70it/s][A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  60%|██████    | 12/20 [00:00<00:00, 113.21it/s][A[A
+
+                                                                    [A[A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  60%|██████    | 12/20 [00:00<00:00, 111.63it/s][A[A
+
+                                                                    [A[A
+Training clients:  40%|████      | 8/20 [00:04<00:07,  1.59it/s][A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  60%|██████    | 12/20 [00:00<00:00, 112.35it/s][A[A
+
+                                                                    [A[A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  60%|██████    | 12/20 [00:00<00:00, 111.83it/s][A[A
+
+                                                                    [A[A
+Training clients:  45%|████▌     | 9/20 [00:05<00:06,  1.64it/s][A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  60%|██████    | 12/20 [00:00<00:00, 111.03it/s][A[A
+
+                                                                    [A[A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  60%|██████    | 12/20 [00:00<00:00, 110.50it/s][A[A
+
+                                                                    [A[A
+Training clients:  50%|█████     | 10/20 [00:05<00:05,  1.67it/s][A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.56it/s][A[A
+
+                                                                   [A[A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  40%|████      | 8/20 [00:00<00:00, 59.60it/s][A[A
+
+Client 5 Training: 100%|██████████| 20/20 [00:00<00:00, 87.40it/s][A[A
+
+                                                                  [A[A
+Training clients:  55%|█████▌    | 11/20 [00:06<00:05,  1.65it/s][A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.95it/s][A[A
+
+                                                                    [A[A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  60%|██████    | 12/20 [00:00<00:00, 110.12it/s][A[A
+
+                                                                    [A[A
+Training clients:  60%|██████    | 12/20 [00:07<00:04,  1.66it/s][A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.68it/s][A[A
+
+                                                                   [A[A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  50%|█████     | 10/20 [00:00<00:00, 93.79it/s][A[A
+
+Client 6 Training: 100%|██████████| 20/20 [00:00<00:00, 95.13it/s][A[A
+
+                                                                  [A[A
+Training clients:  65%|██████▌   | 13/20 [00:07<00:04,  1.66it/s][A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.28it/s][A[A
+
+                                                                   [A[A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  60%|██████    | 12/20 [00:00<00:00, 110.21it/s][A[A
+
+                                                                   [A[A
+Training clients:  70%|███████   | 14/20 [00:08<00:03,  1.69it/s][A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.56it/s][A[A
+
+                                                                    [A[A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.59it/s][A[A
+
+                                                                    [A[A
+Training clients:  75%|███████▌  | 15/20 [00:08<00:02,  1.70it/s][A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.03it/s][A[A
+
+                                                                    [A[A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 112.04it/s][A[A
+
+                                                                    [A[A
+Training clients:  80%|████████  | 16/20 [00:09<00:02,  1.72it/s][A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.73it/s][A[A
+
+                                                                   [A[A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  60%|██████    | 12/20 [00:00<00:00, 110.33it/s][A[A
+
+                                                                   [A[A
+Training clients:  85%|████████▌ | 17/20 [00:10<00:01,  1.73it/s][A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.23it/s][A[A
+
+                                                                   [A[A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  60%|██████    | 12/20 [00:00<00:00, 112.98it/s][A[A
+
+                                                                   [A[A
+Training clients:  90%|█████████ | 18/20 [00:10<00:01,  1.69it/s][A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.44it/s][A[A
+
+                                                                   [A[A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  60%|██████    | 12/20 [00:00<00:00, 110.12it/s][A[A
+
+                                                                   [A[A
+Training clients:  95%|█████████▌| 19/20 [00:11<00:00,  1.71it/s][A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.59it/s][A[A
+
+                                                                    [A[A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  55%|█████▌    | 11/20 [00:00<00:00, 88.43it/s][A[A
+
+Client 18 Training: 100%|██████████| 20/20 [00:00<00:00, 82.16it/s][A[A
+
+                                                                   [A[A
+Training clients: 100%|██████████| 20/20 [00:11<00:00,  1.67it/s][A
+                                                                 [A
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                         [A
+Aggregating models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                          [A------------------------- time cost ------------------------- 21.314021587371826
+Global Rounds:  50%|█████     | 3/6 [01:15<01:11, 23.94s/it]
+Distributing models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                           [A
+-------------Round number: 3-------------
+
+Evaluate global model
+
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+Testing clients:  10%|█         | 2/20 [00:00<00:01, 17.93it/s][A
+Testing clients:  20%|██        | 4/20 [00:00<00:00, 18.05it/s][A
+Testing clients:  30%|███       | 6/20 [00:00<00:00, 17.79it/s][A
+Testing clients:  40%|████      | 8/20 [00:00<00:00, 17.75it/s][A
+Testing clients:  50%|█████     | 10/20 [00:00<00:00, 17.66it/s][A
+Testing clients:  60%|██████    | 12/20 [00:00<00:00, 17.73it/s][A
+Testing clients:  70%|███████   | 14/20 [00:00<00:00, 17.59it/s][A
+Testing clients:  80%|████████  | 16/20 [00:00<00:00, 17.48it/s][A
+Testing clients:  90%|█████████ | 18/20 [00:01<00:00, 17.64it/s][A
+Testing clients: 100%|██████████| 20/20 [00:01<00:00, 17.63it/s][A
+                                                                [A
+Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s][A
+Calculating train metrics:   5%|▌         | 1/20 [00:00<00:04,  4.13it/s][A
+Calculating train metrics:  10%|█         | 2/20 [00:00<00:04,  4.10it/s][A
+Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:04,  4.09it/s][A
+Calculating train metrics:  20%|██        | 4/20 [00:00<00:03,  4.06it/s][A
+Calculating train metrics:  25%|██▌       | 5/20 [00:01<00:03,  4.04it/s][A
+Calculating train metrics:  30%|███       | 6/20 [00:01<00:03,  4.02it/s][A
+Calculating train metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.93it/s][A
+Calculating train metrics:  40%|████      | 8/20 [00:02<00:03,  3.87it/s][A
+Calculating train metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.83it/s][A
+Calculating train metrics:  50%|█████     | 10/20 [00:02<00:02,  3.81it/s][A
+Calculating train metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.79it/s][A
+Calculating train metrics:  60%|██████    | 12/20 [00:03<00:02,  3.79it/s][A
+Calculating train metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.77it/s][A
+Calculating train metrics:  70%|███████   | 14/20 [00:03<00:01,  3.76it/s][A
+Calculating train metrics:  75%|███████▌  | 15/20 [00:03<00:01,  3.74it/s][A
+Calculating train metrics:  80%|████████  | 16/20 [00:04<00:01,  3.76it/s][A
+Calculating train metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.76it/s][A
+Calculating train metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.77it/s][A
+Calculating train metrics:  95%|█████████▌| 19/20 [00:04<00:00,  3.77it/s][A
+Calculating train metrics: 100%|██████████| 20/20 [00:05<00:00,  3.77it/s][A
+                                                                          [AAveraged Train Loss: 2.1695
+Averaged Local Test Accuracy: 0.3919
+Averaged Global Test Accuracy: 0.1618
+Averaged Test AUC: 0.6737
+Std Test Accuracy: 0.1092
+Std Test AUC: 0.0535
+
+Training clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.35it/s][A[A
+
+                                                                   [A[A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  60%|██████    | 12/20 [00:00<00:00, 110.42it/s][A[A
+
+                                                                   [A[A
+Training clients:   5%|▌         | 1/20 [00:00<00:10,  1.78it/s][A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.55it/s][A[A
+
+                                                                   [A[A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  50%|█████     | 10/20 [00:00<00:00, 95.71it/s][A[A
+
+                                                                  [A[A
+Training clients:  10%|█         | 2/20 [00:01<00:11,  1.63it/s][A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.99it/s][A[A
+
+                                                                    [A[A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.25it/s][A[A
+
+                                                                    [A[A
+Training clients:  15%|█▌        | 3/20 [00:01<00:10,  1.66it/s][A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.44it/s][A[A
+
+                                                                    [A[A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.45it/s][A[A
+
+                                                                    [A[A
+Training clients:  20%|██        | 4/20 [00:02<00:09,  1.69it/s][A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.29it/s][A[A
+
+                                                                    [A[A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.94it/s][A[A
+
+                                                                    [A[A
+Training clients:  25%|██▌       | 5/20 [00:02<00:08,  1.69it/s][A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.93it/s][A[A
+
+                                                                   [A[A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  60%|██████    | 12/20 [00:00<00:00, 110.89it/s][A[A
+
+                                                                   [A[A
+Training clients:  30%|███       | 6/20 [00:03<00:08,  1.72it/s][A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.81it/s][A[A
+
+                                                                    [A[A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.69it/s][A[A
+
+                                                                    [A[A
+Training clients:  35%|███▌      | 7/20 [00:04<00:07,  1.74it/s][A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.83it/s][A[A
+
+                                                                   [A[A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.69it/s][A[A
+
+                                                                   [A[A
+Training clients:  40%|████      | 8/20 [00:04<00:06,  1.74it/s][A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.27it/s][A[A
+
+                                                                    [A[A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.53it/s][A[A
+
+                                                                    [A[A
+Training clients:  45%|████▌     | 9/20 [00:05<00:06,  1.74it/s][A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  50%|█████     | 10/20 [00:00<00:00, 99.37it/s][A[A
+
+                                                                   [A[A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  55%|█████▌    | 11/20 [00:00<00:00, 105.09it/s][A[A
+
+                                                                    [A[A
+Training clients:  50%|█████     | 10/20 [00:05<00:05,  1.72it/s][A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.14it/s][A[A
+
+                                                                   [A[A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.38it/s][A[A
+
+                                                                   [A[A
+Training clients:  55%|█████▌    | 11/20 [00:06<00:05,  1.73it/s][A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.77it/s][A[A
+
+                                                                    [A[A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  60%|██████    | 12/20 [00:00<00:00, 110.29it/s][A[A
+
+                                                                    [A[A
+Training clients:  60%|██████    | 12/20 [00:06<00:04,  1.73it/s][A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.06it/s][A[A
+
+                                                                    [A[A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.06it/s][A[A
+
+                                                                    [A[A
+Training clients:  65%|██████▌   | 13/20 [00:07<00:04,  1.73it/s][A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.18it/s][A[A
+
+                                                                    [A[A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  60%|██████    | 12/20 [00:00<00:00, 110.75it/s][A[A
+
+                                                                    [A[A
+Training clients:  70%|███████   | 14/20 [00:08<00:03,  1.75it/s][A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  60%|██████    | 12/20 [00:00<00:00, 111.47it/s][A[A
+
+                                                                   [A[A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  60%|██████    | 12/20 [00:00<00:00, 113.31it/s][A[A
+
+                                                                   [A[A
+Training clients:  75%|███████▌  | 15/20 [00:08<00:02,  1.75it/s][A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.77it/s][A[A
+
+                                                                   [A[A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  55%|█████▌    | 11/20 [00:00<00:00, 95.32it/s][A[A
+
+                                                                  [A[A
+Training clients:  80%|████████  | 16/20 [00:09<00:02,  1.73it/s][A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.90it/s][A[A
+
+                                                                   [A[A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  60%|██████    | 12/20 [00:00<00:00, 111.96it/s][A[A
+
+                                                                   [A[A
+Training clients:  85%|████████▌ | 17/20 [00:09<00:01,  1.74it/s][A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  60%|██████    | 12/20 [00:00<00:00, 110.77it/s][A[A
+
+                                                                   [A[A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  60%|██████    | 12/20 [00:00<00:00, 110.27it/s][A[A
+
+                                                                   [A[A
+Training clients:  90%|█████████ | 18/20 [00:10<00:01,  1.74it/s][A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 111.38it/s][A[A
+
+                                                                    [A[A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 111.59it/s][A[A
+
+                                                                    [A[A
+Training clients:  95%|█████████▌| 19/20 [00:11<00:00,  1.74it/s][A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  60%|██████    | 12/20 [00:00<00:00, 110.99it/s][A[A
+
+                                                                   [A[A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  55%|█████▌    | 11/20 [00:00<00:00, 100.29it/s][A[A
+
+                                                                   [A[A
+Training clients: 100%|██████████| 20/20 [00:11<00:00,  1.73it/s][A
+                                                                 [A
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                         [A
+Aggregating models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                          [A------------------------- time cost ------------------------- 20.792017459869385
+Global Rounds:  67%|██████▋   | 4/6 [01:36<00:45, 22.70s/it]
+Distributing models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                           [A
+-------------Round number: 4-------------
+
+Evaluate global model
+
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+Testing clients:  10%|█         | 2/20 [00:00<00:01, 17.70it/s][A
+Testing clients:  20%|██        | 4/20 [00:00<00:00, 17.96it/s][A
+Testing clients:  30%|███       | 6/20 [00:00<00:00, 17.69it/s][A
+Testing clients:  40%|████      | 8/20 [00:00<00:00, 17.63it/s][A
+Testing clients:  50%|█████     | 10/20 [00:00<00:00, 17.60it/s][A
+Testing clients:  60%|██████    | 12/20 [00:00<00:00, 17.59it/s][A
+Testing clients:  70%|███████   | 14/20 [00:00<00:00, 17.45it/s][A
+Testing clients:  80%|████████  | 16/20 [00:00<00:00, 17.35it/s][A
+Testing clients:  90%|█████████ | 18/20 [00:01<00:00, 17.36it/s][A
+Testing clients: 100%|██████████| 20/20 [00:01<00:00, 17.39it/s][A
+                                                                [A
+Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s][A
+Calculating train metrics:   5%|▌         | 1/20 [00:00<00:08,  2.32it/s][A
+Calculating train metrics:  10%|█         | 2/20 [00:00<00:05,  3.00it/s][A
+Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:05,  3.33it/s][A
+Calculating train metrics:  20%|██        | 4/20 [00:01<00:04,  3.50it/s][A
+Calculating train metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.59it/s][A
+Calculating train metrics:  30%|███       | 6/20 [00:01<00:03,  3.64it/s][A
+Calculating train metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.68it/s][A
+Calculating train metrics:  40%|████      | 8/20 [00:02<00:03,  3.70it/s][A
+Calculating train metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.71it/s][A
+Calculating train metrics:  50%|█████     | 10/20 [00:02<00:02,  3.72it/s][A
+Calculating train metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.72it/s][A
+Calculating train metrics:  60%|██████    | 12/20 [00:03<00:02,  3.71it/s][A
+Calculating train metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.67it/s][A
+Calculating train metrics:  70%|███████   | 14/20 [00:03<00:01,  3.68it/s][A
+Calculating train metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.69it/s][A
+Calculating train metrics:  80%|████████  | 16/20 [00:04<00:01,  3.65it/s][A
+Calculating train metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.71it/s][A
+Calculating train metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.75it/s][A
+Calculating train metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.77it/s][A
+Calculating train metrics: 100%|██████████| 20/20 [00:05<00:00,  3.80it/s][A
+                                                                          [AAveraged Train Loss: 2.1661
+Averaged Local Test Accuracy: 0.3602
+Averaged Global Test Accuracy: 0.1842
+Averaged Test AUC: 0.6802
+Std Test Accuracy: 0.1299
+Std Test AUC: 0.0434
+
+Training clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.09it/s][A[A
+
+                                                                    [A[A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  60%|██████    | 12/20 [00:00<00:00, 112.39it/s][A[A
+
+                                                                    [A[A
+Training clients:   5%|▌         | 1/20 [00:00<00:10,  1.77it/s][A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.38it/s][A[A
+
+                                                                    [A[A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  60%|██████    | 12/20 [00:00<00:00, 112.44it/s][A[A
+
+                                                                    [A[A
+Training clients:  10%|█         | 2/20 [00:01<00:10,  1.78it/s][A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  60%|██████    | 12/20 [00:00<00:00, 111.78it/s][A[A
+
+                                                                   [A[A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  60%|██████    | 12/20 [00:00<00:00, 113.73it/s][A[A
+
+                                                                   [A[A
+Training clients:  15%|█▌        | 3/20 [00:01<00:09,  1.80it/s][A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  60%|██████    | 12/20 [00:00<00:00, 110.70it/s][A[A
+
+                                                                    [A[A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  60%|██████    | 12/20 [00:00<00:00, 113.26it/s][A[A
+
+                                                                    [A[A
+Training clients:  20%|██        | 4/20 [00:02<00:08,  1.80it/s][A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  60%|██████    | 12/20 [00:00<00:00, 112.27it/s][A[A
+
+                                                                   [A[A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  60%|██████    | 12/20 [00:00<00:00, 113.94it/s][A[A
+
+                                                                   [A[A
+Training clients:  25%|██▌       | 5/20 [00:02<00:08,  1.80it/s][A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.69it/s][A[A
+
+                                                                   [A[A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  60%|██████    | 12/20 [00:00<00:00, 114.60it/s][A[A
+
+                                                                   [A[A
+Training clients:  30%|███       | 6/20 [00:03<00:07,  1.78it/s][A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  60%|██████    | 12/20 [00:00<00:00, 111.44it/s][A[A
+
+                                                                   [A[A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  60%|██████    | 12/20 [00:00<00:00, 114.29it/s][A[A
+
+                                                                   [A[A
+Training clients:  35%|███▌      | 7/20 [00:03<00:07,  1.78it/s][A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 110.93it/s][A[A
+
+                                                                    [A[A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 112.99it/s][A[A
+
+                                                                    [A[A
+Training clients:  40%|████      | 8/20 [00:04<00:06,  1.76it/s][A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.40it/s][A[A
+
+                                                                   [A[A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.38it/s][A[A
+
+                                                                   [A[A
+Training clients:  45%|████▌     | 9/20 [00:05<00:06,  1.74it/s][A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.27it/s][A[A
+
+                                                                   [A[A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  60%|██████    | 12/20 [00:00<00:00, 112.37it/s][A[A
+
+                                                                   [A[A
+Training clients:  50%|█████     | 10/20 [00:05<00:05,  1.75it/s][A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.46it/s][A[A
+
+                                                                    [A[A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  60%|██████    | 12/20 [00:00<00:00, 111.04it/s][A[A
+
+                                                                    [A[A
+Training clients:  55%|█████▌    | 11/20 [00:06<00:05,  1.61it/s][A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.10it/s][A[A
+
+                                                                    [A[A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  50%|█████     | 10/20 [00:00<00:00, 97.07it/s][A[A
+
+                                                                   [A[A
+Training clients:  60%|██████    | 12/20 [00:06<00:04,  1.63it/s][A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  60%|██████    | 12/20 [00:00<00:00, 112.61it/s][A[A
+
+                                                                    [A[A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  60%|██████    | 12/20 [00:00<00:00, 111.84it/s][A[A
+
+                                                                    [A[A
+Training clients:  65%|██████▌   | 13/20 [00:07<00:04,  1.65it/s][A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  55%|█████▌    | 11/20 [00:00<00:00, 107.75it/s][A[A
+
+                                                                    [A[A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  60%|██████    | 12/20 [00:00<00:00, 110.32it/s][A[A
+
+                                                                    [A[A
+Training clients:  70%|███████   | 14/20 [00:08<00:03,  1.68it/s][A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.38it/s][A[A
+
+                                                                    [A[A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  60%|██████    | 12/20 [00:00<00:00, 113.60it/s][A[A
+
+                                                                    [A[A
+Training clients:  75%|███████▌  | 15/20 [00:08<00:02,  1.69it/s][A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  60%|██████    | 12/20 [00:00<00:00, 110.20it/s][A[A
+
+                                                                   [A[A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  60%|██████    | 12/20 [00:00<00:00, 110.76it/s][A[A
+
+                                                                   [A[A
+Training clients:  80%|████████  | 16/20 [00:09<00:02,  1.70it/s][A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  60%|██████    | 12/20 [00:00<00:00, 109.00it/s][A[A
+
+                                                                   [A[A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  60%|██████    | 12/20 [00:00<00:00, 113.48it/s][A[A
+
+                                                                   [A[A
+Training clients:  85%|████████▌ | 17/20 [00:09<00:01,  1.70it/s][A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  60%|██████    | 12/20 [00:00<00:00, 113.72it/s][A[A
+
+                                                                    [A[A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  50%|█████     | 10/20 [00:00<00:00, 95.93it/s][A[A
+
+                                                                   [A[A
+Training clients:  90%|█████████ | 18/20 [00:10<00:01,  1.71it/s][A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  60%|██████    | 12/20 [00:00<00:00, 111.77it/s][A[A
+
+                                                                   [A[A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  55%|█████▌    | 11/20 [00:00<00:00, 105.81it/s][A[A
+
+                                                                   [A[A
+Training clients:  95%|█████████▌| 19/20 [00:11<00:00,  1.72it/s][A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  60%|██████    | 12/20 [00:00<00:00, 111.73it/s][A[A
+
+                                                                   [A[A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  60%|██████    | 12/20 [00:00<00:00, 114.18it/s][A[A
+
+                                                                   [A[A
+Training clients: 100%|██████████| 20/20 [00:11<00:00,  1.74it/s][A
+                                                                 [A
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                         [A
+Aggregating models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                          [A------------------------- time cost ------------------------- 21.226237535476685
+Global Rounds:  83%|████████▎ | 5/6 [01:57<00:22, 22.17s/it]
+Distributing models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                           [A
+-------------Round number: 5-------------
+
+Evaluate global model
+
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+Testing clients:  10%|█         | 2/20 [00:00<00:01, 17.85it/s][A
+Testing clients:  20%|██        | 4/20 [00:00<00:00, 17.94it/s][A
+Testing clients:  30%|███       | 6/20 [00:00<00:00, 17.75it/s][A
+Testing clients:  40%|████      | 8/20 [00:00<00:00, 17.87it/s][A
+Testing clients:  50%|█████     | 10/20 [00:00<00:00, 17.82it/s][A
+Testing clients:  60%|██████    | 12/20 [00:00<00:00, 17.83it/s][A
+Testing clients:  70%|███████   | 14/20 [00:00<00:00, 17.79it/s][A
+Testing clients:  80%|████████  | 16/20 [00:00<00:00, 17.71it/s][A
+Testing clients:  90%|█████████ | 18/20 [00:01<00:00, 17.84it/s][A
+Testing clients: 100%|██████████| 20/20 [00:01<00:00, 17.88it/s][A
+                                                                [A
+Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s][A
+Calculating train metrics:   5%|▌         | 1/20 [00:00<00:04,  4.06it/s][A
+Calculating train metrics:  10%|█         | 2/20 [00:00<00:04,  4.05it/s][A
+Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:04,  4.05it/s][A
+Calculating train metrics:  20%|██        | 4/20 [00:00<00:03,  4.03it/s][A
+Calculating train metrics:  25%|██▌       | 5/20 [00:01<00:03,  3.98it/s][A
+Calculating train metrics:  30%|███       | 6/20 [00:01<00:03,  3.96it/s][A
+Calculating train metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.96it/s][A
+Calculating train metrics:  40%|████      | 8/20 [00:02<00:03,  3.97it/s][A
+Calculating train metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.96it/s][A
+Calculating train metrics:  50%|█████     | 10/20 [00:02<00:02,  3.89it/s][A
+Calculating train metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.91it/s][A
+Calculating train metrics:  60%|██████    | 12/20 [00:03<00:02,  3.92it/s][A
+Calculating train metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.91it/s][A
+Calculating train metrics:  70%|███████   | 14/20 [00:03<00:01,  3.84it/s][A
+Calculating train metrics:  75%|███████▌  | 15/20 [00:03<00:01,  3.80it/s][A
+Calculating train metrics:  80%|████████  | 16/20 [00:04<00:01,  3.82it/s][A
+Calculating train metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.81it/s][A
+Calculating train metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.81it/s][A
+Calculating train metrics:  95%|█████████▌| 19/20 [00:04<00:00,  3.81it/s][A
+Calculating train metrics: 100%|██████████| 20/20 [00:05<00:00,  3.82it/s][A
+                                                                          [AAveraged Train Loss: 2.1606
+Averaged Local Test Accuracy: 0.3397
+Averaged Global Test Accuracy: 0.2010
+Averaged Test AUC: 0.6820
+Std Test Accuracy: 0.1407
+Std Test AUC: 0.0416
+
+Training clients:   0%|          | 0/20 [00:00<?, ?it/s][A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  55%|█████▌    | 11/20 [00:00<00:00, 106.77it/s][A[A
+
+                                                                   [A[A
+
+Client 2 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 2 Training:  45%|████▌     | 9/20 [00:00<00:00, 84.28it/s][A[A
+
+Client 2 Training:  95%|█████████▌| 19/20 [00:00<00:00, 92.74it/s][A[A
+
+                                                                  [A[A
+Training clients:   5%|▌         | 1/20 [00:00<00:11,  1.67it/s][A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  60%|██████    | 12/20 [00:00<00:00, 111.24it/s][A[A
+
+                                                                    [A[A
+
+Client 16 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 16 Training:  60%|██████    | 12/20 [00:00<00:00, 112.35it/s][A[A
+
+                                                                    [A[A
+Training clients:  10%|█         | 2/20 [00:01<00:10,  1.75it/s][A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  60%|██████    | 12/20 [00:00<00:00, 111.38it/s][A[A
+
+                                                                    [A[A
+
+Client 14 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 14 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.76it/s][A[A
+
+                                                                    [A[A
+Training clients:  15%|█▌        | 3/20 [00:01<00:09,  1.76it/s][A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  60%|██████    | 12/20 [00:00<00:00, 110.66it/s][A[A
+
+                                                                    [A[A
+
+Client 18 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 18 Training:  60%|██████    | 12/20 [00:00<00:00, 112.33it/s][A[A
+
+                                                                    [A[A
+Training clients:  20%|██        | 4/20 [00:02<00:09,  1.77it/s][A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  60%|██████    | 12/20 [00:00<00:00, 111.24it/s][A[A
+
+                                                                   [A[A
+
+Client 3 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 3 Training:  60%|██████    | 12/20 [00:00<00:00, 113.79it/s][A[A
+
+                                                                   [A[A
+Training clients:  25%|██▌       | 5/20 [00:02<00:08,  1.77it/s][A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  60%|██████    | 12/20 [00:00<00:00, 112.25it/s][A[A
+
+                                                                   [A[A
+
+Client 0 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 0 Training:  60%|██████    | 12/20 [00:00<00:00, 113.53it/s][A[A
+
+                                                                   [A[A
+Training clients:  30%|███       | 6/20 [00:03<00:07,  1.76it/s][A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  60%|██████    | 12/20 [00:00<00:00, 111.85it/s][A[A
+
+                                                                   [A[A
+
+Client 7 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 7 Training:  60%|██████    | 12/20 [00:00<00:00, 113.59it/s][A[A
+
+                                                                   [A[A
+Training clients:  35%|███▌      | 7/20 [00:03<00:07,  1.76it/s][A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.06it/s][A[A
+
+                                                                    [A[A
+
+Client 10 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 10 Training:  60%|██████    | 12/20 [00:00<00:00, 115.91it/s][A[A
+
+                                                                    [A[A
+Training clients:  40%|████      | 8/20 [00:04<00:06,  1.75it/s][A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  60%|██████    | 12/20 [00:00<00:00, 111.02it/s][A[A
+
+                                                                   [A[A
+
+Client 6 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 6 Training:  60%|██████    | 12/20 [00:00<00:00, 114.50it/s][A[A
+
+                                                                   [A[A
+Training clients:  45%|████▌     | 9/20 [00:05<00:06,  1.75it/s][A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  60%|██████    | 12/20 [00:00<00:00, 111.13it/s][A[A
+
+                                                                   [A[A
+
+Client 9 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 9 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.32it/s][A[A
+
+                                                                   [A[A
+Training clients:  50%|█████     | 10/20 [00:05<00:05,  1.74it/s][A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.68it/s][A[A
+
+                                                                   [A[A
+
+Client 4 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 4 Training:  60%|██████    | 12/20 [00:00<00:00, 111.15it/s][A[A
+
+                                                                   [A[A
+Training clients:  55%|█████▌    | 11/20 [00:06<00:05,  1.74it/s][A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 113.34it/s][A[A
+
+                                                                    [A[A
+
+Client 19 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 19 Training:  60%|██████    | 12/20 [00:00<00:00, 112.13it/s][A[A
+
+                                                                    [A[A
+Training clients:  60%|██████    | 12/20 [00:06<00:04,  1.75it/s][A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  60%|██████    | 12/20 [00:00<00:00, 110.23it/s][A[A
+
+                                                                   [A[A
+
+Client 5 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 5 Training:  60%|██████    | 12/20 [00:00<00:00, 112.72it/s][A[A
+
+                                                                   [A[A
+Training clients:  65%|██████▌   | 13/20 [00:07<00:03,  1.75it/s][A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  55%|█████▌    | 11/20 [00:00<00:00, 101.77it/s][A[A
+
+                                                                   [A[A
+
+Client 8 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 8 Training:  60%|██████    | 12/20 [00:00<00:00, 113.13it/s][A[A
+
+                                                                   [A[A
+Training clients:  70%|███████   | 14/20 [00:07<00:03,  1.75it/s][A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  50%|█████     | 10/20 [00:00<00:00, 99.08it/s][A[A
+
+                                                                   [A[A
+
+Client 11 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 11 Training:  60%|██████    | 12/20 [00:00<00:00, 112.31it/s][A[A
+
+                                                                    [A[A
+Training clients:  75%|███████▌  | 15/20 [00:08<00:02,  1.74it/s][A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  60%|██████    | 12/20 [00:00<00:00, 110.78it/s][A[A
+
+                                                                    [A[A
+
+Client 15 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 15 Training:  60%|██████    | 12/20 [00:00<00:00, 113.19it/s][A[A
+
+                                                                    [A[A
+Training clients:  80%|████████  | 16/20 [00:09<00:02,  1.73it/s][A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  60%|██████    | 12/20 [00:00<00:00, 112.33it/s][A[A
+
+                                                                    [A[A
+
+Client 13 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 13 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.78it/s][A[A
+
+                                                                    [A[A
+Training clients:  85%|████████▌ | 17/20 [00:09<00:01,  1.73it/s][A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  60%|██████    | 12/20 [00:00<00:00, 111.97it/s][A[A
+
+                                                                    [A[A
+
+Client 17 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 17 Training:  60%|██████    | 12/20 [00:00<00:00, 111.78it/s][A[A
+
+                                                                    [A[A
+Training clients:  90%|█████████ | 18/20 [00:10<00:01,  1.74it/s][A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  60%|██████    | 12/20 [00:00<00:00, 110.95it/s][A[A
+
+                                                                   [A[A
+
+Client 1 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 1 Training:  55%|█████▌    | 11/20 [00:00<00:00, 100.87it/s][A[A
+
+                                                                   [A[A
+Training clients:  95%|█████████▌| 19/20 [00:10<00:00,  1.73it/s][A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  55%|█████▌    | 11/20 [00:00<00:00, 108.42it/s][A[A
+
+                                                                    [A[A
+
+Client 12 Training:   0%|          | 0/20 [00:00<?, ?it/s][A[A
+
+Client 12 Training:  55%|█████▌    | 11/20 [00:00<00:00, 109.45it/s][A[A
+
+                                                                    [A[A
+Training clients: 100%|██████████| 20/20 [00:11<00:00,  1.74it/s][A
+                                                                 [A
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                         [A
+Aggregating models:   0%|          | 0/20 [00:00<?, ?it/s][A
+                                                          [A------------------------- time cost ------------------------- 20.565078020095825
+Global Rounds: 100%|██████████| 6/6 [02:18<00:00, 21.62s/it]Global Rounds: 100%|██████████| 6/6 [02:18<00:00, 23.05s/it]
+
+Best accuracy.
+0.4239
+
+Average time cost per round.
+21.01603469848633
+File path: ../results/Cifar10_pat_nc20_FedAvg_train_0.h5
+
+Average time cost: 144.19s.
+Length:  6
+std for best accuracy: 0.0
+mean for best accuracy: 0.4239
+All done!
+
+Storage on cpu
+-------------------------------------------------------------------------------
+Total Tensors: 125392356 	Used Memory: 282.63M
+-------------------------------------------------------------------------------

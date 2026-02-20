@@ -1,0 +1,1 @@
+/home/mulsoap0504/FedCD/FedCD-Core/logs/FedCD/GM_VGG8W640_PM_VGG8W896_Fext_SmallFExt/pat/NC_20/date_20260219/time_101137/acc.csv

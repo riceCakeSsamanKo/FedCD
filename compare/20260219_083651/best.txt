@@ -1,0 +1,6 @@
+Best by PM local:
+  exp_001_client_all_gm256_pm1280 | pm_local=0.7522 | gm_global=0.2611 | mode=client_all | gm/pm=256/1280
+Best by GM global:
+  exp_011_client_conf_gm256_pm1280 | pm_local=0.7521 | gm_global=0.2652 | mode=client_conf | gm/pm=256/1280
+Best combined (PM+GM):
+  exp_011_client_conf_gm256_pm1280 | score=0.508650 | pm_local=0.7521 | gm_global=0.2652 | mode=client_conf | gm/pm=256/1280

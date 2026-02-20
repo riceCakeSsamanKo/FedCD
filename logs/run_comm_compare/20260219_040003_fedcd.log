@@ -1,0 +1,1 @@
+run_comm_compare_fedcd_vgg8w768_vs_baseline.sh: line 199: -eval_common_global: command not found
