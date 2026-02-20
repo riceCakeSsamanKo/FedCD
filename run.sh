@@ -43,6 +43,10 @@ FEDCD_ENTROPY_RELIABILITY_SCALE="${FEDCD_ENTROPY_RELIABILITY_SCALE:-0.8}"
 FEDCD_ENTROPY_HARD_SWITCH_MARGIN="${FEDCD_ENTROPY_HARD_SWITCH_MARGIN:-0.20}"
 FEDCD_ENTROPY_USE_OOD_GATE="${FEDCD_ENTROPY_USE_OOD_GATE:-true}"
 FEDCD_ENTROPY_OOD_SCALE="${FEDCD_ENTROPY_OOD_SCALE:-0.5}"
+FEDCD_FUSION_MODE="${FEDCD_FUSION_MODE:-pm_defer_hard}"
+FEDCD_PM_DEFER_CONF_THRESHOLD="${FEDCD_PM_DEFER_CONF_THRESHOLD:-0.55}"
+FEDCD_PM_DEFER_GM_MARGIN="${FEDCD_PM_DEFER_GM_MARGIN:-0.02}"
+FEDCD_PM_DEFER_OOD_THRESHOLD="${FEDCD_PM_DEFER_OOD_THRESHOLD:-0.35}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -122,6 +126,10 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_entropy_hard_switch_margin "${FEDCD_ENTROPY_HARD_SWITCH_MARGIN}" \
     --fedcd_entropy_use_ood_gate "${FEDCD_ENTROPY_USE_OOD_GATE}" \
     --fedcd_entropy_ood_scale "${FEDCD_ENTROPY_OOD_SCALE}" \
+    --fedcd_fusion_mode "${FEDCD_FUSION_MODE}" \
+    --fedcd_pm_defer_conf_threshold "${FEDCD_PM_DEFER_CONF_THRESHOLD}" \
+    --fedcd_pm_defer_gm_margin "${FEDCD_PM_DEFER_GM_MARGIN}" \
+    --fedcd_pm_defer_ood_threshold "${FEDCD_PM_DEFER_OOD_THRESHOLD}" \
     --fedcd_gate_reliability_ema 0.9 \
     --fedcd_gate_reliability_samples 512 \
     --fedcd_gate_feature_ema 0.9 \

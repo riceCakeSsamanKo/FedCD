@@ -31,6 +31,10 @@ class PMWrapper(nn.Module):
         entropy_hard_switch_margin=0.15,
         entropy_use_ood_gate=True,
         entropy_ood_scale=1.0,
+        fusion_mode="soft",
+        pm_defer_conf_threshold=0.55,
+        pm_defer_gm_margin=0.02,
+        pm_defer_ood_threshold=0.35,
     ):
         super().__init__()
         self.f_ext = f_ext
@@ -51,6 +55,12 @@ class PMWrapper(nn.Module):
         self.entropy_hard_switch_margin = max(float(entropy_hard_switch_margin), 0.0)
         self.entropy_use_ood_gate = bool(entropy_use_ood_gate)
         self.entropy_ood_scale = max(float(entropy_ood_scale), 1e-6)
+        self.fusion_mode = str(fusion_mode).strip().lower()
+        if self.fusion_mode not in {"soft", "pm_defer_hard"}:
+            self.fusion_mode = "soft"
+        self.pm_defer_conf_threshold = min(max(float(pm_defer_conf_threshold), 0.0), 1.0)
+        self.pm_defer_gm_margin = max(float(pm_defer_gm_margin), 0.0)
+        self.pm_defer_ood_threshold = min(max(float(pm_defer_ood_threshold), 0.0), 1.0)
         self.register_buffer(
             "pm_class_reliability",
             torch.full((int(num_classes),), 0.5, dtype=torch.float32),
@@ -114,39 +124,7 @@ class PMWrapper(nn.Module):
                 pm_conf = pm_conf.clamp(0.0, 2.0)
                 gm_conf = gm_conf.clamp(0.0, 2.0)
 
-        rel_pm_conf = torch.sigmoid(
-            ((pm_conf + self.entropy_pm_bias) - (gm_conf + self.entropy_gm_bias))
-            / self.entropy_gate_tau
-        )
-        min_w = float(self.entropy_min_pm_weight)
-        max_w = float(self.entropy_max_pm_weight)
-        if abs(max_w - min_w) < 1e-12:
-            # Explicit fixed-ratio mode (e.g., 0.5/0.5) independent of confidence.
-            pm_weight = torch.full_like(rel_pm_conf, min(max(min_w, 0.0), 1.0))
-        elif max_w > min_w:
-            span = max_w - min_w
-            pm_weight = min_w + span * rel_pm_conf
-        else:
-            # Fallback for malformed range: use relative confidence directly.
-            pm_weight = rel_pm_conf
-
-        if self.entropy_hard_switch_margin > 0:
-            conf_gap = pm_conf - gm_conf
-            pm_weight = torch.where(
-                conf_gap >= self.entropy_hard_switch_margin,
-                torch.full_like(pm_weight, self.entropy_max_pm_weight),
-                pm_weight,
-            )
-            pm_weight = torch.where(
-                conf_gap <= -self.entropy_hard_switch_margin,
-                torch.full_like(pm_weight, self.entropy_min_pm_weight),
-                pm_weight,
-            )
-
-        if self.entropy_disagree_gm_boost > 0:
-            disagree = (pred_pm != pred_gm).float().unsqueeze(1)
-            gm_better = (gm_conf > pm_conf).float()
-            pm_weight = pm_weight - self.entropy_disagree_gm_boost * disagree * gm_better
+        in_dist_score = None
 
         if (
             self.entropy_use_ood_gate
@@ -161,8 +139,52 @@ class PMWrapper(nn.Module):
             var = self.feature_var.to(feat.device).clamp_min(1e-6).unsqueeze(0)
             mahalanobis = ((feat - mu).pow(2) / var).mean(dim=1, keepdim=True)
             in_dist_score = torch.exp(-mahalanobis / self.entropy_ood_scale).clamp(0.0, 1.0)
-            pm_floor = min(self.entropy_min_pm_weight, self.entropy_max_pm_weight)
-            pm_weight = pm_floor + (pm_weight - pm_floor) * in_dist_score
+
+        if self.fusion_mode == "pm_defer_hard":
+            # PM-default routing with explicit defer-to-GM on low-confidence/OOD samples.
+            use_pm = (pm_conf >= self.pm_defer_conf_threshold)
+            use_pm = use_pm & ((gm_conf - pm_conf) <= self.pm_defer_gm_margin)
+            if in_dist_score is not None:
+                use_pm = use_pm & (in_dist_score >= self.pm_defer_ood_threshold)
+            pm_weight = use_pm.float()
+        else:
+            rel_pm_conf = torch.sigmoid(
+                ((pm_conf + self.entropy_pm_bias) - (gm_conf + self.entropy_gm_bias))
+                / self.entropy_gate_tau
+            )
+            min_w = float(self.entropy_min_pm_weight)
+            max_w = float(self.entropy_max_pm_weight)
+            if abs(max_w - min_w) < 1e-12:
+                # Explicit fixed-ratio mode (e.g., 0.5/0.5) independent of confidence.
+                pm_weight = torch.full_like(rel_pm_conf, min(max(min_w, 0.0), 1.0))
+            elif max_w > min_w:
+                span = max_w - min_w
+                pm_weight = min_w + span * rel_pm_conf
+            else:
+                # Fallback for malformed range: use relative confidence directly.
+                pm_weight = rel_pm_conf
+
+            if self.entropy_hard_switch_margin > 0:
+                conf_gap = pm_conf - gm_conf
+                pm_weight = torch.where(
+                    conf_gap >= self.entropy_hard_switch_margin,
+                    torch.full_like(pm_weight, self.entropy_max_pm_weight),
+                    pm_weight,
+                )
+                pm_weight = torch.where(
+                    conf_gap <= -self.entropy_hard_switch_margin,
+                    torch.full_like(pm_weight, self.entropy_min_pm_weight),
+                    pm_weight,
+                )
+
+            if self.entropy_disagree_gm_boost > 0:
+                disagree = (pred_pm != pred_gm).float().unsqueeze(1)
+                gm_better = (gm_conf > pm_conf).float()
+                pm_weight = pm_weight - self.entropy_disagree_gm_boost * disagree * gm_better
+
+            if in_dist_score is not None:
+                pm_floor = min(self.entropy_min_pm_weight, self.entropy_max_pm_weight)
+                pm_weight = pm_floor + (pm_weight - pm_floor) * in_dist_score
 
         pm_weight = pm_weight.clamp(0.0, 1.0)
         gm_weight = 1.0 - pm_weight
@@ -234,6 +256,10 @@ class clientFedCD(Client):
         self.entropy_hard_switch_margin = float(getattr(args, "fedcd_entropy_hard_switch_margin", 0.15))
         self.entropy_use_ood_gate = bool(getattr(args, "fedcd_entropy_use_ood_gate", True))
         self.entropy_ood_scale = float(getattr(args, "fedcd_entropy_ood_scale", 1.0))
+        self.fusion_mode = str(getattr(args, "fedcd_fusion_mode", "soft")).strip().lower()
+        self.pm_defer_conf_threshold = float(getattr(args, "fedcd_pm_defer_conf_threshold", 0.55))
+        self.pm_defer_gm_margin = float(getattr(args, "fedcd_pm_defer_gm_margin", 0.02))
+        self.pm_defer_ood_threshold = float(getattr(args, "fedcd_pm_defer_ood_threshold", 0.35))
         self.gate_reliability_ema = float(getattr(args, "fedcd_gate_reliability_ema", 0.9))
         self.gate_reliability_samples = int(getattr(args, "fedcd_gate_reliability_samples", 512))
         self.gate_feature_ema = float(getattr(args, "fedcd_gate_feature_ema", 0.9))
@@ -283,6 +309,10 @@ class clientFedCD(Client):
             entropy_hard_switch_margin=self.entropy_hard_switch_margin,
             entropy_use_ood_gate=self.entropy_use_ood_gate,
             entropy_ood_scale=self.entropy_ood_scale,
+            fusion_mode=self.fusion_mode,
+            pm_defer_conf_threshold=self.pm_defer_conf_threshold,
+            pm_defer_gm_margin=self.pm_defer_gm_margin,
+            pm_defer_ood_threshold=self.pm_defer_ood_threshold,
         )
         self.model.set_class_reliability(self.pm_class_reliability, self.gm_class_reliability)
         self.model.set_feature_stats(self.gate_feature_mean, self.gate_feature_var)

@@ -548,6 +548,14 @@ if __name__ == "__main__":
                         help="Use local feature-distribution similarity (OOD-aware) to suppress PM on OOD samples.")
     parser.add_argument('--fedcd_entropy_ood_scale', type=float, default=1.0,
                         help="Scale of OOD-aware PM suppression; smaller means stronger suppression.")
+    parser.add_argument('--fedcd_fusion_mode', type=str, default="soft",
+                        help="Inference fusion mode: soft | pm_defer_hard.")
+    parser.add_argument('--fedcd_pm_defer_conf_threshold', type=float, default=0.55,
+                        help="For pm_defer_hard, minimum PM confidence (1-normalized entropy) to keep PM.")
+    parser.add_argument('--fedcd_pm_defer_gm_margin', type=float, default=0.02,
+                        help="For pm_defer_hard, switch to GM if GM confidence exceeds PM by this margin.")
+    parser.add_argument('--fedcd_pm_defer_ood_threshold', type=float, default=0.35,
+                        help="For pm_defer_hard, minimum in-distribution score to keep PM when OOD gate is enabled.")
     parser.add_argument('--fedcd_gate_reliability_ema', type=float, default=0.9,
                         help="EMA factor for updating per-class PM/GM gate reliability.")
     parser.add_argument('--fedcd_gate_reliability_samples', type=int, default=512,
