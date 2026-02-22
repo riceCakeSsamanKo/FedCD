@@ -43,10 +43,32 @@ FEDCD_ENTROPY_RELIABILITY_SCALE="${FEDCD_ENTROPY_RELIABILITY_SCALE:-0.8}"
 FEDCD_ENTROPY_HARD_SWITCH_MARGIN="${FEDCD_ENTROPY_HARD_SWITCH_MARGIN:-0.20}"
 FEDCD_ENTROPY_USE_OOD_GATE="${FEDCD_ENTROPY_USE_OOD_GATE:-true}"
 FEDCD_ENTROPY_OOD_SCALE="${FEDCD_ENTROPY_OOD_SCALE:-0.5}"
-FEDCD_FUSION_MODE="${FEDCD_FUSION_MODE:-pm_defer_hard}"
+FEDCD_FUSION_MODE="${FEDCD_FUSION_MODE:-router_soft}"
 FEDCD_PM_DEFER_CONF_THRESHOLD="${FEDCD_PM_DEFER_CONF_THRESHOLD:-0.55}"
 FEDCD_PM_DEFER_GM_MARGIN="${FEDCD_PM_DEFER_GM_MARGIN:-0.02}"
 FEDCD_PM_DEFER_OOD_THRESHOLD="${FEDCD_PM_DEFER_OOD_THRESHOLD:-0.35}"
+FEDCD_ROUTER_ENABLE="${FEDCD_ROUTER_ENABLE:-true}"
+FEDCD_ROUTER_HIDDEN_DIM="${FEDCD_ROUTER_HIDDEN_DIM:-128}"
+FEDCD_ROUTER_DROPOUT="${FEDCD_ROUTER_DROPOUT:-0.0}"
+FEDCD_ROUTER_LR_SCALE="${FEDCD_ROUTER_LR_SCALE:-1.0}"
+FEDCD_ROUTER_LOSS_WEIGHT="${FEDCD_ROUTER_LOSS_WEIGHT:-0.2}"
+FEDCD_ROUTER_THRESHOLD="${FEDCD_ROUTER_THRESHOLD:-0.55}"
+FEDCD_ROUTER_TEMPERATURE="${FEDCD_ROUTER_TEMPERATURE:-1.0}"
+FEDCD_ROUTER_NEG_STD_SCALE="${FEDCD_ROUTER_NEG_STD_SCALE:-2.0}"
+FEDCD_ROUTER_USE_FEATURE_NORM="${FEDCD_ROUTER_USE_FEATURE_NORM:-true}"
+FEDCD_ROUTER_REINIT_ON_INITIAL_BROADCAST="${FEDCD_ROUTER_REINIT_ON_INITIAL_BROADCAST:-true}"
+FEDCD_ROUTER_SUPERVISION_MODE="${FEDCD_ROUTER_SUPERVISION_MODE:-branch_ce}"
+FEDCD_ROUTER_BRANCH_MARGIN="${FEDCD_ROUTER_BRANCH_MARGIN:-0.02}"
+FEDCD_ROUTER_GAP_POWER="${FEDCD_ROUTER_GAP_POWER:-1.0}"
+FEDCD_ROUTER_MIN_LABELED_SAMPLES="${FEDCD_ROUTER_MIN_LABELED_SAMPLES:-4}"
+FEDCD_ROUTER_FALLBACK_OOD_LOSS="${FEDCD_ROUTER_FALLBACK_OOD_LOSS:-true}"
+FEDCD_ROUTER_USE_VAL_SPLIT="${FEDCD_ROUTER_USE_VAL_SPLIT:-true}"
+FEDCD_ROUTER_VAL_RATIO="${FEDCD_ROUTER_VAL_RATIO:-0.1}"
+FEDCD_ROUTER_VAL_MIN_SAMPLES="${FEDCD_ROUTER_VAL_MIN_SAMPLES:-32}"
+FEDCD_ROUTER_VAL_MAX_SAMPLES="${FEDCD_ROUTER_VAL_MAX_SAMPLES:-512}"
+FEDCD_ROUTER_SOFT_TAU="${FEDCD_ROUTER_SOFT_TAU:-0.2}"
+FEDCD_ROUTER_SOFT_LABEL_FLOOR="${FEDCD_ROUTER_SOFT_LABEL_FLOOR:-0.05}"
+FEDCD_LOCAL_PM_ONLY_OBJECTIVE="${FEDCD_LOCAL_PM_ONLY_OBJECTIVE:-false}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -109,7 +131,7 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_pm_logits_weight 0.7 \
     --fedcd_pm_only_weight 1.5 \
     --fedcd_gm_logits_weight 0.0 \
-    --fedcd_local_pm_only_objective true \
+    --fedcd_local_pm_only_objective "${FEDCD_LOCAL_PM_ONLY_OBJECTIVE}" \
     --fedcd_gm_lr_scale 0.1 \
     --fedcd_gm_update_mode server_pm_teacher \
     --fedcd_hybrid_proto_blend 0.35 \
@@ -130,6 +152,27 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_pm_defer_conf_threshold "${FEDCD_PM_DEFER_CONF_THRESHOLD}" \
     --fedcd_pm_defer_gm_margin "${FEDCD_PM_DEFER_GM_MARGIN}" \
     --fedcd_pm_defer_ood_threshold "${FEDCD_PM_DEFER_OOD_THRESHOLD}" \
+    --fedcd_router_enable "${FEDCD_ROUTER_ENABLE}" \
+    --fedcd_router_hidden_dim "${FEDCD_ROUTER_HIDDEN_DIM}" \
+    --fedcd_router_dropout "${FEDCD_ROUTER_DROPOUT}" \
+    --fedcd_router_lr_scale "${FEDCD_ROUTER_LR_SCALE}" \
+    --fedcd_router_loss_weight "${FEDCD_ROUTER_LOSS_WEIGHT}" \
+    --fedcd_router_threshold "${FEDCD_ROUTER_THRESHOLD}" \
+    --fedcd_router_temperature "${FEDCD_ROUTER_TEMPERATURE}" \
+    --fedcd_router_neg_std_scale "${FEDCD_ROUTER_NEG_STD_SCALE}" \
+    --fedcd_router_use_feature_norm "${FEDCD_ROUTER_USE_FEATURE_NORM}" \
+    --fedcd_router_reinit_on_initial_broadcast "${FEDCD_ROUTER_REINIT_ON_INITIAL_BROADCAST}" \
+    --fedcd_router_supervision_mode "${FEDCD_ROUTER_SUPERVISION_MODE}" \
+    --fedcd_router_branch_margin "${FEDCD_ROUTER_BRANCH_MARGIN}" \
+    --fedcd_router_gap_power "${FEDCD_ROUTER_GAP_POWER}" \
+    --fedcd_router_min_labeled_samples "${FEDCD_ROUTER_MIN_LABELED_SAMPLES}" \
+    --fedcd_router_fallback_ood_loss "${FEDCD_ROUTER_FALLBACK_OOD_LOSS}" \
+    --fedcd_router_use_val_split "${FEDCD_ROUTER_USE_VAL_SPLIT}" \
+    --fedcd_router_val_ratio "${FEDCD_ROUTER_VAL_RATIO}" \
+    --fedcd_router_val_min_samples "${FEDCD_ROUTER_VAL_MIN_SAMPLES}" \
+    --fedcd_router_val_max_samples "${FEDCD_ROUTER_VAL_MAX_SAMPLES}" \
+    --fedcd_router_soft_tau "${FEDCD_ROUTER_SOFT_TAU}" \
+    --fedcd_router_soft_label_floor "${FEDCD_ROUTER_SOFT_LABEL_FLOOR}" \
     --fedcd_gate_reliability_ema 0.9 \
     --fedcd_gate_reliability_samples 512 \
     --fedcd_gate_feature_ema 0.9 \

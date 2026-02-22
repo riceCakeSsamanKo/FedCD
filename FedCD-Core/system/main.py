@@ -549,13 +549,55 @@ if __name__ == "__main__":
     parser.add_argument('--fedcd_entropy_ood_scale', type=float, default=1.0,
                         help="Scale of OOD-aware PM suppression; smaller means stronger suppression.")
     parser.add_argument('--fedcd_fusion_mode', type=str, default="soft",
-                        help="Inference fusion mode: soft | pm_defer_hard.")
+                        help="Inference fusion mode: soft | pm_defer_hard | router_hard | router_soft.")
     parser.add_argument('--fedcd_pm_defer_conf_threshold', type=float, default=0.55,
                         help="For pm_defer_hard, minimum PM confidence (1-normalized entropy) to keep PM.")
     parser.add_argument('--fedcd_pm_defer_gm_margin', type=float, default=0.02,
                         help="For pm_defer_hard, switch to GM if GM confidence exceeds PM by this margin.")
     parser.add_argument('--fedcd_pm_defer_ood_threshold', type=float, default=0.35,
                         help="For pm_defer_hard, minimum in-distribution score to keep PM when OOD gate is enabled.")
+    parser.add_argument('--fedcd_router_enable', type=str2bool, default=False,
+                        help="Enable local per-client router trained on f_ext features (router is not aggregated).")
+    parser.add_argument('--fedcd_router_hidden_dim', type=int, default=128,
+                        help="Hidden dimension of local router MLP.")
+    parser.add_argument('--fedcd_router_dropout', type=float, default=0.0,
+                        help="Dropout ratio inside local router MLP.")
+    parser.add_argument('--fedcd_router_lr_scale', type=float, default=1.0,
+                        help="Local router learning-rate scale relative to base local lr.")
+    parser.add_argument('--fedcd_router_loss_weight', type=float, default=0.2,
+                        help="Auxiliary local router BCE loss weight.")
+    parser.add_argument('--fedcd_router_threshold', type=float, default=0.5,
+                        help="For router_hard, PM is selected when router local-prob >= threshold.")
+    parser.add_argument('--fedcd_router_temperature', type=float, default=1.0,
+                        help="Router logit temperature for router_hard/router_soft.")
+    parser.add_argument('--fedcd_router_neg_std_scale', type=float, default=2.0,
+                        help="Scale factor for synthetic outlier feature sampling in router training.")
+    parser.add_argument('--fedcd_router_use_feature_norm', type=str2bool, default=True,
+                        help="Normalize router input using local feature mean/variance before routing.")
+    parser.add_argument('--fedcd_router_reinit_on_initial_broadcast', type=str2bool, default=True,
+                        help="Reinitialize client-local router when initial server components are broadcast.")
+    parser.add_argument('--fedcd_router_supervision_mode', type=str, default="branch_ce",
+                        help="Router supervision mode: branch_ce | ood_synth | hybrid.")
+    parser.add_argument('--fedcd_router_branch_margin', type=float, default=0.02,
+                        help="Margin on per-sample CE gap to label PM-vs-GM router targets.")
+    parser.add_argument('--fedcd_router_gap_power', type=float, default=1.0,
+                        help="Exponent for CE-gap weighting in branch_ce router supervision.")
+    parser.add_argument('--fedcd_router_min_labeled_samples', type=int, default=4,
+                        help="Minimum labeled samples in batch required for branch_ce router supervision.")
+    parser.add_argument('--fedcd_router_fallback_ood_loss', type=str2bool, default=True,
+                        help="If branch_ce has too few labels, fall back to synthetic OOD router loss.")
+    parser.add_argument('--fedcd_router_use_val_split', type=str2bool, default=True,
+                        help="Use a client-local validation split (from local train set) for router supervision.")
+    parser.add_argument('--fedcd_router_val_ratio', type=float, default=0.1,
+                        help="Validation split ratio for router supervision (0~0.5).")
+    parser.add_argument('--fedcd_router_val_min_samples', type=int, default=32,
+                        help="Minimum validation samples per client for router supervision.")
+    parser.add_argument('--fedcd_router_val_max_samples', type=int, default=512,
+                        help="Maximum validation samples per client for router supervision (0 disables cap).")
+    parser.add_argument('--fedcd_router_soft_tau', type=float, default=0.2,
+                        help="Temperature for CE-gap to soft router target conversion.")
+    parser.add_argument('--fedcd_router_soft_label_floor', type=float, default=0.05,
+                        help="Clamp soft router targets away from 0/1 by this floor (0~0.49).")
     parser.add_argument('--fedcd_gate_reliability_ema', type=float, default=0.9,
                         help="EMA factor for updating per-class PM/GM gate reliability.")
     parser.add_argument('--fedcd_gate_reliability_samples', type=int, default=512,

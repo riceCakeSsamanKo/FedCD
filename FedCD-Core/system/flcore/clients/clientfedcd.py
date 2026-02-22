@@ -3,10 +3,29 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from flcore.clients.clientbase import Client
 from flcore.trainmodel.models import SmallFExt
 from utils.data_utils import read_client_data
+
+class LocalSimilarityRouter(nn.Module):
+    def __init__(self, input_dim, hidden_dim=128, dropout=0.0):
+        super().__init__()
+        hidden_dim = max(8, int(hidden_dim))
+        dropout = min(max(float(dropout), 0.0), 0.9)
+        self.net = nn.Sequential(
+            nn.LayerNorm(int(input_dim)),
+            nn.Linear(int(input_dim), hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.Linear(hidden_dim, 1),
+        )
+        nn.init.constant_(self.net[-1].bias, 0.0)
+
+    def forward(self, feat):
+        if feat.dim() > 2:
+            feat = torch.flatten(feat, 1)
+        return self.net(feat)
 
 class PMWrapper(nn.Module):
     def __init__(
@@ -35,6 +54,10 @@ class PMWrapper(nn.Module):
         pm_defer_conf_threshold=0.55,
         pm_defer_gm_margin=0.02,
         pm_defer_ood_threshold=0.35,
+        local_router=None,
+        router_threshold=0.5,
+        router_temperature=1.0,
+        router_use_feature_norm=True,
     ):
         super().__init__()
         self.f_ext = f_ext
@@ -42,6 +65,7 @@ class PMWrapper(nn.Module):
         self.personalized_module = personalized_module
         self.generalized_adapter = generalized_adapter
         self.personalized_adapter = personalized_adapter
+        self.local_router = local_router
         self.entropy_temp_pm = max(float(entropy_temp_pm), 1e-6)
         self.entropy_temp_gm = max(float(entropy_temp_gm), 1e-6)
         self.entropy_min_pm_weight = float(entropy_min_pm_weight)
@@ -56,11 +80,16 @@ class PMWrapper(nn.Module):
         self.entropy_use_ood_gate = bool(entropy_use_ood_gate)
         self.entropy_ood_scale = max(float(entropy_ood_scale), 1e-6)
         self.fusion_mode = str(fusion_mode).strip().lower()
-        if self.fusion_mode not in {"soft", "pm_defer_hard"}:
+        if self.fusion_mode not in {"soft", "pm_defer_hard", "router_hard", "router_soft"}:
             self.fusion_mode = "soft"
+        if self.fusion_mode in {"router_hard", "router_soft"} and self.local_router is None:
+            self.fusion_mode = "pm_defer_hard"
         self.pm_defer_conf_threshold = min(max(float(pm_defer_conf_threshold), 0.0), 1.0)
         self.pm_defer_gm_margin = max(float(pm_defer_gm_margin), 0.0)
         self.pm_defer_ood_threshold = min(max(float(pm_defer_ood_threshold), 0.0), 1.0)
+        self.router_threshold = min(max(float(router_threshold), 0.0), 1.0)
+        self.router_temperature = max(float(router_temperature), 1e-6)
+        self.router_use_feature_norm = bool(router_use_feature_norm)
         self.register_buffer(
             "pm_class_reliability",
             torch.full((int(num_classes),), 0.5, dtype=torch.float32),
@@ -104,11 +133,57 @@ class PMWrapper(nn.Module):
         norm = torch.log(torch.tensor(float(num_classes), device=prob.device))
         return entropy / norm.clamp_min(eps)
 
+    def _prepare_router_feature(self, feat):
+        if feat is None:
+            return None
+        if feat.dim() > 2:
+            feat = torch.flatten(feat, 1)
+        if (
+            self.router_use_feature_norm
+            and self.feature_mean is not None
+            and self.feature_var is not None
+            and feat.size(1) == self.feature_mean.numel()
+        ):
+            mu = self.feature_mean.to(feat.device).unsqueeze(0)
+            std = torch.sqrt(self.feature_var.to(feat.device).clamp_min(1e-6)).unsqueeze(0)
+            feat = (feat - mu) / std
+        return feat
+
+    def _router_local_prob(self, feat):
+        if self.local_router is None:
+            return None
+        router_feat = self._prepare_router_feature(feat)
+        if router_feat is None:
+            return None
+        router_logits = self.local_router(router_feat)
+        if router_logits.dim() == 1:
+            router_logits = router_logits.unsqueeze(1)
+        return torch.sigmoid(router_logits / self.router_temperature).clamp(0.0, 1.0)
+
     def mix_prob(self, gm_logits, pm_logits, feat=None):
         # Entropy-based confidence gating:
         # Use relative confidence (PM vs GM) so GM can dominate when PM is uncertain.
         pm_prob = torch.softmax(pm_logits / self.entropy_temp_pm, dim=1)
         gm_prob = torch.softmax(gm_logits / self.entropy_temp_gm, dim=1)
+
+        if self.fusion_mode in {"router_hard", "router_soft"}:
+            router_local_prob = self._router_local_prob(feat)
+            if router_local_prob is None:
+                pm_weight = torch.full(
+                    (pm_prob.size(0), 1),
+                    self.entropy_max_pm_weight,
+                    dtype=pm_prob.dtype,
+                    device=pm_prob.device,
+                )
+            elif self.fusion_mode == "router_soft":
+                pm_weight = router_local_prob
+            else:
+                pm_weight = (router_local_prob >= self.router_threshold).float()
+            pm_weight = pm_weight.clamp(0.0, 1.0)
+            gm_weight = 1.0 - pm_weight
+            mixed_prob = gm_weight * gm_prob + pm_weight * pm_prob
+            return mixed_prob, pm_weight
+
         pm_conf = 1.0 - self._normalized_entropy(pm_prob)
         gm_conf = 1.0 - self._normalized_entropy(gm_prob)
         pred_pm = torch.argmax(pm_prob, dim=1)
@@ -260,6 +335,38 @@ class clientFedCD(Client):
         self.pm_defer_conf_threshold = float(getattr(args, "fedcd_pm_defer_conf_threshold", 0.55))
         self.pm_defer_gm_margin = float(getattr(args, "fedcd_pm_defer_gm_margin", 0.02))
         self.pm_defer_ood_threshold = float(getattr(args, "fedcd_pm_defer_ood_threshold", 0.35))
+        self.router_enable = bool(getattr(args, "fedcd_router_enable", False))
+        self.router_hidden_dim = int(getattr(args, "fedcd_router_hidden_dim", 128))
+        self.router_dropout = float(getattr(args, "fedcd_router_dropout", 0.0))
+        self.router_lr_scale = float(getattr(args, "fedcd_router_lr_scale", 1.0))
+        self.router_loss_weight = float(getattr(args, "fedcd_router_loss_weight", 0.2))
+        self.router_threshold = float(getattr(args, "fedcd_router_threshold", 0.5))
+        self.router_temperature = float(getattr(args, "fedcd_router_temperature", 1.0))
+        self.router_neg_std_scale = float(getattr(args, "fedcd_router_neg_std_scale", 2.0))
+        self.router_use_feature_norm = bool(getattr(args, "fedcd_router_use_feature_norm", True))
+        self.router_reinit_on_initial_broadcast = bool(
+            getattr(args, "fedcd_router_reinit_on_initial_broadcast", True)
+        )
+        self.router_supervision_mode = str(
+            getattr(args, "fedcd_router_supervision_mode", "branch_ce")
+        ).strip().lower()
+        if self.router_supervision_mode not in {"branch_ce", "ood_synth", "hybrid"}:
+            self.router_supervision_mode = "branch_ce"
+        self.router_branch_margin = max(float(getattr(args, "fedcd_router_branch_margin", 0.02)), 0.0)
+        self.router_gap_power = max(float(getattr(args, "fedcd_router_gap_power", 1.0)), 0.0)
+        self.router_min_labeled_samples = max(
+            1, int(getattr(args, "fedcd_router_min_labeled_samples", 4))
+        )
+        self.router_fallback_ood_loss = bool(getattr(args, "fedcd_router_fallback_ood_loss", True))
+        self.router_use_val_split = bool(getattr(args, "fedcd_router_use_val_split", True))
+        self.router_val_ratio = min(max(float(getattr(args, "fedcd_router_val_ratio", 0.1)), 0.0), 0.5)
+        self.router_val_min_samples = max(1, int(getattr(args, "fedcd_router_val_min_samples", 32)))
+        self.router_val_max_samples = max(0, int(getattr(args, "fedcd_router_val_max_samples", 512)))
+        self.router_soft_tau = max(float(getattr(args, "fedcd_router_soft_tau", 0.2)), 1e-6)
+        self.router_soft_label_floor = min(
+            max(float(getattr(args, "fedcd_router_soft_label_floor", 0.05)), 0.0),
+            0.49,
+        )
         self.gate_reliability_ema = float(getattr(args, "fedcd_gate_reliability_ema", 0.9))
         self.gate_reliability_samples = int(getattr(args, "fedcd_gate_reliability_samples", 512))
         self.gate_feature_ema = float(getattr(args, "fedcd_gate_feature_ema", 0.9))
@@ -288,6 +395,17 @@ class clientFedCD(Client):
             if self.f_ext_dim is not None and int(self.f_ext_dim) > 0
             else None
         )
+        self.router = None
+        self.router_val_indices = None
+        if self.router_enable:
+            if self.f_ext_dim is None or int(self.f_ext_dim) <= 0:
+                raise ValueError("fedcd_router_enable=True requires positive f_ext_dim.")
+            self.router = LocalSimilarityRouter(
+                input_dim=int(self.f_ext_dim),
+                hidden_dim=self.router_hidden_dim,
+                dropout=self.router_dropout,
+            )
+            self._build_router_val_split_indices()
         self.model = PMWrapper(
             self.f_ext,
             self.generalized_module,
@@ -313,6 +431,10 @@ class clientFedCD(Client):
             pm_defer_conf_threshold=self.pm_defer_conf_threshold,
             pm_defer_gm_margin=self.pm_defer_gm_margin,
             pm_defer_ood_threshold=self.pm_defer_ood_threshold,
+            local_router=self.router,
+            router_threshold=self.router_threshold,
+            router_temperature=self.router_temperature,
+            router_use_feature_norm=self.router_use_feature_norm,
         )
         self.model.set_class_reliability(self.pm_class_reliability, self.gm_class_reliability)
         self.model.set_feature_stats(self.gate_feature_mean, self.gate_feature_var)
@@ -332,6 +454,9 @@ class clientFedCD(Client):
             print(f"  Total Parameters: {total_params:,}")
             print(f"  Trainable Parameters: {trainable_params:,}")
             print(f"  Estimated Model Size: {total_size_bytes / (1024**2):.2f} MB")
+            if self.router_enable and self.router_use_val_split:
+                val_cnt = len(self.router_val_indices) if self.router_val_indices is not None else 0
+                print(f"  Router Validation Split: {val_cnt} samples")
 
     def _to_device(self, tensor, device):
         if self.pin_memory and device == "cuda":
@@ -427,6 +552,178 @@ class clientFedCD(Client):
         target = torch.full_like(corr, float(self.nc_target_corr))
         return F.mse_loss(corr, target, reduction="mean")
 
+    def _sample_router_negative_features(self, feat):
+        if feat.dim() > 2:
+            feat = torch.flatten(feat, 1)
+        feat = feat.detach()
+
+        if (
+            self.gate_feature_mean is not None
+            and self.gate_feature_var is not None
+            and feat.size(1) == self.gate_feature_mean.numel()
+        ):
+            mu = self.gate_feature_mean.to(feat.device).unsqueeze(0)
+            std = torch.sqrt(self.gate_feature_var.to(feat.device).clamp_min(1e-6)).unsqueeze(0)
+        else:
+            mu = feat.mean(dim=0, keepdim=True)
+            std = feat.std(dim=0, unbiased=False, keepdim=True).clamp_min(1e-3)
+
+        neg = mu + self.router_neg_std_scale * std * torch.randn_like(feat)
+        if feat.size(0) > 1:
+            perm = torch.randperm(feat.size(0), device=feat.device)
+            neg = 0.5 * neg + 0.5 * feat[perm]
+        return neg
+
+    def _build_router_val_split_indices(self):
+        self.router_val_indices = None
+        if not self.router_use_val_split:
+            return
+        try:
+            train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
+            total = len(train_data)
+        except Exception:
+            return
+
+        if total <= 1:
+            return
+
+        val_size = int(round(total * self.router_val_ratio))
+        val_size = max(val_size, self.router_val_min_samples)
+        if self.router_val_max_samples > 0:
+            val_size = min(val_size, self.router_val_max_samples)
+        val_size = min(max(val_size, 1), total - 1)
+
+        g = torch.Generator()
+        g.manual_seed(2026 + int(self.id))
+        perm = torch.randperm(total, generator=g)
+        self.router_val_indices = perm[:val_size].tolist()
+
+    def load_router_val_data(self, batch_size=None):
+        if self.router_val_indices is None or len(self.router_val_indices) == 0:
+            return None
+        if batch_size is None:
+            batch_size = self.batch_size
+        batch_size = min(batch_size, len(self.router_val_indices))
+        if batch_size <= 0:
+            return None
+
+        train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
+        val_data = Subset(train_data, self.router_val_indices)
+        loader_kwargs = {
+            "batch_size": batch_size,
+            "drop_last": False,
+            "shuffle": True,
+            "num_workers": self.num_workers,
+            "pin_memory": self.pin_memory and self.device == "cuda",
+        }
+        if self.num_workers > 0:
+            loader_kwargs["persistent_workers"] = True
+            loader_kwargs["prefetch_factor"] = self.prefetch_factor
+        return DataLoader(val_data, **loader_kwargs)
+
+    def _router_ood_synthetic_loss(self, feat, pos_feat=None):
+        if self.router is None:
+            return feat.new_zeros(())
+        if feat.dim() > 2:
+            feat = torch.flatten(feat, 1)
+        if pos_feat is None:
+            pos_feat = self.model._prepare_router_feature(feat.detach())
+        if pos_feat is None:
+            return feat.new_zeros(())
+        neg_feat = self._sample_router_negative_features(feat)
+        neg_feat = self.model._prepare_router_feature(neg_feat)
+        if neg_feat is None:
+            return feat.new_zeros(())
+
+        logits_pos = self.router(pos_feat).view(-1)
+        logits_neg = self.router(neg_feat).view(-1)
+        target_pos = torch.ones_like(logits_pos)
+        target_neg = torch.zeros_like(logits_neg)
+        loss_pos = F.binary_cross_entropy_with_logits(logits_pos, target_pos)
+        loss_neg = F.binary_cross_entropy_with_logits(logits_neg, target_neg)
+        return 0.5 * (loss_pos + loss_neg)
+
+    def _router_training_loss(self, feat, logits_pm=None, logits_gm=None, y=None):
+        if self.router is None:
+            return feat.new_zeros(())
+        if feat.dim() > 2:
+            feat = torch.flatten(feat, 1)
+
+        pos_feat = self.model._prepare_router_feature(feat.detach())
+        if pos_feat is None:
+            return feat.new_zeros(())
+
+        supervised_loss = None
+        use_branch_supervision = self.router_supervision_mode in {"branch_ce", "hybrid"}
+        if use_branch_supervision and logits_pm is not None and logits_gm is not None and y is not None:
+            with torch.no_grad():
+                y_ref = y.detach().long()
+                valid = (y_ref >= 0) & (y_ref < logits_pm.size(1))
+                if bool(valid.any()):
+                    pm_ce = F.cross_entropy(logits_pm.detach(), y_ref, reduction="none")
+                    gm_ce = F.cross_entropy(logits_gm.detach(), y_ref, reduction="none")
+                    gap = gm_ce - pm_ce
+                    labeled = valid & (gap.abs() >= self.router_branch_margin)
+                    soft_target = torch.sigmoid(gap / self.router_soft_tau)
+                    if self.router_soft_label_floor > 0:
+                        span = 1.0 - 2.0 * self.router_soft_label_floor
+                        soft_target = self.router_soft_label_floor + span * soft_target
+                else:
+                    pm_ce = None
+                    gm_ce = None
+                    gap = None
+                    soft_target = None
+                    labeled = None
+
+            if labeled is not None and int(labeled.sum().item()) >= self.router_min_labeled_samples:
+                router_logits = self.router(pos_feat).view(-1)
+                target = soft_target.to(router_logits.dtype)
+                bce = F.binary_cross_entropy_with_logits(router_logits, target, reduction="none")
+
+                if self.router_gap_power > 0:
+                    gap_weight = gap.abs().clamp_min(1e-6).pow(self.router_gap_power)
+                    labeled_gap_mean = gap_weight[labeled].mean().clamp_min(1e-6)
+                    gap_weight = gap_weight / labeled_gap_mean
+                else:
+                    gap_weight = torch.ones_like(bce)
+
+                mask = labeled.to(bce.dtype)
+                supervised_loss = (bce * gap_weight * mask).sum() / (
+                    gap_weight * mask
+                ).sum().clamp_min(1e-12)
+
+        ood_loss = None
+        use_ood = (
+            self.router_supervision_mode == "ood_synth"
+            or self.router_supervision_mode == "hybrid"
+            or (supervised_loss is None and self.router_fallback_ood_loss)
+        )
+        if use_ood:
+            ood_loss = self._router_ood_synthetic_loss(feat, pos_feat=pos_feat)
+
+        if supervised_loss is not None and ood_loss is not None:
+            return 0.8 * supervised_loss + 0.2 * ood_loss
+        if supervised_loss is not None:
+            return supervised_loss
+        if ood_loss is not None:
+            return ood_loss
+        return feat.new_zeros(())
+
+    def _randomize_router(self):
+        if self.router is None:
+            return
+
+        def _reset_module(m):
+            if hasattr(m, "reset_parameters"):
+                m.reset_parameters()
+
+        self.router.apply(_reset_module)
+        # Keep neutral PM/GM prior at deployment while preserving random weights.
+        with torch.no_grad():
+            last = self.router.net[-1]
+            if isinstance(last, nn.Linear) and last.bias is not None:
+                last.bias.zero_()
+
     def _set_local_gm_trainable(self, trainable):
         for p in self.generalized_module.parameters():
             p.requires_grad = bool(trainable)
@@ -493,6 +790,18 @@ class clientFedCD(Client):
 
         def _train_once(device, batch_size):
             trainloader = self.load_train_data(batch_size=batch_size)
+            router_valloader = None
+            router_val_iter = None
+            if (
+                self.router is not None
+                and self.router_loss_weight > 0
+                and self.router_use_val_split
+                and self.router_val_indices is not None
+                and len(self.router_val_indices) > 0
+            ):
+                router_valloader = self.load_router_val_data(batch_size=min(batch_size, self.batch_size))
+                if router_valloader is not None:
+                    router_val_iter = iter(router_valloader)
             # Move models to GPU only during training to reduce memory usage
             self.model.to(device)
             self.f_ext.to(device)
@@ -504,6 +813,9 @@ class clientFedCD(Client):
             if self.personalized_adapter is not None:
                 self.personalized_adapter.to(device)
             self.personalized_module.train()
+            if self.router is not None:
+                self.router.to(device)
+                self.router.train()
             if self.local_gm_trainable:
                 self.generalized_module.train()
                 if self.generalized_adapter is not None:
@@ -560,6 +872,48 @@ class clientFedCD(Client):
                             if self.nc_weight > 0:
                                 nc_loss = self._feature_negative_correlation_loss(gm_feat, pm_feat)
                                 loss = loss + self.nc_weight * nc_loss
+                        if self.router is not None and self.router_loss_weight > 0:
+                            router_feat = z
+                            router_logits_pm = logits_pm
+                            router_logits_gm = logits_gm
+                            router_y = y
+                            if router_val_iter is not None:
+                                try:
+                                    x_router, y_router = next(router_val_iter)
+                                except StopIteration:
+                                    router_val_iter = iter(router_valloader)
+                                    x_router, y_router = next(router_val_iter)
+                                if type(x_router) == type([]):
+                                    x_router = x_router[0]
+                                x_router = self._to_device(x_router, device)
+                                y_router = self._to_device(y_router, device)
+                                with torch.no_grad():
+                                    z_router = self.f_ext(x_router)
+                                    if z_router.dim() > 2:
+                                        z_router = torch.flatten(z_router, 1)
+                                    z_router_gm = (
+                                        self.generalized_adapter(z_router)
+                                        if self.generalized_adapter is not None
+                                        else z_router
+                                    )
+                                    z_router_pm = (
+                                        self.personalized_adapter(z_router)
+                                        if self.personalized_adapter is not None
+                                        else z_router
+                                    )
+                                    logits_gm_router = self.generalized_module(z_router_gm)
+                                    logits_pm_router = self.personalized_module(z_router_pm)
+                                router_feat = z_router
+                                router_logits_pm = logits_pm_router
+                                router_logits_gm = logits_gm_router
+                                router_y = y_router
+                            router_loss = self._router_training_loss(
+                                router_feat,
+                                logits_pm=router_logits_pm,
+                                logits_gm=router_logits_gm,
+                                y=router_y,
+                            )
+                            loss = loss + self.router_loss_weight * router_loss
                     
                     scaler.scale(loss).backward()
                     scaler.step(self.optimizer)
@@ -964,6 +1318,11 @@ class clientFedCD(Client):
         if self.personalized_adapter is not None and personalized_adapter_state:
             self.personalized_adapter.load_state_dict(personalized_adapter_state, strict=True)
 
+        # Router is client-local and must remain independent from proxy pretrain / server broadcast.
+        # Reinitialize at deployment so later routing is initialized only from local client data.
+        if self.router is not None and self.router_reinit_on_initial_broadcast:
+            self._randomize_router()
+
         self.model.f_ext = self.f_ext
         self.model.generalized_module = self.generalized_module
         self.model.personalized_module = self.personalized_module
@@ -1022,6 +1381,10 @@ class clientFedCD(Client):
         if self.personalized_adapter is not None:
             pm_params += list(self.personalized_adapter.parameters())
 
+        router_params = []
+        if self.router is not None:
+            router_params = list(self.router.parameters())
+
         gm_params = []
         if self.local_gm_trainable:
             gm_params = list(self.generalized_module.parameters())
@@ -1029,9 +1392,12 @@ class clientFedCD(Client):
                 gm_params += list(self.generalized_adapter.parameters())
 
         gm_lr = max(self.learning_rate * self.gm_lr_scale, 0.0)
+        router_lr = max(self.learning_rate * self.router_lr_scale, 0.0)
         param_groups = []
         if pm_params:
             param_groups.append({"params": pm_params, "lr": self.learning_rate})
+        if router_params and router_lr > 0:
+            param_groups.append({"params": router_params, "lr": router_lr})
         if gm_params and gm_lr > 0:
             param_groups.append({"params": gm_params, "lr": gm_lr})
         return torch.optim.SGD(param_groups, lr=self.learning_rate)
