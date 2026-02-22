@@ -58,6 +58,19 @@ class FedCD(Server):
         self.common_eval_batch_size = int(getattr(args, "common_eval_batch_size", 256))
         self.global_test_loader = self._build_global_test_loader() if self.eval_common_global else None
         self.last_global_gate_stats = None
+        self.last_local_gate_stats = None
+        self.router_server_distill_enable = bool(
+            getattr(args, "fedcd_router_server_distill_enable", True)
+        )
+        if self.router_server_distill_enable:
+            any_router = any(getattr(c, "router", None) is not None for c in self.clients)
+            if not any_router:
+                self.router_server_distill_enable = False
+                print("[FedCD] Router-context distillation disabled: no client router is enabled.")
+        self.router_server_samples = int(getattr(args, "fedcd_router_server_samples", 256))
+        self.router_server_samples = max(0, self.router_server_samples)
+        self.router_server_period = int(getattr(args, "fedcd_router_server_period", 1))
+        self.router_server_period = max(1, self.router_server_period)
         # Backward-compatible alias
         self.common_test_loader = self.global_test_loader
         self.generalized_module = self._extract_module(self.global_model)
@@ -776,6 +789,7 @@ class FedCD(Server):
             received_pms = []
             received_gms = []
             received_protos = []
+            received_router_stats = []
             total_uplink_bytes = 0
             for client in tqdm(self.selected_clients, desc=f"Round {i} Collecting PMs", leave=False):
                 pm_state = client.upload_parameters()
@@ -791,6 +805,14 @@ class FedCD(Server):
                     if proto_state:
                         received_protos.append((client.id, proto_state))
                         total_uplink_bytes += sum(v.numel() * v.element_size() for v in proto_state.values())
+                if (
+                    self.router_server_distill_enable
+                    and i % self.router_server_period == 0
+                ):
+                    router_state = client.upload_router_feature_stats(max_samples=self.router_server_samples)
+                    if router_state:
+                        received_router_stats.append((client.id, router_state))
+                        total_uplink_bytes += self._tensor_state_nbytes(router_state)
             
             round_uplink += total_uplink_bytes
 
@@ -816,6 +838,16 @@ class FedCD(Server):
                 for c_id in sorted(cluster_groups.keys()):
                     clients_in_cluster = sorted(cluster_groups[c_id])
                     print(f"  Cluster {c_id} ({len(clients_in_cluster)} clients): {clients_in_cluster}")
+
+            if (
+                self.router_server_distill_enable
+                and i % self.router_server_period == 0
+                and received_router_stats
+            ):
+                cluster_router_contexts = self._build_router_cluster_contexts(received_router_stats)
+                if cluster_router_contexts:
+                    router_downlink = self.send_router_distribution_context(cluster_router_contexts)
+                    round_downlink += router_downlink
 
             # 3. 클러스터 내 PM 집계 및 배포
             need_cluster_pm = (
@@ -939,6 +971,16 @@ class FedCD(Server):
             print(f"Server: PM-only Local Test Accuracy: {pm_local_test_acc:.4f}")
         if gm_local_test_acc is not None:
             print(f"Server: GM-only Local Test Accuracy: {gm_local_test_acc:.4f}")
+        if self.last_local_gate_stats is not None:
+            local_gate = self.last_local_gate_stats
+            print(
+                "Server: Local Fusion PM Weight (mean/min/max): "
+                f"{local_gate['pm_weight_mean']:.4f}/{local_gate['pm_weight_min']:.4f}/{local_gate['pm_weight_max']:.4f}"
+            )
+            print(
+                "Server: Local Fusion Argmax Agreement (with PM/GM): "
+                f"{local_gate['agree_with_pm']:.4f}/{local_gate['agree_with_gm']:.4f}"
+            )
         if global_test_acc is not None:
             print(f"Server: Overall Averaged Global Test Accuracy: {global_test_acc:.4f}")
             if self.last_global_gate_stats is not None:
@@ -1065,6 +1107,187 @@ class FedCD(Server):
                 current_bytes = sum(v.numel() * v.element_size() for v in current_pm.values())
                 total_broadcast_bytes += current_bytes
         
+        return total_broadcast_bytes
+
+    @staticmethod
+    def _tensor_state_nbytes(state):
+        total = 0
+        if not isinstance(state, dict):
+            return total
+        for v in state.values():
+            if torch.is_tensor(v):
+                total += v.numel() * v.element_size()
+        return total
+
+    @staticmethod
+    def _mean_var_from_sums(sum_tensor, sq_sum_tensor, count_tensor):
+        if count_tensor <= 0:
+            return None, None
+        denom = float(max(count_tensor, 1e-12))
+        mean = sum_tensor / denom
+        var = (sq_sum_tensor / denom) - mean.pow(2)
+        return mean.float(), var.float().clamp_min(1e-6)
+
+    @staticmethod
+    def _class_mean_var_from_sums(counts, feat_sum, feat_sq_sum, fallback_mean=None, fallback_var=None):
+        C = counts.size(0)
+        D = feat_sum.size(1)
+        mean = torch.zeros((C, D), dtype=torch.float32)
+        var = torch.ones((C, D), dtype=torch.float32)
+        valid = counts > 0
+        if valid.any():
+            idx = valid.nonzero(as_tuple=False).view(-1)
+            cnt = counts[idx].unsqueeze(1).clamp_min(1e-12)
+            cls_mean = feat_sum[idx] / cnt
+            cls_var = (feat_sq_sum[idx] / cnt) - cls_mean.pow(2)
+            mean[idx] = cls_mean.float()
+            var[idx] = cls_var.float().clamp_min(1e-6)
+        if fallback_mean is not None and fallback_var is not None:
+            invalid = ~valid
+            if invalid.any():
+                mean[invalid] = fallback_mean[invalid].float()
+                var[invalid] = fallback_var[invalid].float().clamp_min(1e-6)
+        return mean, var, valid.float()
+
+    def _build_router_cluster_contexts(self, received_router_stats):
+        if not received_router_stats:
+            return {}
+
+        valid_payloads = []
+        num_classes = None
+        feat_dim = None
+        for client_id, state in received_router_stats:
+            if not state:
+                continue
+            if not {"counts", "feat_sum", "feat_sq_sum"}.issubset(set(state.keys())):
+                continue
+            counts = state["counts"].detach().cpu().float()
+            feat_sum = state["feat_sum"].detach().cpu().float()
+            feat_sq_sum = state["feat_sq_sum"].detach().cpu().float()
+            if counts.dim() != 1 or feat_sum.dim() != 2 or feat_sq_sum.dim() != 2:
+                continue
+            if feat_sum.shape != feat_sq_sum.shape:
+                continue
+            if feat_sum.size(0) != counts.size(0):
+                continue
+
+            if num_classes is None:
+                num_classes = counts.size(0)
+                feat_dim = feat_sum.size(1)
+            elif num_classes != counts.size(0) or feat_dim != feat_sum.size(1):
+                continue
+
+            valid_payloads.append((int(client_id), counts, feat_sum, feat_sq_sum))
+
+        if not valid_payloads or num_classes is None or feat_dim is None:
+            return {}
+
+        global_counts = torch.zeros((num_classes,), dtype=torch.float32)
+        global_feat_sum = torch.zeros((num_classes, feat_dim), dtype=torch.float32)
+        global_feat_sq_sum = torch.zeros((num_classes, feat_dim), dtype=torch.float32)
+
+        cluster_counts = {}
+        cluster_feat_sum = {}
+        cluster_feat_sq_sum = {}
+
+        for client_id, counts, feat_sum, feat_sq_sum in valid_payloads:
+            cluster_id = int(self.cluster_map.get(client_id, 0))
+            global_counts += counts
+            global_feat_sum += feat_sum
+            global_feat_sq_sum += feat_sq_sum
+
+            if cluster_id not in cluster_counts:
+                cluster_counts[cluster_id] = counts.clone()
+                cluster_feat_sum[cluster_id] = feat_sum.clone()
+                cluster_feat_sq_sum[cluster_id] = feat_sq_sum.clone()
+            else:
+                cluster_counts[cluster_id] += counts
+                cluster_feat_sum[cluster_id] += feat_sum
+                cluster_feat_sq_sum[cluster_id] += feat_sq_sum
+
+        global_total = float(global_counts.sum().item())
+        if global_total <= 0:
+            return {}
+
+        global_sum_vec = global_feat_sum.sum(dim=0)
+        global_sq_sum_vec = global_feat_sq_sum.sum(dim=0)
+        global_mean, global_var = self._mean_var_from_sums(global_sum_vec, global_sq_sum_vec, global_total)
+        if global_mean is None or global_var is None:
+            return {}
+        global_cls_mean, global_cls_var, _ = self._class_mean_var_from_sums(
+            global_counts, global_feat_sum, global_feat_sq_sum
+        )
+
+        contexts = {}
+        all_cluster_ids = set(self.cluster_map.values())
+        for cluster_id in all_cluster_ids:
+            c_counts = cluster_counts.get(cluster_id)
+            c_feat_sum = cluster_feat_sum.get(cluster_id)
+            c_feat_sq_sum = cluster_feat_sq_sum.get(cluster_id)
+            if c_counts is None:
+                c_counts = torch.zeros_like(global_counts)
+                c_feat_sum = torch.zeros_like(global_feat_sum)
+                c_feat_sq_sum = torch.zeros_like(global_feat_sq_sum)
+
+            in_total = float(c_counts.sum().item())
+            in_sum_vec = c_feat_sum.sum(dim=0)
+            in_sq_sum_vec = c_feat_sq_sum.sum(dim=0)
+
+            out_counts = (global_counts - c_counts).clamp_min(0.0)
+            out_feat_sum = (global_feat_sum - c_feat_sum)
+            out_feat_sq_sum = (global_feat_sq_sum - c_feat_sq_sum)
+            out_total = float(out_counts.sum().item())
+            out_sum_vec = out_feat_sum.sum(dim=0)
+            out_sq_sum_vec = out_feat_sq_sum.sum(dim=0)
+
+            in_mean, in_var = self._mean_var_from_sums(in_sum_vec, in_sq_sum_vec, in_total)
+            out_mean, out_var = self._mean_var_from_sums(out_sum_vec, out_sq_sum_vec, out_total)
+            if in_mean is None or in_var is None:
+                in_mean, in_var = global_mean.clone(), global_var.clone()
+            if out_mean is None or out_var is None:
+                out_mean, out_var = global_mean.clone(), global_var.clone()
+
+            in_cls_mean, in_cls_var, in_cls_valid = self._class_mean_var_from_sums(
+                c_counts, c_feat_sum, c_feat_sq_sum, fallback_mean=global_cls_mean, fallback_var=global_cls_var
+            )
+            out_cls_mean, out_cls_var, out_cls_valid = self._class_mean_var_from_sums(
+                out_counts, out_feat_sum, out_feat_sq_sum, fallback_mean=global_cls_mean, fallback_var=global_cls_var
+            )
+
+            contexts[cluster_id] = {
+                "in_feature_mean": in_mean.cpu(),
+                "in_feature_var": in_var.cpu(),
+                "out_feature_mean": out_mean.cpu(),
+                "out_feature_var": out_var.cpu(),
+                "in_class_mean": in_cls_mean.cpu(),
+                "in_class_var": in_cls_var.cpu(),
+                "in_class_valid": in_cls_valid.cpu(),
+                "out_class_mean": out_cls_mean.cpu(),
+                "out_class_var": out_cls_var.cpu(),
+                "out_class_valid": out_cls_valid.cpu(),
+            }
+
+        return contexts
+
+    def send_router_distribution_context(self, cluster_contexts):
+        if not cluster_contexts:
+            return 0
+
+        total_broadcast_bytes = 0
+        sample_context = next(iter(cluster_contexts.values()))
+        context_bytes = self._tensor_state_nbytes(sample_context)
+        print(
+            "[FedCD] Broadcast Router Context Size: "
+            f"{context_bytes / (1024**2):.2f} MB per client (cluster-conditioned)"
+        )
+
+        for client in self.clients:
+            cluster_id = int(self.cluster_map.get(client.id, 0))
+            ctx = cluster_contexts.get(cluster_id, None)
+            client.set_router_distribution_context(ctx)
+            if ctx is not None:
+                total_broadcast_bytes += self._tensor_state_nbytes(ctx)
+
         return total_broadcast_bytes
 
     def aggregate_global_gms(self, received_gms):
@@ -2165,6 +2388,7 @@ class FedCD(Server):
             (gm_local_acc, pm_local_acc) weighted by total local-test samples.
         """
         if not self.clients:
+            self.last_local_gate_stats = None
             return None, None
 
         device = self.device
@@ -2172,22 +2396,18 @@ class FedCD(Server):
         total_samples = 0
         gm_correct_total = 0
         pm_correct_total = 0
+        pm_weight_sum = 0.0
+        pm_weight_min = float("inf")
+        pm_weight_max = float("-inf")
+        pm_weight_count = 0
+        agree_with_pm = 0
+        agree_with_gm = 0
+        agree_count = 0
 
         for client in self.clients:
             testloader = client.load_test_data()
-
-            client.f_ext.to(device)
-            client.generalized_module.to(device)
-            client.personalized_module.to(device)
-            client.f_ext.eval()
-            client.generalized_module.eval()
-            client.personalized_module.eval()
-            if client.generalized_adapter is not None:
-                client.generalized_adapter.to(device)
-                client.generalized_adapter.eval()
-            if client.personalized_adapter is not None:
-                client.personalized_adapter.to(device)
-                client.personalized_adapter.eval()
+            client.model.to(device)
+            client.model.eval()
 
             with torch.no_grad():
                 for x, y in testloader:
@@ -2196,32 +2416,44 @@ class FedCD(Server):
                     x = x.to(device, non_blocking=use_non_blocking)
                     y = y.to(device, non_blocking=use_non_blocking)
 
-                    z = client.f_ext(x)
-                    if z.dim() > 2:
-                        z = torch.flatten(z, 1)
+                    fused_logits, gm_logits, pm_logits, pm_weight = client.infer_fused_logits_with_gate(x)
+                    pred_fused = torch.argmax(fused_logits, dim=1)
+                    pred_pm = torch.argmax(pm_logits, dim=1)
+                    pred_gm = torch.argmax(gm_logits, dim=1)
 
-                    z_gm = client.generalized_adapter(z) if client.generalized_adapter is not None else z
-                    z_pm = client.personalized_adapter(z) if client.personalized_adapter is not None else z
-                    gm_logits = client.generalized_module(z_gm)
-                    pm_logits = client.personalized_module(z_pm)
-
-                    gm_correct_total += (torch.argmax(gm_logits, dim=1) == y).sum().item()
-                    pm_correct_total += (torch.argmax(pm_logits, dim=1) == y).sum().item()
+                    gm_correct_total += (pred_gm == y).sum().item()
+                    pm_correct_total += (pred_pm == y).sum().item()
                     total_samples += y.size(0)
+                    agree_with_pm += (pred_fused == pred_pm).sum().item()
+                    agree_with_gm += (pred_fused == pred_gm).sum().item()
+                    agree_count += y.size(0)
 
-            client.f_ext.to("cpu")
-            client.generalized_module.to("cpu")
-            client.personalized_module.to("cpu")
-            if client.generalized_adapter is not None:
-                client.generalized_adapter.to("cpu")
-            if client.personalized_adapter is not None:
-                client.personalized_adapter.to("cpu")
+                    pw = pm_weight.view(-1)
+                    pm_weight_sum += pw.sum().item()
+                    pm_weight_count += pw.numel()
+                    pm_weight_min = min(pm_weight_min, pw.min().item())
+                    pm_weight_max = max(pm_weight_max, pw.max().item())
+
+            client.model.to("cpu")
 
         if device == "cuda":
             torch.cuda.empty_cache()
 
         if total_samples <= 0:
+            self.last_local_gate_stats = None
             return None, None
+
+        if pm_weight_count > 0:
+            self.last_local_gate_stats = {
+                "pm_weight_mean": pm_weight_sum / pm_weight_count,
+                "pm_weight_min": pm_weight_min,
+                "pm_weight_max": pm_weight_max,
+                "agree_with_pm": agree_with_pm / max(agree_count, 1),
+                "agree_with_gm": agree_with_gm / max(agree_count, 1),
+            }
+        else:
+            self.last_local_gate_stats = None
+
         gm_local_acc = gm_correct_total / total_samples
         pm_local_acc = pm_correct_total / total_samples
         return gm_local_acc, pm_local_acc

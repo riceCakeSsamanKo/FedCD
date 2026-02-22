@@ -548,6 +548,10 @@ if __name__ == "__main__":
                         help="Use local feature-distribution similarity (OOD-aware) to suppress PM on OOD samples.")
     parser.add_argument('--fedcd_entropy_ood_scale', type=float, default=1.0,
                         help="Scale of OOD-aware PM suppression; smaller means stronger suppression.")
+    parser.add_argument('--fedcd_entropy_ood_use_class_stats', type=str2bool, default=True,
+                        help="Use class-conditional local feature stats for OOD-aware PM routing.")
+    parser.add_argument('--fedcd_entropy_ood_class_mix', type=float, default=0.6,
+                        help="Mix ratio of class-conditional score in OOD gate (0=global only, 1=class-only).")
     parser.add_argument('--fedcd_fusion_mode', type=str, default="soft",
                         help="Inference fusion mode: soft | pm_defer_hard | router_hard | router_soft.")
     parser.add_argument('--fedcd_pm_defer_conf_threshold', type=float, default=0.55,
@@ -558,8 +562,14 @@ if __name__ == "__main__":
                         help="For pm_defer_hard, minimum in-distribution score to keep PM when OOD gate is enabled.")
     parser.add_argument('--fedcd_router_enable', type=str2bool, default=False,
                         help="Enable local per-client router trained on f_ext features (router is not aggregated).")
+    parser.add_argument('--fedcd_router_type', type=str, default="mlp",
+                        help="Router architecture: mlp | attention.")
     parser.add_argument('--fedcd_router_hidden_dim', type=int, default=128,
                         help="Hidden dimension of local router MLP.")
+    parser.add_argument('--fedcd_router_attn_dim', type=int, default=128,
+                        help="Attention embedding dim for attention router.")
+    parser.add_argument('--fedcd_router_attn_heads', type=int, default=4,
+                        help="Number of attention heads for attention router.")
     parser.add_argument('--fedcd_router_dropout', type=float, default=0.0,
                         help="Dropout ratio inside local router MLP.")
     parser.add_argument('--fedcd_router_lr_scale', type=float, default=1.0,
@@ -574,6 +584,14 @@ if __name__ == "__main__":
                         help="Scale factor for synthetic outlier feature sampling in router training.")
     parser.add_argument('--fedcd_router_use_feature_norm', type=str2bool, default=True,
                         help="Normalize router input using local feature mean/variance before routing.")
+    parser.add_argument('--fedcd_router_min_gm_weight', type=float, default=0.1,
+                        help="Minimum GM mixture weight floor in router_soft mode (prevents PM-collapse).")
+    parser.add_argument('--fedcd_router_conf_defer_margin', type=float, default=0.03,
+                        help="GM confidence margin over PM to down-weight PM in router modes.")
+    parser.add_argument('--fedcd_router_conf_defer_strength', type=float, default=0.7,
+                        help="Strength of PM down-weight when GM confidence exceeds PM by margin.")
+    parser.add_argument('--fedcd_router_conf_defer_tau', type=float, default=0.1,
+                        help="Temperature for confidence-based defer in router modes.")
     parser.add_argument('--fedcd_router_reinit_on_initial_broadcast', type=str2bool, default=True,
                         help="Reinitialize client-local router when initial server components are broadcast.")
     parser.add_argument('--fedcd_router_supervision_mode', type=str, default="branch_ce",
@@ -598,6 +616,30 @@ if __name__ == "__main__":
                         help="Temperature for CE-gap to soft router target conversion.")
     parser.add_argument('--fedcd_router_soft_label_floor', type=float, default=0.05,
                         help="Clamp soft router targets away from 0/1 by this floor (0~0.49).")
+    parser.add_argument('--fedcd_router_balance_weight', type=float, default=0.1,
+                        help="Regularization weight to keep router PM selection ratio from collapsing.")
+    parser.add_argument('--fedcd_router_balance_target', type=float, default=0.55,
+                        help="Target PM routing ratio used by router-balance regularization.")
+    parser.add_argument('--fedcd_router_balance_tolerance', type=float, default=0.2,
+                        help="Tolerance band around target PM ratio before router-balance penalty starts.")
+    parser.add_argument('--fedcd_router_server_distill_enable', type=str2bool, default=True,
+                        help="Use server-provided cluster in/out feature distributions to supervise router training.")
+    parser.add_argument('--fedcd_router_server_distill_weight', type=float, default=0.4,
+                        help="Additional BCE weight for server distribution-based router supervision.")
+    parser.add_argument('--fedcd_router_server_blend', type=float, default=0.5,
+                        help="Blend ratio for local-router score vs server distribution score (1=local-only, 0=server-only).")
+    parser.add_argument('--fedcd_router_server_tau', type=float, default=0.2,
+                        help="Temperature for converting server in-vs-out distribution margin into PM probability.")
+    parser.add_argument('--fedcd_router_server_ood_scale', type=float, default=1.0,
+                        help="Scale for server-side in/out Mahalanobis score in router supervision.")
+    parser.add_argument('--fedcd_router_server_use_class_stats', type=str2bool, default=True,
+                        help="Use class-conditional server in/out stats (predicted PM class) for router supervision.")
+    parser.add_argument('--fedcd_router_server_class_mix', type=float, default=0.6,
+                        help="Mix ratio of class-conditional score in server router supervision (0=global only, 1=class-only).")
+    parser.add_argument('--fedcd_router_server_samples', type=int, default=256,
+                        help="Per-client max local train samples used to upload router feature stats each update.")
+    parser.add_argument('--fedcd_router_server_period', type=int, default=1,
+                        help="Round period for server router-context updates.")
     parser.add_argument('--fedcd_gate_reliability_ema', type=float, default=0.9,
                         help="EMA factor for updating per-class PM/GM gate reliability.")
     parser.add_argument('--fedcd_gate_reliability_samples', type=int, default=512,
