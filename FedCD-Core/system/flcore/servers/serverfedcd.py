@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 import torchvision
-from flcore.trainmodel.models import SmallFExt
+from flcore.trainmodel.models import SmallFExt, TinyFExt
 from flcore.clients.clientfedcd import clientFedCD
 from flcore.servers.serverbase import Server
 from utils.data_utils import read_client_data 
@@ -71,8 +71,13 @@ class FedCD(Server):
         self.router_server_samples = max(0, self.router_server_samples)
         self.router_server_period = int(getattr(args, "fedcd_router_server_period", 1))
         self.router_server_period = max(1, self.router_server_period)
-        # Backward-compatible alias
-        self.common_test_loader = self.global_test_loader
+        self.router_server_neg_mode = str(
+            getattr(args, "fedcd_router_server_neg_mode", "all_other")
+        ).strip().lower()
+        if self.router_server_neg_mode not in {"all_other", "farthest_k"}:
+            self.router_server_neg_mode = "all_other"
+        self.router_server_neg_topk = int(getattr(args, "fedcd_router_server_neg_topk", 2))
+        self.router_server_neg_topk = max(0, self.router_server_neg_topk)
         self.generalized_module = self._extract_module(self.global_model)
         pm_model = getattr(args, "pm_model", None)
         if pm_model is None:
@@ -83,7 +88,6 @@ class FedCD(Server):
             self.personalized_module,
         )
         self.f_ext = self._build_f_ext(args, target_dim=target_fext_dim)
-        self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
         # Adapter is intentionally disabled.
         self.generalized_adapter = None
         self.personalized_adapter = None
@@ -99,6 +103,13 @@ class FedCD(Server):
             "hybrid_local_proto",
         }:
             raise ValueError(f"Unknown fedcd_gm_update_mode: {self.gm_update_mode}")
+        self.pm_to_gm_mask_enable = bool(
+            getattr(args, "fedcd_pm_to_gm_mask_enable", False)
+        )
+        self.pm_to_gm_mask_unified = bool(
+            getattr(args, "fedcd_pm_to_gm_mask_unified", True)
+        )
+        self._pm_to_gm_hidden_mask_cache = {}
         self.hybrid_proto_blend = float(getattr(args, "fedcd_hybrid_proto_blend", 0.35))
         self.hybrid_proto_blend = min(max(self.hybrid_proto_blend, 0.0), 1.0)
         self.pm_teacher_lr = float(getattr(args, "fedcd_pm_teacher_lr", 0.01))
@@ -301,6 +312,13 @@ class FedCD(Server):
             else:
                 fext_dim = int(getattr(args, "fext_dim", 512))
             f_ext = SmallFExt(in_channels=in_channels, out_dim=fext_dim)
+        elif model_name == "TinyFExt":
+            in_channels = 1 if "MNIST" in args.dataset else 3
+            if target_dim is not None:
+                fext_dim = int(target_dim)
+            else:
+                fext_dim = int(getattr(args, "fext_dim", 256))
+            f_ext = TinyFExt(in_channels=in_channels, out_dim=fext_dim)
         else:
             raise NotImplementedError(f"Unknown fext_model: {model_name}")
             
@@ -1220,6 +1238,68 @@ class FedCD(Server):
 
         contexts = {}
         all_cluster_ids = set(self.cluster_map.values())
+        cluster_mean_vec = {}
+        for cluster_id in all_cluster_ids:
+            c_counts = cluster_counts.get(cluster_id)
+            c_feat_sum = cluster_feat_sum.get(cluster_id)
+            if c_counts is None or c_feat_sum is None:
+                cluster_mean_vec[cluster_id] = global_mean.clone()
+                continue
+            c_total = float(c_counts.sum().item())
+            if c_total <= 0:
+                cluster_mean_vec[cluster_id] = global_mean.clone()
+            else:
+                cluster_mean_vec[cluster_id] = (c_feat_sum.sum(dim=0) / c_total).float()
+
+        def _compose_negative_stats(cur_cluster_id, cur_counts, cur_feat_sum, cur_feat_sq_sum):
+            # Baseline negative context: all other clusters.
+            out_counts = (global_counts - cur_counts).clamp_min(0.0)
+            out_feat_sum = (global_feat_sum - cur_feat_sum)
+            out_feat_sq_sum = (global_feat_sq_sum - cur_feat_sq_sum)
+
+            # Hard-negative context: farthest clusters by feature-mean distance.
+            if self.router_server_neg_mode != "farthest_k":
+                return out_counts, out_feat_sum, out_feat_sq_sum
+
+            candidates = []
+            cur_mean = cluster_mean_vec.get(cur_cluster_id, global_mean)
+            for other_id in all_cluster_ids:
+                if other_id == cur_cluster_id:
+                    continue
+                other_counts = cluster_counts.get(other_id)
+                other_feat_sum = cluster_feat_sum.get(other_id)
+                other_feat_sq_sum = cluster_feat_sq_sum.get(other_id)
+                if other_counts is None or other_feat_sum is None or other_feat_sq_sum is None:
+                    continue
+                other_total = float(other_counts.sum().item())
+                if other_total <= 0:
+                    continue
+                other_mean = cluster_mean_vec.get(other_id, global_mean)
+                dist = torch.sum((other_mean - cur_mean).pow(2)).item()
+                candidates.append((dist, other_id))
+
+            if not candidates:
+                return out_counts, out_feat_sum, out_feat_sq_sum
+
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            if self.router_server_neg_topk <= 0:
+                pick = candidates
+            else:
+                pick = candidates[: min(self.router_server_neg_topk, len(candidates))]
+
+            neg_counts = torch.zeros_like(global_counts)
+            neg_feat_sum = torch.zeros_like(global_feat_sum)
+            neg_feat_sq_sum = torch.zeros_like(global_feat_sq_sum)
+            for _, oid in pick:
+                neg_counts += cluster_counts[oid]
+                neg_feat_sum += cluster_feat_sum[oid]
+                neg_feat_sq_sum += cluster_feat_sq_sum[oid]
+
+            neg_total = float(neg_counts.sum().item())
+            if neg_total <= 0:
+                return out_counts, out_feat_sum, out_feat_sq_sum
+            return neg_counts, neg_feat_sum, neg_feat_sq_sum
+
         for cluster_id in all_cluster_ids:
             c_counts = cluster_counts.get(cluster_id)
             c_feat_sum = cluster_feat_sum.get(cluster_id)
@@ -1233,9 +1313,9 @@ class FedCD(Server):
             in_sum_vec = c_feat_sum.sum(dim=0)
             in_sq_sum_vec = c_feat_sq_sum.sum(dim=0)
 
-            out_counts = (global_counts - c_counts).clamp_min(0.0)
-            out_feat_sum = (global_feat_sum - c_feat_sum)
-            out_feat_sq_sum = (global_feat_sq_sum - c_feat_sq_sum)
+            out_counts, out_feat_sum, out_feat_sq_sum = _compose_negative_stats(
+                cluster_id, c_counts, c_feat_sum, c_feat_sq_sum
+            )
             out_total = float(out_counts.sum().item())
             out_sum_vec = out_feat_sum.sum(dim=0)
             out_sq_sum_vec = out_feat_sq_sum.sum(dim=0)
@@ -1349,6 +1429,192 @@ class FedCD(Server):
                 avg_state[key] = acc
         return avg_state
 
+    def _weighted_average_state_dicts(self, grouped_states, group_weights):
+        valid = []
+        total_weight = 0.0
+        for group_id, state in grouped_states.items():
+            if not state:
+                continue
+            w = float(group_weights.get(group_id, 1.0))
+            if w <= 0:
+                continue
+            valid.append((state, w))
+            total_weight += w
+
+        if not valid or total_weight <= 0:
+            return None
+
+        avg_state = {}
+        template = valid[0][0]
+        for key in template.keys():
+            acc = None
+            for state, w in valid:
+                value = state.get(key, None)
+                if value is None:
+                    continue
+                contrib = value.detach().cpu() * (w / total_weight)
+                acc = contrib if acc is None else (acc + contrib)
+            if acc is not None:
+                avg_state[key] = acc
+        return avg_state
+
+    @staticmethod
+    def _topk_sorted_indices(score, k):
+        n = int(score.numel())
+        k = int(max(0, min(k, n)))
+        if k <= 0:
+            return torch.empty((0,), dtype=torch.long, device=score.device)
+        if k == n:
+            return torch.arange(n, dtype=torch.long, device=score.device)
+        idx = torch.topk(score, k=k, largest=True, sorted=False).indices
+        idx, _ = torch.sort(idx)
+        return idx
+
+    @staticmethod
+    def _slice_or_pad_dim(tensor, dim, target_size, select_idx=None):
+        cur = int(tensor.size(dim))
+        tgt = int(target_size)
+        if cur == tgt:
+            return tensor
+
+        if cur > tgt:
+            if select_idx is None:
+                moved = tensor.abs().movedim(dim, 0).reshape(cur, -1)
+                score = moved.mean(dim=1)
+                select_idx = FedCD._topk_sorted_indices(score, tgt)
+            else:
+                select_idx = select_idx.to(tensor.device, dtype=torch.long)
+                if select_idx.numel() > tgt:
+                    select_idx = select_idx[:tgt]
+                elif select_idx.numel() < tgt:
+                    remain = tgt - int(select_idx.numel())
+                    all_idx = torch.arange(cur, device=tensor.device, dtype=torch.long)
+                    mask = torch.ones(cur, device=tensor.device, dtype=torch.bool)
+                    if select_idx.numel() > 0:
+                        mask[select_idx] = False
+                    extra = all_idx[mask][:remain]
+                    select_idx = torch.cat([select_idx, extra], dim=0)
+                select_idx, _ = torch.sort(select_idx)
+            return tensor.index_select(dim, select_idx)
+
+        pad_shape = list(tensor.shape)
+        pad_shape[dim] = tgt - cur
+        pad = torch.zeros(pad_shape, dtype=tensor.dtype, device=tensor.device)
+        return torch.cat([tensor, pad], dim=dim)
+
+    def _match_tensor_shape(self, src, target_tensor):
+        if src is None or target_tensor is None:
+            return None
+        src_t = src.detach().cpu()
+        if src_t.dim() != target_tensor.dim():
+            return None
+        out = src_t
+        for dim, tgt in enumerate(target_tensor.shape):
+            out = self._slice_or_pad_dim(out, dim, int(tgt))
+        return out.to(dtype=target_tensor.dtype).clone()
+
+    @staticmethod
+    def _linear_layer_names(module):
+        return [name for name, m in module.named_modules() if isinstance(m, nn.Linear)]
+
+    def _select_hidden_mask_indices(self, pm_fc1_weight, pm_fc2_weight, gm_hidden, cache_key):
+        pm_hidden = int(pm_fc1_weight.size(0))
+        gm_hidden = int(gm_hidden)
+        if gm_hidden >= pm_hidden:
+            return torch.arange(pm_hidden, dtype=torch.long)
+
+        if self.pm_to_gm_mask_unified:
+            cached = self._pm_to_gm_hidden_mask_cache.get(cache_key, None)
+            if cached is not None and int(cached.numel()) == gm_hidden:
+                return cached.clone()
+
+        score_in = pm_fc1_weight.detach().cpu().abs().mean(dim=1)
+        score_out = pm_fc2_weight.detach().cpu().abs().mean(dim=0)
+        score = score_in + score_out
+        idx = self._topk_sorted_indices(score, gm_hidden).cpu()
+
+        if self.pm_to_gm_mask_unified:
+            self._pm_to_gm_hidden_mask_cache[cache_key] = idx.clone()
+        return idx
+
+    def _project_pm_state_to_gm_state(self, pm_module_state):
+        gm_template = self.generalized_module.state_dict()
+        projected = {}
+
+        pm_linear = self._linear_layer_names(self.personalized_module)
+        gm_linear = self._linear_layer_names(self.generalized_module)
+
+        if len(pm_linear) >= 2 and len(gm_linear) >= 2:
+            pm_fc1_w_key = f"{pm_linear[0]}.weight"
+            pm_fc1_b_key = f"{pm_linear[0]}.bias"
+            pm_fc2_w_key = f"{pm_linear[1]}.weight"
+            pm_fc2_b_key = f"{pm_linear[1]}.bias"
+            gm_fc1_w_key = f"{gm_linear[0]}.weight"
+            gm_fc1_b_key = f"{gm_linear[0]}.bias"
+            gm_fc2_w_key = f"{gm_linear[1]}.weight"
+            gm_fc2_b_key = f"{gm_linear[1]}.bias"
+
+            req_pm = {pm_fc1_w_key, pm_fc2_w_key}
+            req_gm = {gm_fc1_w_key, gm_fc2_w_key}
+            if req_pm.issubset(set(pm_module_state.keys())) and req_gm.issubset(set(gm_template.keys())):
+                pm_fc1_w = pm_module_state[pm_fc1_w_key].detach().cpu()
+                pm_fc2_w = pm_module_state[pm_fc2_w_key].detach().cpu()
+                gm_fc1_w_t = gm_template[gm_fc1_w_key]
+                gm_fc2_w_t = gm_template[gm_fc2_w_key]
+
+                if (
+                    pm_fc1_w.dim() == 2
+                    and pm_fc2_w.dim() == 2
+                    and gm_fc1_w_t.dim() == 2
+                    and gm_fc2_w_t.dim() == 2
+                    and int(pm_fc1_w.size(0)) == int(pm_fc2_w.size(1))
+                    and int(gm_fc1_w_t.size(0)) == int(gm_fc2_w_t.size(1))
+                ):
+                    gm_hidden = int(gm_fc1_w_t.size(0))
+                    cache_key = (
+                        pm_fc1_w_key,
+                        pm_fc2_w_key,
+                        int(pm_fc1_w.size(0)),
+                        gm_hidden,
+                    )
+                    hidden_idx = self._select_hidden_mask_indices(pm_fc1_w, pm_fc2_w, gm_hidden, cache_key)
+
+                    in_score = pm_fc1_w.abs().mean(dim=0)
+                    in_idx = self._topk_sorted_indices(in_score, int(min(pm_fc1_w.size(1), gm_fc1_w_t.size(1))))
+                    gm_fc1_w = pm_fc1_w.index_select(0, hidden_idx)
+                    gm_fc1_w = gm_fc1_w.index_select(1, in_idx)
+                    gm_fc1_w = self._slice_or_pad_dim(gm_fc1_w, 1, int(gm_fc1_w_t.size(1)))
+                    projected[gm_fc1_w_key] = gm_fc1_w.to(dtype=gm_fc1_w_t.dtype).clone()
+
+                    if pm_fc1_b_key in pm_module_state and gm_fc1_b_key in gm_template:
+                        gm_fc1_b_t = gm_template[gm_fc1_b_key]
+                        pm_fc1_b = pm_module_state[pm_fc1_b_key].detach().cpu()
+                        gm_fc1_b = pm_fc1_b.index_select(0, hidden_idx)
+                        gm_fc1_b = self._slice_or_pad_dim(gm_fc1_b, 0, int(gm_fc1_b_t.size(0)))
+                        projected[gm_fc1_b_key] = gm_fc1_b.to(dtype=gm_fc1_b_t.dtype).clone()
+
+                    gm_fc2_w = pm_fc2_w.index_select(1, hidden_idx)
+                    gm_fc2_w = self._slice_or_pad_dim(gm_fc2_w, 0, int(gm_fc2_w_t.size(0)))
+                    projected[gm_fc2_w_key] = gm_fc2_w.to(dtype=gm_fc2_w_t.dtype).clone()
+
+                    if pm_fc2_b_key in pm_module_state and gm_fc2_b_key in gm_template:
+                        gm_fc2_b_t = gm_template[gm_fc2_b_key]
+                        gm_fc2_b = self._match_tensor_shape(pm_module_state[pm_fc2_b_key], gm_fc2_b_t)
+                        if gm_fc2_b is not None:
+                            projected[gm_fc2_b_key] = gm_fc2_b
+
+        for gm_key, gm_tensor in gm_template.items():
+            if gm_key in projected:
+                continue
+            src = pm_module_state.get(gm_key, None)
+            if src is None:
+                continue
+            matched = self._match_tensor_shape(src, gm_tensor)
+            if matched is not None:
+                projected[gm_key] = matched
+
+        return projected
+
     def update_gm_from_pm_fedavg(self, cluster_pms, cluster_counts):
         """
         Build GM by FedAveraging uploaded PMs on server.
@@ -1357,35 +1623,82 @@ class FedCD(Server):
         if not cluster_pms:
             return None
 
-        gm_module_template = self.generalized_module.state_dict()
-        gm_adapter_template = (
-            self.generalized_adapter.state_dict() if self.generalized_adapter is not None else {}
-        )
+        if not self.pm_to_gm_mask_enable:
+            gm_module_template = self.generalized_module.state_dict()
+            gm_adapter_template = (
+                self.generalized_adapter.state_dict() if self.generalized_adapter is not None else {}
+            )
 
-        cluster_gm_states = {}
-        for cluster_id, state in cluster_pms.items():
-            pm_module_state, pm_adapter_state = self._extract_personalized_state(state)
-            converted = {}
+            cluster_gm_states = {}
+            for cluster_id, state in cluster_pms.items():
+                pm_module_state, pm_adapter_state = self._extract_personalized_state(state)
+                converted = {}
 
-            for key, value in pm_module_state.items():
-                if key in gm_module_template and gm_module_template[key].shape == value.shape:
-                    converted[f"generalized_module.{key}"] = value.detach().cpu()
+                for key, value in pm_module_state.items():
+                    if key in gm_module_template and gm_module_template[key].shape == value.shape:
+                        converted[f"generalized_module.{key}"] = value.detach().cpu()
 
-            if self.generalized_adapter is not None and pm_adapter_state:
-                for key, value in pm_adapter_state.items():
-                    if key in gm_adapter_template and gm_adapter_template[key].shape == value.shape:
-                        converted[f"generalized_adapter.{key}"] = value.detach().cpu()
+                if self.generalized_adapter is not None and pm_adapter_state:
+                    for key, value in pm_adapter_state.items():
+                        if key in gm_adapter_template and gm_adapter_template[key].shape == value.shape:
+                            converted[f"generalized_adapter.{key}"] = value.detach().cpu()
 
-            if converted:
-                cluster_gm_states[cluster_id] = converted
+                if converted:
+                    cluster_gm_states[cluster_id] = converted
 
-        if not cluster_gm_states:
-            print("[FedCD] PM->GM FedAvg skipped: no compatible PM states.")
-            return None
+            if not cluster_gm_states:
+                print("[FedCD] PM->GM FedAvg skipped: no compatible PM states.")
+                return None
 
-        global_gm_state = self._weighted_average_generalized_states(cluster_gm_states, cluster_counts)
-        if not global_gm_state:
-            return None
+            global_gm_state = self._weighted_average_generalized_states(cluster_gm_states, cluster_counts)
+            if not global_gm_state:
+                return None
+        else:
+            cluster_pm_modules = {}
+            cluster_pm_adapters = {}
+            for cluster_id, state in cluster_pms.items():
+                pm_module_state, pm_adapter_state = self._extract_personalized_state(state)
+                if pm_module_state:
+                    cluster_pm_modules[cluster_id] = pm_module_state
+                if pm_adapter_state:
+                    cluster_pm_adapters[cluster_id] = pm_adapter_state
+
+            if not cluster_pm_modules:
+                print("[FedCD] PM->GM masked update skipped: empty PM module states.")
+                return None
+
+            avg_pm_module = self._weighted_average_state_dicts(cluster_pm_modules, cluster_counts)
+            if not avg_pm_module:
+                print("[FedCD] PM->GM masked update skipped: PM averaging failed.")
+                return None
+
+            projected_module = self._project_pm_state_to_gm_state(avg_pm_module)
+            if not projected_module:
+                print("[FedCD] PM->GM masked update skipped: projection produced no GM params.")
+                return None
+
+            global_gm_state = {
+                f"generalized_module.{k}": v
+                for k, v in projected_module.items()
+            }
+
+            if self.generalized_adapter is not None and cluster_pm_adapters:
+                avg_pm_adapter = self._weighted_average_state_dicts(cluster_pm_adapters, cluster_counts)
+                gm_adapter_template = self.generalized_adapter.state_dict()
+                if avg_pm_adapter:
+                    for key, tensor in gm_adapter_template.items():
+                        src = avg_pm_adapter.get(key, None)
+                        if src is None:
+                            continue
+                        matched = self._match_tensor_shape(src, tensor)
+                        if matched is not None:
+                            global_gm_state[f"generalized_adapter.{key}"] = matched
+
+        # Keep strict load stable even when only a subset of GM keys is updated.
+        current_gm_state = self._current_generalized_state()
+        for key, value in current_gm_state.items():
+            if key not in global_gm_state:
+                global_gm_state[key] = value.clone()
 
         for cluster_id in set(self.cluster_map.values()):
             self.cluster_generalized_states[cluster_id] = {
@@ -2377,10 +2690,6 @@ class FedCD(Server):
 
         raise ValueError(f"Unsupported proxy dataset: {proxy_name}")
 
-    # Backward-compatible alias
-    def _build_common_test_loader(self):
-        return self._build_global_test_loader()
-
     def evaluate_local_branch_test_accs(self):
         """
         Evaluate GM-only and PM-only accuracy on each client's local test split.
@@ -2628,7 +2937,3 @@ class FedCD(Server):
         if valid_clients == 0:
             return None
         return acc_sum / valid_clients
-
-    # Backward-compatible alias
-    def evaluate_common_test_acc(self):
-        return self.evaluate_global_test_acc()

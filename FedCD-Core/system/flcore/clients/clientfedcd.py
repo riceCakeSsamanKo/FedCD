@@ -1,11 +1,12 @@
 import copy
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from torch.utils.data import DataLoader, Subset
 from flcore.clients.clientbase import Client
-from flcore.trainmodel.models import SmallFExt
+from flcore.trainmodel.models import SmallFExt, TinyFExt
 from utils.data_utils import read_client_data
 
 class LocalSimilarityRouter(nn.Module):
@@ -99,6 +100,45 @@ class LocalAttentionRouter(nn.Module):
         base_logit = self.score(fused)
         return base_logit + attn_margin
 
+
+class SafeLogitFusionGate(nn.Module):
+    """
+    Output-space PM/GM fusion gate.
+    Operates on branch confidence/meta signals, so it is robust to
+    hidden-neuron permutation changes after aggregation.
+    """
+    def __init__(
+        self,
+        hidden_dim=64,
+        dropout=0.0,
+        pm_prior=0.8,
+        temperature=1.0,
+    ):
+        super().__init__()
+        hidden_dim = max(8, int(hidden_dim))
+        dropout = min(max(float(dropout), 0.0), 0.9)
+        pm_prior = min(max(float(pm_prior), 1e-4), 1.0 - 1e-4)
+        self.temperature = max(float(temperature), 1e-6)
+        self.prior_logit = float(math.log(pm_prior / (1.0 - pm_prior)))
+
+        self.net = nn.Sequential(
+            nn.LayerNorm(6),
+            nn.Linear(6, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(hidden_dim, 1),
+        )
+        # Start from PM-prior behavior, then adapt.
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+
+    def forward(self, meta):
+        if meta.dim() == 1:
+            meta = meta.unsqueeze(0)
+        logit = self.net(meta) + self.prior_logit
+        return torch.sigmoid(logit / self.temperature).clamp(0.0, 1.0)
+
+
 class PMWrapper(nn.Module):
     def __init__(
         self,
@@ -142,6 +182,13 @@ class PMWrapper(nn.Module):
         router_server_ood_scale=1.0,
         router_server_use_class_stats=True,
         router_server_class_mix=0.6,
+        learned_blend_alpha=0.5,
+        safe_fusion_hidden_dim=64,
+        safe_fusion_dropout=0.0,
+        safe_fusion_pm_prior=0.8,
+        safe_fusion_temperature=1.0,
+        safe_fusion_min_pm_weight=0.0,
+        safe_fusion_max_pm_weight=1.0,
     ):
         super().__init__()
         self.f_ext = f_ext
@@ -164,10 +211,19 @@ class PMWrapper(nn.Module):
         self.entropy_use_ood_gate = bool(entropy_use_ood_gate)
         self.entropy_ood_scale = max(float(entropy_ood_scale), 1e-6)
         self.fusion_mode = str(fusion_mode).strip().lower()
-        if self.fusion_mode not in {"soft", "pm_defer_hard", "router_hard", "router_soft"}:
+        if self.fusion_mode not in {
+            "soft",
+            "poe_soft",
+            "learned_blend",
+            "pm_defer_hard",
+            "router_hard",
+            "router_soft",
+            "safe_logit",
+        }:
             self.fusion_mode = "soft"
         if self.fusion_mode in {"router_hard", "router_soft"} and self.local_router is None:
             self.fusion_mode = "pm_defer_hard"
+        self.learned_blend_alpha = min(max(float(learned_blend_alpha), 0.0), 1.0)
         self.pm_defer_conf_threshold = min(max(float(pm_defer_conf_threshold), 0.0), 1.0)
         self.pm_defer_gm_margin = max(float(pm_defer_gm_margin), 0.0)
         self.pm_defer_ood_threshold = min(max(float(pm_defer_ood_threshold), 0.0), 1.0)
@@ -186,6 +242,21 @@ class PMWrapper(nn.Module):
         self.router_server_ood_scale = max(float(router_server_ood_scale), 1e-6)
         self.router_server_use_class_stats = bool(router_server_use_class_stats)
         self.router_server_class_mix = min(max(float(router_server_class_mix), 0.0), 1.0)
+        self.safe_fusion_min_pm_weight = min(max(float(safe_fusion_min_pm_weight), 0.0), 1.0)
+        self.safe_fusion_max_pm_weight = min(max(float(safe_fusion_max_pm_weight), 0.0), 1.0)
+        if self.safe_fusion_min_pm_weight > self.safe_fusion_max_pm_weight:
+            self.safe_fusion_min_pm_weight, self.safe_fusion_max_pm_weight = (
+                self.safe_fusion_max_pm_weight,
+                self.safe_fusion_min_pm_weight,
+            )
+        self.safe_fusion_gate = None
+        if self.fusion_mode == "safe_logit":
+            self.safe_fusion_gate = SafeLogitFusionGate(
+                hidden_dim=safe_fusion_hidden_dim,
+                dropout=safe_fusion_dropout,
+                pm_prior=safe_fusion_pm_prior,
+                temperature=safe_fusion_temperature,
+            )
         self.register_buffer(
             "pm_class_reliability",
             torch.full((int(num_classes),), 0.5, dtype=torch.float32),
@@ -270,6 +341,11 @@ class PMWrapper(nn.Module):
             self.router_out_class_var = None
             self.router_out_class_valid = None
             self.router_context_valid = None
+
+    def get_fusion_trainable_parameters(self):
+        if self.safe_fusion_gate is None:
+            return []
+        return list(self.safe_fusion_gate.parameters())
 
     def set_class_reliability(self, pm_reliability, gm_reliability):
         with torch.no_grad():
@@ -430,6 +506,13 @@ class PMWrapper(nn.Module):
         norm = torch.log(torch.tensor(float(num_classes), device=prob.device))
         return entropy / norm.clamp_min(eps)
 
+    @staticmethod
+    def _top_margin(prob):
+        if prob.size(1) <= 1:
+            return prob[:, :1]
+        top2 = torch.topk(prob, k=2, dim=1, largest=True, sorted=True).values
+        return (top2[:, :1] - top2[:, 1:2]).clamp(0.0, 1.0)
+
     def _prepare_router_feature(self, feat):
         if feat is None:
             return None
@@ -510,6 +593,28 @@ class PMWrapper(nn.Module):
             else None
         )
 
+        if self.fusion_mode == "safe_logit":
+            # Output-space gate avoids hidden-unit alignment issues across rounds.
+            in_score = in_dist_score if in_dist_score is not None else torch.ones_like(pm_conf)
+            pm_margin = self._top_margin(pm_prob)
+            gm_margin = self._top_margin(gm_prob)
+            meta = torch.cat(
+                [pm_conf, gm_conf, pm_conf - gm_conf, pm_margin, gm_margin, in_score],
+                dim=1,
+            )
+            if self.safe_fusion_gate is not None:
+                pm_weight = self.safe_fusion_gate(meta)
+            else:
+                pm_weight = torch.full_like(pm_conf, 0.8)
+
+            pm_weight = pm_weight.clamp(
+                self.safe_fusion_min_pm_weight,
+                self.safe_fusion_max_pm_weight,
+            )
+            gm_weight = 1.0 - pm_weight
+            mixed_prob = gm_weight * gm_prob + pm_weight * pm_prob
+            return mixed_prob, pm_weight
+
         if self.fusion_mode in {"router_hard", "router_soft"}:
             router_local_prob = self._router_local_prob(feat, pm_logits=pm_logits, gm_logits=gm_logits)
             server_pm_prob = self._compute_server_router_pm_prob(feat, pred_pm)
@@ -568,7 +673,9 @@ class PMWrapper(nn.Module):
                 pm_conf = pm_conf.clamp(0.0, 2.0)
                 gm_conf = gm_conf.clamp(0.0, 2.0)
 
-        if self.fusion_mode == "pm_defer_hard":
+        if self.fusion_mode == "learned_blend":
+            pm_weight = torch.full_like(pm_conf, self.learned_blend_alpha)
+        elif self.fusion_mode == "pm_defer_hard":
             # PM-default routing with explicit defer-to-GM on low-confidence/OOD samples.
             use_pm = (pm_conf >= self.pm_defer_conf_threshold)
             use_pm = use_pm & ((gm_conf - pm_conf) <= self.pm_defer_gm_margin)
@@ -616,7 +723,15 @@ class PMWrapper(nn.Module):
 
         pm_weight = pm_weight.clamp(0.0, 1.0)
         gm_weight = 1.0 - pm_weight
-        mixed_prob = gm_weight * gm_prob + pm_weight * pm_prob
+        if self.fusion_mode == "poe_soft":
+            # Product-of-experts style fusion in log-probability space.
+            # This sharpens agreement and suppresses branch-specific overconfidence.
+            log_pm = torch.log(pm_prob.clamp_min(1e-12))
+            log_gm = torch.log(gm_prob.clamp_min(1e-12))
+            mix_log = pm_weight * log_pm + gm_weight * log_gm
+            mixed_prob = torch.softmax(mix_log, dim=1)
+        else:
+            mixed_prob = gm_weight * gm_prob + pm_weight * pm_prob
         return mixed_prob, pm_weight
 
     def fuse_logits(self, gm_logits, pm_logits, feat=None):
@@ -685,9 +800,61 @@ class clientFedCD(Client):
         self.entropy_use_ood_gate = bool(getattr(args, "fedcd_entropy_use_ood_gate", True))
         self.entropy_ood_scale = float(getattr(args, "fedcd_entropy_ood_scale", 1.0))
         self.fusion_mode = str(getattr(args, "fedcd_fusion_mode", "soft")).strip().lower()
+        self.learned_blend_alpha = float(getattr(args, "fedcd_learned_blend_alpha", 0.5))
+        self.learned_blend_auto_tune = bool(getattr(args, "fedcd_learned_blend_auto_tune", False))
+        self.learned_blend_period = max(1, int(getattr(args, "fedcd_learned_blend_period", 1)))
+        self.learned_blend_candidates = max(
+            3, int(getattr(args, "fedcd_learned_blend_candidates", 11))
+        )
+        self.safe_fusion_hidden_dim = int(getattr(args, "fedcd_safe_fusion_hidden_dim", 64))
+        self.safe_fusion_dropout = float(getattr(args, "fedcd_safe_fusion_dropout", 0.0))
+        self.safe_fusion_pm_prior = float(getattr(args, "fedcd_safe_fusion_pm_prior", 0.8))
+        self.safe_fusion_temperature = float(getattr(args, "fedcd_safe_fusion_temperature", 1.0))
+        self.safe_fusion_min_pm_weight = float(getattr(args, "fedcd_safe_fusion_min_pm_weight", 0.0))
+        self.safe_fusion_max_pm_weight = float(getattr(args, "fedcd_safe_fusion_max_pm_weight", 1.0))
+        self.safe_fusion_loss_weight = float(getattr(args, "fedcd_safe_fusion_loss_weight", 0.3))
+        self.safe_fusion_margin = float(getattr(args, "fedcd_safe_fusion_margin", 0.02))
+        self.safe_fusion_lr_scale = float(getattr(args, "fedcd_safe_fusion_lr_scale", 1.0))
+        self.safe_fusion_route_weight = float(
+            getattr(args, "fedcd_safe_fusion_route_weight", 0.6)
+        )
+        self.safe_fusion_route_tau = float(
+            getattr(args, "fedcd_safe_fusion_route_tau", 0.2)
+        )
+        self.safe_fusion_route_floor = float(
+            getattr(args, "fedcd_safe_fusion_route_floor", 0.05)
+        )
+        self.safe_fusion_route_gap_power = float(
+            getattr(args, "fedcd_safe_fusion_route_gap_power", 1.0)
+        )
         self.pm_defer_conf_threshold = float(getattr(args, "fedcd_pm_defer_conf_threshold", 0.55))
         self.pm_defer_gm_margin = float(getattr(args, "fedcd_pm_defer_gm_margin", 0.02))
         self.pm_defer_ood_threshold = float(getattr(args, "fedcd_pm_defer_ood_threshold", 0.35))
+        self.branch_temp_calibration_enable = bool(
+            getattr(args, "fedcd_branch_temp_calibration_enable", False)
+        )
+        self.branch_temp_calibration_period = max(
+            1, int(getattr(args, "fedcd_branch_temp_calibration_period", 1))
+        )
+        self.branch_temp_calibration_steps = max(
+            1, int(getattr(args, "fedcd_branch_temp_calibration_steps", 80))
+        )
+        self.branch_temp_calibration_lr = max(
+            1e-5, float(getattr(args, "fedcd_branch_temp_calibration_lr", 0.05))
+        )
+        self.branch_temp_min = max(
+            1e-3, float(getattr(args, "fedcd_branch_temp_min", 0.5))
+        )
+        self.branch_temp_max = max(
+            self.branch_temp_min + 1e-3,
+            float(getattr(args, "fedcd_branch_temp_max", 5.0)),
+        )
+        self.branch_temp_samples = max(
+            64, int(getattr(args, "fedcd_branch_temp_samples", 512))
+        )
+        self.pm_temp_calibrated = 1.0
+        self.gm_temp_calibrated = 1.0
+        self.round_counter = 0
         self.router_enable = bool(getattr(args, "fedcd_router_enable", False))
         self.router_type = str(getattr(args, "fedcd_router_type", "mlp")).strip().lower()
         if self.router_type not in {"mlp", "attention"}:
@@ -747,6 +914,12 @@ class clientFedCD(Client):
             getattr(args, "fedcd_router_server_use_class_stats", True)
         )
         self.router_server_class_mix = float(getattr(args, "fedcd_router_server_class_mix", 0.6))
+        self.router_server_synth_weight = float(
+            getattr(args, "fedcd_router_server_synth_weight", 0.0)
+        )
+        self.router_server_synth_samples = max(
+            0, int(getattr(args, "fedcd_router_server_synth_samples", 128))
+        )
         self.gate_reliability_ema = float(getattr(args, "fedcd_gate_reliability_ema", 0.9))
         self.gate_reliability_samples = int(getattr(args, "fedcd_gate_reliability_samples", 512))
         self.gate_feature_ema = float(getattr(args, "fedcd_gate_feature_ema", 0.9))
@@ -819,8 +992,8 @@ class clientFedCD(Client):
             feature_dim=(int(self.f_ext_dim) if self.f_ext_dim is not None else 0),
             generalized_adapter=self.generalized_adapter,
             personalized_adapter=self.personalized_adapter,
-            entropy_temp_pm=self.entropy_temp_pm,
-            entropy_temp_gm=self.entropy_temp_gm,
+            entropy_temp_pm=(self.entropy_temp_pm * self.pm_temp_calibrated),
+            entropy_temp_gm=(self.entropy_temp_gm * self.gm_temp_calibrated),
             entropy_min_pm_weight=self.entropy_min_pm_weight,
             entropy_max_pm_weight=self.entropy_max_pm_weight,
             entropy_gate_tau=self.entropy_gate_tau,
@@ -852,12 +1025,20 @@ class clientFedCD(Client):
             router_server_ood_scale=self.router_server_ood_scale,
             router_server_use_class_stats=self.router_server_use_class_stats,
             router_server_class_mix=self.router_server_class_mix,
+            learned_blend_alpha=self.learned_blend_alpha,
+            safe_fusion_hidden_dim=self.safe_fusion_hidden_dim,
+            safe_fusion_dropout=self.safe_fusion_dropout,
+            safe_fusion_pm_prior=self.safe_fusion_pm_prior,
+            safe_fusion_temperature=self.safe_fusion_temperature,
+            safe_fusion_min_pm_weight=self.safe_fusion_min_pm_weight,
+            safe_fusion_max_pm_weight=self.safe_fusion_max_pm_weight,
         )
         self.model.set_class_reliability(self.pm_class_reliability, self.gm_class_reliability)
         self.model.set_feature_stats(self.gate_feature_mean, self.gate_feature_var)
         self.model.set_class_feature_stats(
             self.class_feature_mean, self.class_feature_var, self.class_feature_valid
         )
+        self._sync_fusion_runtime_params()
 
         # Local GM training can be toggled by fedcd_gm_update_mode.
         self._set_local_gm_trainable(self.local_gm_trainable)
@@ -884,6 +1065,169 @@ class clientFedCD(Client):
             return tensor.to(device, non_blocking=True)
         return tensor.to(device)
 
+    def _sync_fusion_runtime_params(self):
+        if not hasattr(self, "model") or self.model is None:
+            return
+        self.pm_temp_calibrated = max(float(self.pm_temp_calibrated), self.branch_temp_min)
+        self.gm_temp_calibrated = max(float(self.gm_temp_calibrated), self.branch_temp_min)
+        self.model.entropy_temp_pm = max(
+            float(self.entropy_temp_pm) * float(self.pm_temp_calibrated), 1e-6
+        )
+        self.model.entropy_temp_gm = max(
+            float(self.entropy_temp_gm) * float(self.gm_temp_calibrated), 1e-6
+        )
+        self.model.learned_blend_alpha = min(max(float(self.learned_blend_alpha), 0.0), 1.0)
+
+    def _collect_fusion_calibration_logits(self, max_samples=512):
+        max_samples = max(int(max_samples), 1)
+        # Prefer held-out local split if available.
+        loader = None
+        if self.router_val_indices is not None and len(self.router_val_indices) > 0:
+            loader = self.load_router_val_data(batch_size=min(64, self.batch_size))
+        if loader is None:
+            loader = self.load_train_data(batch_size=min(64, self.batch_size))
+
+        device = self.device
+        self.f_ext.to(device)
+        self.generalized_module.to(device)
+        self.personalized_module.to(device)
+        self.f_ext.eval()
+        self.generalized_module.eval()
+        self.personalized_module.eval()
+        if self.generalized_adapter is not None:
+            self.generalized_adapter.to(device)
+            self.generalized_adapter.eval()
+        if self.personalized_adapter is not None:
+            self.personalized_adapter.to(device)
+            self.personalized_adapter.eval()
+
+        pm_logits_all = []
+        gm_logits_all = []
+        y_all = []
+        seen = 0
+        with torch.no_grad():
+            for x, y in loader:
+                if type(x) == type([]):
+                    x = x[0]
+                x = self._to_device(x, device)
+                y = self._to_device(y, device)
+
+                z = self.f_ext(x)
+                if z.dim() > 2:
+                    z = torch.flatten(z, 1)
+                z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+                logits_gm = self.generalized_module(z_gm)
+                logits_pm = self.personalized_module(z_pm)
+
+                pm_logits_all.append(logits_pm.detach().cpu())
+                gm_logits_all.append(logits_gm.detach().cpu())
+                y_all.append(y.detach().cpu())
+                seen += y.size(0)
+                if seen >= max_samples:
+                    break
+
+        # Keep memory pressure low under multi-run settings.
+        if self.args.avoid_oom:
+            self.f_ext.to("cpu")
+            self.generalized_module.to("cpu")
+            self.personalized_module.to("cpu")
+            if self.generalized_adapter is not None:
+                self.generalized_adapter.to("cpu")
+            if self.personalized_adapter is not None:
+                self.personalized_adapter.to("cpu")
+            if device == "cuda":
+                torch.cuda.empty_cache()
+
+        if not pm_logits_all:
+            return None, None, None
+        pm_logits = torch.cat(pm_logits_all, dim=0)[:max_samples]
+        gm_logits = torch.cat(gm_logits_all, dim=0)[:max_samples]
+        y = torch.cat(y_all, dim=0)[:max_samples].long()
+        return pm_logits, gm_logits, y
+
+    def _optimize_temperature(self, logits, y, init_temp=1.0):
+        if logits is None or y is None or logits.size(0) <= 1:
+            return float(init_temp)
+        device = "cuda" if self.device == "cuda" and torch.cuda.is_available() else "cpu"
+        logits = logits.to(device)
+        y = y.to(device)
+        log_t = nn.Parameter(
+            torch.tensor(math.log(max(float(init_temp), self.branch_temp_min)), device=device)
+        )
+        optimizer = torch.optim.Adam([log_t], lr=self.branch_temp_calibration_lr)
+        best_loss = float("inf")
+        best_temp = max(float(init_temp), self.branch_temp_min)
+
+        lo = math.log(self.branch_temp_min)
+        hi = math.log(self.branch_temp_max)
+        for _ in range(self.branch_temp_calibration_steps):
+            t = torch.exp(log_t).clamp(min=self.branch_temp_min, max=self.branch_temp_max)
+            loss = F.cross_entropy(logits / t, y)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            with torch.no_grad():
+                log_t.clamp_(min=lo, max=hi)
+                loss_v = float(loss.item())
+                if loss_v < best_loss:
+                    best_loss = loss_v
+                    best_temp = float(t.item())
+        return best_temp
+
+    def _tune_learned_blend_alpha(self, pm_logits, gm_logits, y):
+        if pm_logits is None or gm_logits is None or y is None or y.numel() <= 1:
+            return
+        n = max(int(self.learned_blend_candidates), 3)
+        candidates = torch.linspace(0.0, 1.0, steps=n)
+        t_pm = max(float(self.entropy_temp_pm) * float(self.pm_temp_calibrated), 1e-6)
+        t_gm = max(float(self.entropy_temp_gm) * float(self.gm_temp_calibrated), 1e-6)
+        pm_prob = torch.softmax(pm_logits / t_pm, dim=1)
+        gm_prob = torch.softmax(gm_logits / t_gm, dim=1)
+
+        best_alpha = float(self.learned_blend_alpha)
+        best_loss = float("inf")
+        for a in candidates:
+            alpha = float(a.item())
+            prob = alpha * pm_prob + (1.0 - alpha) * gm_prob
+            loss = F.nll_loss(torch.log(prob.clamp_min(1e-12)), y).item()
+            if loss < best_loss:
+                best_loss = loss
+                best_alpha = alpha
+        self.learned_blend_alpha = best_alpha
+
+    def _post_train_fusion_calibration(self):
+        need_temp_cal = (
+            self.branch_temp_calibration_enable
+            and (self.round_counter % self.branch_temp_calibration_period == 0)
+        )
+        need_blend_tune = (
+            self.learned_blend_auto_tune
+            and self.fusion_mode == "learned_blend"
+            and (self.round_counter % self.learned_blend_period == 0)
+        )
+        if not need_temp_cal and not need_blend_tune:
+            return
+
+        pm_logits, gm_logits, y = self._collect_fusion_calibration_logits(
+            max_samples=self.branch_temp_samples
+        )
+        if pm_logits is None or gm_logits is None or y is None or y.numel() <= 1:
+            return
+
+        if need_temp_cal:
+            self.pm_temp_calibrated = self._optimize_temperature(
+                pm_logits, y, init_temp=self.pm_temp_calibrated
+            )
+            self.gm_temp_calibrated = self._optimize_temperature(
+                gm_logits, y, init_temp=self.gm_temp_calibrated
+            )
+
+        if need_blend_tune:
+            self._tune_learned_blend_alpha(pm_logits, gm_logits, y)
+
+        self._sync_fusion_runtime_params()
+
     @staticmethod
     def _is_oom(err):
         return "out of memory" in str(err).lower()
@@ -902,6 +1246,13 @@ class clientFedCD(Client):
             else:
                 fext_dim = int(getattr(args, "fext_dim", 512))
             f_ext = SmallFExt(in_channels=in_channels, out_dim=fext_dim)
+        elif model_name == "TinyFExt":
+            in_channels = 1 if "MNIST" in args.dataset else 3
+            if target_dim is not None:
+                fext_dim = int(target_dim)
+            else:
+                fext_dim = int(getattr(args, "fext_dim", 256))
+            f_ext = TinyFExt(in_channels=in_channels, out_dim=fext_dim)
         else:
             raise NotImplementedError(f"Unknown fext_model: {model_name}")
             
@@ -1064,6 +1415,74 @@ class clientFedCD(Client):
         loss_neg = F.binary_cross_entropy_with_logits(logits_neg, target_neg)
         return 0.5 * (loss_pos + loss_neg)
 
+    def _router_server_synthetic_loss(self, feat, logits_pm=None, logits_gm=None):
+        if (
+            self.router is None
+            or not self.router_server_distill_enable
+            or self.router_server_synth_weight <= 0
+            or self.router_server_synth_samples <= 0
+        ):
+            return feat.new_zeros(())
+        if feat.dim() > 2:
+            feat = torch.flatten(feat, 1)
+
+        in_mu = getattr(self.model, "router_in_feature_mean", None)
+        in_var = getattr(self.model, "router_in_feature_var", None)
+        out_mu = getattr(self.model, "router_out_feature_mean", None)
+        out_var = getattr(self.model, "router_out_feature_var", None)
+        ctx_valid = getattr(self.model, "router_context_valid", None)
+        if (
+            in_mu is None
+            or in_var is None
+            or out_mu is None
+            or out_var is None
+            or ctx_valid is None
+            or float(ctx_valid.item()) <= 0
+        ):
+            return feat.new_zeros(())
+
+        num_total = max(8, int(self.router_server_synth_samples))
+        num_pos = num_total // 2
+        num_neg = num_total - num_pos
+        if num_pos <= 0 or num_neg <= 0:
+            return feat.new_zeros(())
+
+        dev = feat.device
+        dtype = feat.dtype if feat.is_floating_point() else torch.float32
+
+        def _sample(mu, var, n):
+            mu = mu.to(dev, dtype=dtype).view(1, -1)
+            std = var.to(dev, dtype=dtype).clamp_min(1e-6).sqrt().view(1, -1)
+            return mu + torch.randn((n, mu.size(1)), device=dev, dtype=dtype) * std
+
+        with torch.no_grad():
+            pos = _sample(in_mu, in_var, num_pos)
+            neg = _sample(out_mu, out_var, num_neg)
+            synth = torch.cat([pos, neg], dim=0)
+
+        synth_feat = self.model._prepare_router_feature(synth)
+        if synth_feat is None:
+            return feat.new_zeros(())
+
+        pm_ctx = None
+        gm_ctx = None
+        if logits_pm is not None and logits_gm is not None and logits_pm.numel() > 0 and logits_gm.numel() > 0:
+            with torch.no_grad():
+                pm_proto = logits_pm.detach().mean(dim=0, keepdim=True)
+                gm_proto = logits_gm.detach().mean(dim=0, keepdim=True)
+                pm_ctx = pm_proto.expand(synth_feat.size(0), -1)
+                gm_ctx = gm_proto.expand(synth_feat.size(0), -1)
+
+        router_logits = self.router(synth_feat, pm_logits=pm_ctx, gm_logits=gm_ctx).view(-1)
+        targets = torch.cat(
+            [
+                torch.ones((num_pos,), device=router_logits.device, dtype=router_logits.dtype),
+                torch.zeros((num_neg,), device=router_logits.device, dtype=router_logits.dtype),
+            ],
+            dim=0,
+        )
+        return F.binary_cross_entropy_with_logits(router_logits, targets)
+
     def _router_training_loss(self, feat, logits_pm=None, logits_gm=None, y=None):
         if self.router is None:
             return feat.new_zeros(())
@@ -1147,6 +1566,14 @@ class clientFedCD(Client):
                     server_target.view(-1).to(router_logits.dtype),
                 )
 
+        server_synth_loss = None
+        if self.router_server_synth_weight > 0:
+            server_synth_loss = self._router_server_synthetic_loss(
+                feat,
+                logits_pm=logits_pm,
+                logits_gm=logits_gm,
+            )
+
         balance_loss = None
         if self.router_balance_weight > 0:
             bal_logits = self.router(
@@ -1173,6 +1600,8 @@ class clientFedCD(Client):
             base_loss = base_loss + self.router_balance_weight * balance_loss
         if server_distill_loss is not None:
             base_loss = base_loss + self.router_server_distill_weight * server_distill_loss
+        if server_synth_loss is not None:
+            base_loss = base_loss + self.router_server_synth_weight * server_synth_loss
         return base_loss
 
     def _randomize_router(self):
@@ -1326,7 +1755,8 @@ class clientFedCD(Client):
                         # 2. PM의 예측
                         z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
                         pm_feat, logits_pm = self._forward_module_with_feature(z_pm, self.personalized_module)
-                        fused_logits = self.model.fuse_logits(logits_gm, logits_pm, feat=z)
+                        mixed_prob, pm_weight = self.model.mix_prob(logits_gm, logits_pm, feat=z)
+                        fused_logits = torch.log(mixed_prob.clamp_min(1e-12))
 
                         # 3. Local objective
                         # PM-only experimental mode: maximize PM local accuracy only.
@@ -1343,6 +1773,40 @@ class clientFedCD(Client):
                             if self.nc_weight > 0:
                                 nc_loss = self._feature_negative_correlation_loss(gm_feat, pm_feat)
                                 loss = loss + self.nc_weight * nc_loss
+                            if (
+                                self.fusion_mode == "safe_logit"
+                                and (self.safe_fusion_loss_weight > 0 or self.safe_fusion_route_weight > 0)
+                            ):
+                                fused_ce = F.nll_loss(fused_logits, y, reduction="none")
+                                pm_ce = F.cross_entropy(logits_pm, y, reduction="none")
+                                gm_ce = F.cross_entropy(logits_gm, y, reduction="none")
+                                if self.safe_fusion_loss_weight > 0:
+                                    branch_best = torch.minimum(pm_ce, gm_ce)
+                                    safety_penalty = F.relu(
+                                        fused_ce - branch_best - self.safe_fusion_margin
+                                    ).mean()
+                                    loss = loss + self.safe_fusion_loss_weight * safety_penalty
+                                if self.safe_fusion_route_weight > 0:
+                                    pm_weight_flat = pm_weight.view(-1).clamp(1e-6, 1.0 - 1e-6)
+                                    ce_gap = gm_ce - pm_ce
+                                    tau = max(self.safe_fusion_route_tau, 1e-6)
+                                    route_target = torch.sigmoid(ce_gap / tau)
+                                    floor = min(max(self.safe_fusion_route_floor, 0.0), 0.49)
+                                    if floor > 0:
+                                        route_target = floor + (1.0 - 2.0 * floor) * route_target
+                                    with torch.cuda.amp.autocast(enabled=False):
+                                        route_bce = F.binary_cross_entropy(
+                                            pm_weight_flat.float(),
+                                            route_target.float(),
+                                            reduction="none",
+                                        )
+                                    gap_power = max(self.safe_fusion_route_gap_power, 0.0)
+                                    if gap_power > 0:
+                                        gap_w = ce_gap.abs().clamp_min(1e-6).pow(gap_power)
+                                        gap_w = gap_w / gap_w.mean().clamp_min(1e-6)
+                                        route_bce = route_bce * gap_w
+                                    route_loss = route_bce.mean()
+                                    loss = loss + self.safe_fusion_route_weight * route_loss
                         if self.router is not None and self.router_loss_weight > 0:
                             router_feat = z
                             router_logits_pm = logits_pm
@@ -1446,8 +1910,10 @@ class clientFedCD(Client):
                 raise
 
         if trained:
+            self.round_counter += 1
             stat_samples = max(int(self.gate_reliability_samples), int(self.gate_feature_samples))
             self._update_gate_class_reliability(max_samples=stat_samples)
+            self._post_train_fusion_calibration()
 
     def _update_gate_class_reliability(self, max_samples=512):
         ema = min(max(float(self.gate_reliability_ema), 0.0), 1.0)
@@ -1698,10 +2164,6 @@ class clientFedCD(Client):
                 return
             raise
 
-    def warmup_classifier(self):
-        # Backward compatibility for existing call sites.
-        self.warmup_personalized_module()
-
     # [핵심] 서버에서 Generalized Module 파트를 받아 적용
     def set_parameters(self, model):
         # 서버에서 받은 Generalized Module 관련 파라미터를 로드
@@ -1907,9 +2369,15 @@ class clientFedCD(Client):
 
         gm_lr = max(self.learning_rate * self.gm_lr_scale, 0.0)
         router_lr = max(self.learning_rate * self.router_lr_scale, 0.0)
+        safe_fusion_lr = max(self.learning_rate * self.safe_fusion_lr_scale, 0.0)
+        fusion_params = []
+        if hasattr(self.model, "get_fusion_trainable_parameters"):
+            fusion_params = list(self.model.get_fusion_trainable_parameters())
         param_groups = []
         if pm_params:
             param_groups.append({"params": pm_params, "lr": self.learning_rate})
+        if fusion_params and safe_fusion_lr > 0:
+            param_groups.append({"params": fusion_params, "lr": safe_fusion_lr})
         if router_params and router_lr > 0:
             param_groups.append({"params": router_params, "lr": router_lr})
         if gm_params and gm_lr > 0:

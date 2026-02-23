@@ -1,0 +1,964 @@
+==========================================================
+FedCD baseline-aligned run (TinyFExt + PM-upscaled + router-off)
+dataset=Cifar10_pat_nc20 nc=20 gr=20 ls=2 lr=0.005 lbs=128
+model: GM=VGG8W256, PM=VGG8W1290, FExt=SmallFExt
+teacher: source=client, topk=5, min_active=2
+==========================================================
+
+[Info] Experiment logs will be saved to: logs/FedCD/GM_VGG8W256_PM_VGG8W1290_Fext_SmallFExt/pat/NC_20/date_20260222/time_160341
+
+==================================================
+goal = train
+device = cuda
+device_id = 0
+dataset = Cifar10_pat_nc20
+num_classes = 10
+model = VGG8W256
+batch_size = 128
+num_workers = 0
+pin_memory = True
+prefetch_factor = 2
+gpu_batch_mult = 1
+gpu_batch_max = 0
+amp = True
+tf32 = True
+log_usage = True
+log_usage_every = 1
+log_usage_path = logs/FedCD/GM_VGG8W256_PM_VGG8W1290_Fext_SmallFExt/pat/NC_20/date_20260222/time_160341/acc.csv
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 20
+top_cnt = 100
+local_epochs = 2
+algorithm = FedCD
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 20
+num_clusters = 5
+cluster_threshold = 0.1
+adaptive_threshold = True
+threshold_step = 0.01
+threshold_step_max = 0.1
+threshold_decay = 0.9
+act_window_size = 5
+act_min_slope = 0.0002
+threshold_inc_rate = 1.3
+threshold_dec_rate = 0.5
+threshold_max = 0.95
+ema_alpha = 0.3
+tolerance_ratio = 0.4
+cluster_period = 2
+pm_period = 1
+global_period = 2
+fedcd_enable_clustering = True
+fedcd_enable_pm_aggregation = True
+cluster_sample_size = 512
+max_dynamic_clusters = 0
+fedcd_nc_weight = 0.02
+fedcd_nc_target_corr = -0.1
+fedcd_fusion_weight = 0.6
+fedcd_pm_logits_weight = 0.7
+fedcd_pm_only_weight = 1.5
+fedcd_gm_logits_weight = 0.0
+fedcd_local_pm_only_objective = False
+fedcd_gm_lr_scale = 0.1
+fedcd_gm_update_mode = server_pm_teacher
+fedcd_hybrid_proto_blend = 0.35
+fedcd_entropy_temp_pm = 1.0
+fedcd_entropy_temp_gm = 1.0
+fedcd_entropy_min_pm_weight = 0.1
+fedcd_entropy_max_pm_weight = 0.9
+fedcd_entropy_gate_tau = 0.1
+fedcd_entropy_pm_bias = 0.05
+fedcd_entropy_gm_bias = 0.0
+fedcd_entropy_disagree_gm_boost = 0.0
+fedcd_entropy_use_class_reliability = True
+fedcd_entropy_reliability_scale = 0.8
+fedcd_entropy_hard_switch_margin = 0.2
+fedcd_entropy_use_ood_gate = True
+fedcd_entropy_ood_scale = 0.5
+fedcd_entropy_ood_use_class_stats = True
+fedcd_entropy_ood_class_mix = 0.6
+fedcd_fusion_mode = soft
+fedcd_learned_blend_alpha = 0.5
+fedcd_learned_blend_auto_tune = False
+fedcd_learned_blend_period = 1
+fedcd_learned_blend_candidates = 11
+fedcd_pm_defer_conf_threshold = 0.55
+fedcd_pm_defer_gm_margin = 0.02
+fedcd_pm_defer_ood_threshold = 0.35
+fedcd_router_enable = False
+fedcd_router_type = attention
+fedcd_router_hidden_dim = 128
+fedcd_router_attn_dim = 128
+fedcd_router_attn_heads = 4
+fedcd_router_dropout = 0.0
+fedcd_router_lr_scale = 1.0
+fedcd_router_loss_weight = 0.0
+fedcd_router_threshold = 0.55
+fedcd_router_temperature = 1.0
+fedcd_router_neg_std_scale = 2.0
+fedcd_router_use_feature_norm = True
+fedcd_router_min_gm_weight = 0.1
+fedcd_router_conf_defer_margin = 0.03
+fedcd_router_conf_defer_strength = 0.7
+fedcd_router_conf_defer_tau = 0.1
+fedcd_router_reinit_on_initial_broadcast = True
+fedcd_router_supervision_mode = hybrid
+fedcd_router_branch_margin = 0.02
+fedcd_router_gap_power = 1.0
+fedcd_router_min_labeled_samples = 4
+fedcd_router_fallback_ood_loss = True
+fedcd_router_use_val_split = True
+fedcd_router_val_ratio = 0.1
+fedcd_router_val_min_samples = 32
+fedcd_router_val_max_samples = 512
+fedcd_router_soft_tau = 0.2
+fedcd_router_soft_label_floor = 0.05
+fedcd_router_balance_weight = 0.1
+fedcd_router_balance_target = 0.55
+fedcd_router_balance_tolerance = 0.2
+fedcd_router_server_distill_enable = False
+fedcd_router_server_distill_weight = 0.4
+fedcd_router_server_blend = 0.5
+fedcd_router_server_tau = 0.2
+fedcd_router_server_ood_scale = 1.0
+fedcd_router_server_use_class_stats = True
+fedcd_router_server_class_mix = 0.6
+fedcd_router_server_samples = 256
+fedcd_router_server_period = 1
+fedcd_router_server_neg_mode = all_other
+fedcd_router_server_neg_topk = 2
+fedcd_router_server_synth_weight = 0.0
+fedcd_router_server_synth_samples = 128
+fedcd_branch_temp_calibration_enable = False
+fedcd_branch_temp_calibration_period = 1
+fedcd_branch_temp_calibration_steps = 80
+fedcd_branch_temp_calibration_lr = 0.05
+fedcd_branch_temp_min = 0.5
+fedcd_branch_temp_max = 5.0
+fedcd_branch_temp_samples = 512
+fedcd_gate_reliability_ema = 0.9
+fedcd_gate_reliability_samples = 512
+fedcd_gate_feature_ema = 0.9
+fedcd_gate_feature_samples = 512
+fedcd_warmup_epochs = 0
+fedcd_pm_teacher_lr = 0.008
+fedcd_pm_teacher_temp = 2.0
+fedcd_pm_teacher_kl_weight = 1.0
+fedcd_pm_teacher_ce_weight = 0.0
+fedcd_pm_teacher_samples = 10000
+fedcd_pm_teacher_batch_size = 256
+fedcd_pm_teacher_epochs = 3
+fedcd_pm_teacher_proxy_dataset = Cifar100
+fedcd_pm_teacher_proxy_root = 
+fedcd_pm_teacher_proxy_split = train
+fedcd_pm_teacher_proxy_download = False
+fedcd_pm_teacher_allow_test_fallback = False
+fedcd_pm_teacher_source = client
+fedcd_pm_teacher_confidence_weight = True
+fedcd_pm_teacher_confidence_min = 0.1
+fedcd_pm_teacher_confidence_power = 2.0
+fedcd_pm_teacher_ensemble_confidence = True
+fedcd_pm_teacher_topk = 5
+fedcd_pm_teacher_abstain_threshold = 0.3
+fedcd_pm_teacher_teacher_abstain_threshold = 0.5
+fedcd_pm_teacher_min_active_teachers = 2
+fedcd_pm_teacher_consensus_min_ratio = 0.6
+fedcd_pm_teacher_correct_only = False
+fedcd_pm_teacher_rel_weight = 0.1
+fedcd_pm_teacher_rel_batch = 64
+fedcd_init_pretrain = True
+fedcd_init_epochs = 2
+fedcd_init_lr = 0.005
+fedcd_init_samples = 10000
+fedcd_init_batch_size = 256
+fedcd_init_ce_weight = 1.0
+fedcd_init_kd_weight = 1.0
+fedcd_init_entropy_weight = 0.05
+fedcd_init_diversity_weight = 0.05
+fedcd_proto_teacher_lr = 0.01
+fedcd_proto_teacher_steps = 200
+fedcd_proto_teacher_batch_size = 256
+fedcd_proto_teacher_temp = 2.0
+fedcd_proto_teacher_ce_weight = 1.0
+fedcd_proto_teacher_kl_weight = 0.5
+fedcd_proto_teacher_noise_scale = 1.0
+fedcd_proto_teacher_min_count = 1.0
+fedcd_proto_teacher_client_samples = 0
+fedcd_proto_teacher_confidence_weight = True
+fedcd_proto_teacher_confidence_min = 0.05
+fedcd_proto_teacher_confidence_power = 1.0
+fedcd_search_enable = False
+fedcd_search_min_rounds = 8
+fedcd_search_patience = 6
+fedcd_search_drop_patience = 3
+fedcd_search_drop_delta = 0.003
+fedcd_search_score_gm_weight = 0.75
+fedcd_search_score_pm_weight = 0.25
+fedcd_search_score_eps = 0.0001
+fedcd_search_min_pm_local_acc = 0.55
+fedcd_search_min_gm_global_acc = 0.18
+gm_model = VGG8W256
+pm_model = VGG8W1290
+fext_model = SmallFExt
+fext_dim = 256
+eval_common_global = True
+global_test_samples = 0
+common_eval_batch_size = 256
+prev = 0
+times = 1
+eval_gap = 1
+save_folder_name = items
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+avoid_oom = True
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000.0
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+pm_model_name = VGG8W1290
+==================================================
+
+============= Running time: 0th =============
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=10, bias=True)
+  )
+)
+
+[Client 0] Model Parameter Stats:
+  Total Parameters: 1,030,594
+  Trainable Parameters: 344,440
+  Estimated Model Size: 3.93 MB
+
+Join ratio / total clients: 1.0 / 20
+Finished creating server and clients.
+[FedCD] Global Test Set Size: 10000
+[FedCD] PM-teacher source for GM distillation: client
+[FedCD] PM-teacher Distill Source: proxy:CIFAR100:train
+[FedCD] PM-teacher Distill Set Size: 10000
+[FedCD] Initialization pretrain: source=proxy:CIFAR100:train, epochs=2, lr=0.005, samples=10000
+Init pretrain on proxy:   0%|          | 0/40 [00:00<?, ?it/s]Init pretrain on proxy:   2%|▎         | 1/40 [00:00<00:27,  1.40it/s]Init pretrain on proxy:   8%|▊         | 3/40 [00:00<00:09,  4.03it/s]Init pretrain on proxy:  12%|█▎        | 5/40 [00:01<00:05,  6.53it/s]Init pretrain on proxy:  18%|█▊        | 7/40 [00:01<00:03,  8.70it/s]Init pretrain on proxy:  22%|██▎       | 9/40 [00:01<00:02, 10.50it/s]Init pretrain on proxy:  28%|██▊       | 11/40 [00:01<00:02, 11.87it/s]Init pretrain on proxy:  32%|███▎      | 13/40 [00:01<00:02, 12.89it/s]Init pretrain on proxy:  38%|███▊      | 15/40 [00:01<00:01, 13.66it/s]Init pretrain on proxy:  42%|████▎     | 17/40 [00:01<00:01, 13.39it/s]Init pretrain on proxy:  48%|████▊     | 19/40 [00:01<00:01, 13.98it/s]Init pretrain on proxy:  52%|█████▎    | 21/40 [00:02<00:01, 14.48it/s]Init pretrain on proxy:  57%|█████▊    | 23/40 [00:02<00:01, 14.86it/s]Init pretrain on proxy:  62%|██████▎   | 25/40 [00:02<00:00, 15.04it/s]Init pretrain on proxy:  68%|██████▊   | 27/40 [00:02<00:00, 15.25it/s]Init pretrain on proxy:  72%|███████▎  | 29/40 [00:02<00:00, 14.50it/s]Init pretrain on proxy:  78%|███████▊  | 31/40 [00:02<00:00, 14.76it/s]Init pretrain on proxy:  82%|████████▎ | 33/40 [00:02<00:00, 15.07it/s]Init pretrain on proxy:  88%|████████▊ | 35/40 [00:02<00:00, 15.23it/s]Init pretrain on proxy:  92%|█████████▎| 37/40 [00:03<00:00, 15.38it/s]Init pretrain on proxy:  98%|█████████▊| 39/40 [00:03<00:00, 15.50it/s]                                                                       Init pretrain on proxy:   0%|          | 0/40 [00:00<?, ?it/s]Init pretrain on proxy:   5%|▌         | 2/40 [00:00<00:02, 13.02it/s]Init pretrain on proxy:  10%|█         | 4/40 [00:00<00:02, 13.36it/s]Init pretrain on proxy:  15%|█▌        | 6/40 [00:00<00:02, 14.28it/s]Init pretrain on proxy:  20%|██        | 8/40 [00:00<00:02, 14.77it/s]Init pretrain on proxy:  25%|██▌       | 10/40 [00:00<00:01, 15.07it/s]Init pretrain on proxy:  30%|███       | 12/40 [00:00<00:01, 15.29it/s]Init pretrain on proxy:  35%|███▌      | 14/40 [00:00<00:01, 15.31it/s]Init pretrain on proxy:  40%|████      | 16/40 [00:01<00:01, 14.54it/s]Init pretrain on proxy:  45%|████▌     | 18/40 [00:01<00:01, 14.31it/s]Init pretrain on proxy:  50%|█████     | 20/40 [00:01<00:01, 13.91it/s]Init pretrain on proxy:  55%|█████▌    | 22/40 [00:01<00:01, 14.41it/s]Init pretrain on proxy:  60%|██████    | 24/40 [00:01<00:01, 14.78it/s]Init pretrain on proxy:  65%|██████▌   | 26/40 [00:01<00:00, 15.07it/s]Init pretrain on proxy:  70%|███████   | 28/40 [00:01<00:00, 15.24it/s]Init pretrain on proxy:  75%|███████▌  | 30/40 [00:02<00:00, 15.23it/s]Init pretrain on proxy:  80%|████████  | 32/40 [00:02<00:00, 14.34it/s]Init pretrain on proxy:  85%|████████▌ | 34/40 [00:02<00:00, 14.66it/s]Init pretrain on proxy:  90%|█████████ | 36/40 [00:02<00:00, 14.98it/s]Init pretrain on proxy:  95%|█████████▌| 38/40 [00:02<00:00, 15.20it/s]                                                                       [FedCD] Broadcast initial components (f_ext+GM+PM): 3.93 MB per client
+
+[FedCD] Round 0: training 20 clients
+Round 0 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 0 Local Training:   5%|▌         | 1/20 [00:00<00:17,  1.07it/s]Round 0 Local Training:  10%|█         | 2/20 [00:01<00:15,  1.18it/s]Round 0 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.23it/s]Round 0 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.25it/s]Round 0 Local Training:  25%|██▌       | 5/20 [00:04<00:11,  1.29it/s]Round 0 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.30it/s]Round 0 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.29it/s]Round 0 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.29it/s]Round 0 Local Training:  45%|████▌     | 9/20 [00:07<00:08,  1.33it/s]Round 0 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.26it/s]Round 0 Local Training:  55%|█████▌    | 11/20 [00:08<00:07,  1.24it/s]Round 0 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.25it/s]Round 0 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.27it/s]Round 0 Local Training:  70%|███████   | 14/20 [00:11<00:04,  1.30it/s]Round 0 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.31it/s]Round 0 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.30it/s]Round 0 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.30it/s]Round 0 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.32it/s]Round 0 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.33it/s]Round 0 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.32it/s]                                                                       Round 0 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 0 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1000
+
+[FedCD] Round 0: Clustering Result:
+  Cluster 0 (4 clients): [8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+  Cluster 4 (4 clients): [4, 5, 6, 7]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 0: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   2%|▎         | 1/40 [00:00<00:04,  9.17it/s]Distill GM from PM teachers [1/3]:   8%|▊         | 3/40 [00:00<00:02, 12.52it/s]Distill GM from PM teachers [1/3]:  12%|█▎        | 5/40 [00:00<00:02, 13.45it/s]Distill GM from PM teachers [1/3]:  18%|█▊        | 7/40 [00:00<00:02, 13.88it/s]Distill GM from PM teachers [1/3]:  22%|██▎       | 9/40 [00:00<00:02, 13.95it/s]Distill GM from PM teachers [1/3]:  28%|██▊       | 11/40 [00:00<00:02, 12.50it/s]Distill GM from PM teachers [1/3]:  32%|███▎      | 13/40 [00:00<00:02, 13.15it/s]Distill GM from PM teachers [1/3]:  38%|███▊      | 15/40 [00:01<00:01, 13.60it/s]Distill GM from PM teachers [1/3]:  42%|████▎     | 17/40 [00:01<00:01, 13.91it/s]Distill GM from PM teachers [1/3]:  48%|████▊     | 19/40 [00:01<00:01, 14.15it/s]Distill GM from PM teachers [1/3]:  52%|█████▎    | 21/40 [00:01<00:01, 14.26it/s]Distill GM from PM teachers [1/3]:  57%|█████▊    | 23/40 [00:01<00:01, 12.86it/s]Distill GM from PM teachers [1/3]:  62%|██████▎   | 25/40 [00:01<00:01, 13.32it/s]Distill GM from PM teachers [1/3]:  68%|██████▊   | 27/40 [00:02<00:00, 13.66it/s]Distill GM from PM teachers [1/3]:  72%|███████▎  | 29/40 [00:02<00:00, 13.83it/s]Distill GM from PM teachers [1/3]:  78%|███████▊  | 31/40 [00:02<00:00, 13.97it/s]Distill GM from PM teachers [1/3]:  82%|████████▎ | 33/40 [00:02<00:00, 14.14it/s]Distill GM from PM teachers [1/3]:  88%|████████▊ | 35/40 [00:02<00:00, 13.46it/s]Distill GM from PM teachers [1/3]:  92%|█████████▎| 37/40 [00:02<00:00, 13.21it/s]Distill GM from PM teachers [1/3]:  98%|█████████▊| 39/40 [00:02<00:00, 13.64it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 14.64it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 14.66it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.45it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 13.98it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.42it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:02, 12.67it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.21it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 13.57it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.81it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 13.97it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.01it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 13.12it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.49it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:02<00:00, 13.78it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.96it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 14.13it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.20it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.20it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.62it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 14.48it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 14.58it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.55it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 13.51it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.84it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:01, 14.11it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.30it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 14.39it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.35it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 14.07it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.45it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 12.77it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.26it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:02<00:00, 13.63it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.91it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 14.10it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.47it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.22it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.60it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 0: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 0 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 13.05it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 15.31it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 14.13it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 14.53it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 15.17it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 15.59it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 15.78it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 15.86it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 15.87it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 14.89it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.64it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.73it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:05,  3.38it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.36it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.47it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.50it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:04,  2.99it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.16it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.26it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.35it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.47it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.54it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.52it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.57it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.61it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.55it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.53it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.59it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.63it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.42it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5965/0.5941/0.5975
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7970/0.4593
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5965/0.5941/0.5975
+Server: Fusion Argmax Agreement (with PM/GM): 0.7973/0.4595
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Collecting history (n=0)...
+[ACT] Updated Threshold: 0.1000 -> 0.1100 (Dir: 1, Step: 0.0100)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.1050 (samples: 2000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+  Cluster 4: 0.0000 (samples: 2000)
+
+[FedCD] Round 1: training 20 clients
+Round 1 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 1 Local Training:   5%|▌         | 1/20 [00:00<00:13,  1.41it/s]Round 1 Local Training:  10%|█         | 2/20 [00:01<00:13,  1.35it/s]Round 1 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.37it/s]Round 1 Local Training:  20%|██        | 4/20 [00:02<00:11,  1.38it/s]Round 1 Local Training:  25%|██▌       | 5/20 [00:03<00:10,  1.37it/s]Round 1 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.37it/s]Round 1 Local Training:  35%|███▌      | 7/20 [00:05<00:09,  1.38it/s]Round 1 Local Training:  40%|████      | 8/20 [00:05<00:08,  1.37it/s]Round 1 Local Training:  45%|████▌     | 9/20 [00:06<00:08,  1.37it/s]Round 1 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.37it/s]Round 1 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.38it/s]Round 1 Local Training:  60%|██████    | 12/20 [00:08<00:05,  1.37it/s]Round 1 Local Training:  65%|██████▌   | 13/20 [00:09<00:05,  1.37it/s]Round 1 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.33it/s]Round 1 Local Training:  75%|███████▌  | 15/20 [00:10<00:03,  1.35it/s]Round 1 Local Training:  80%|████████  | 16/20 [00:11<00:02,  1.37it/s]Round 1 Local Training:  85%|████████▌ | 17/20 [00:12<00:02,  1.36it/s]Round 1 Local Training:  90%|█████████ | 18/20 [00:13<00:01,  1.34it/s]Round 1 Local Training:  95%|█████████▌| 19/20 [00:13<00:00,  1.36it/s]Round 1 Local Training: 100%|██████████| 20/20 [00:14<00:00,  1.36it/s]                                                                       Round 1 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 1 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 1: PM aggregation and cluster update done
+
+------------- Round number: 1 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 17.03it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 17.22it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 17.18it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 16.90it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 16.96it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 16.98it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 16.79it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 11.85it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 13.02it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 14.13it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.68it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.73it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.74it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.72it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.72it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.71it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.71it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.70it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.69it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.68it/s]Training Metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.66it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.66it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.64it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.62it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.61it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.61it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.63it/s]Training Metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.65it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.66it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.66it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5966/0.5941/0.5976
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5966/0.5941/0.5976
+Server: Fusion Argmax Agreement (with PM/GM): 0.7975/0.4593
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.1050 (samples: 2000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+  Cluster 4: 0.0000 (samples: 2000)
+
+[FedCD] Round 2: training 20 clients
+Round 2 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 2 Local Training:   5%|▌         | 1/20 [00:00<00:13,  1.39it/s]Round 2 Local Training:  10%|█         | 2/20 [00:01<00:12,  1.39it/s]Round 2 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.30it/s]Round 2 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.23it/s]Round 2 Local Training:  25%|██▌       | 5/20 [00:04<00:12,  1.16it/s]Round 2 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.21it/s]Round 2 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.24it/s]Round 2 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.28it/s]Round 2 Local Training:  45%|████▌     | 9/20 [00:07<00:08,  1.29it/s]Round 2 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.29it/s]Round 2 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.30it/s]Round 2 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.29it/s]Round 2 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.31it/s]Round 2 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.32it/s]Round 2 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.31it/s]Round 2 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.31it/s]Round 2 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.30it/s]Round 2 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.29it/s]Round 2 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.29it/s]Round 2 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.29it/s]                                                                       Round 2 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 2 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1100
+[FedCD] Aligned cluster labels: 0->0, 1->2, 2->1, 3->3
+
+[FedCD] Round 2: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 2: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:03, 10.68it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 12.45it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 12.27it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 12.96it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.38it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:02, 13.57it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.71it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 13.06it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.16it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 13.48it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.72it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 13.90it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.07it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:02<00:00, 14.17it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.69it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 13.31it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.51it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.53it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.53it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 13.73it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:03, 11.17it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 12.40it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 13.06it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.44it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:02, 13.69it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.79it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 12.88it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.23it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 13.34it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.53it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 13.55it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.69it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:02<00:00, 13.80it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 12.72it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 12.65it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 12.96it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.29it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.53it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 13.71it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:03, 10.85it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 11.97it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 12.59it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 12.91it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:02, 13.13it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.38it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 13.34it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.30it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 13.48it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.59it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 13.71it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.75it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:02<00:00, 13.36it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.53it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 13.59it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.69it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.75it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.86it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 2: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 2 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 16.60it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 14.72it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 15.01it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 15.73it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 16.05it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 16.28it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 16.40it/s]Testing Clients:  80%|████████  | 16/20 [00:00<00:00, 16.52it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 16.30it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 14.00it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.78it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.77it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.46it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.56it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.59it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.01it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:04,  3.17it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.30it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.29it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.38it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.46it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.50it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.50it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.55it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.57it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.38it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.46it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.51it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.42it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.42it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5966/0.5940/0.5977
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5966/0.5940/0.5977
+Server: Fusion Argmax Agreement (with PM/GM): 0.7976/0.4592
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Collecting history (n=1)...
+[ACT] Updated Threshold: 0.1100 -> 0.1200 (Dir: 1, Step: 0.0100)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 3: training 20 clients
+Round 3 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 3 Local Training:   5%|▌         | 1/20 [00:00<00:14,  1.27it/s]Round 3 Local Training:  10%|█         | 2/20 [00:01<00:13,  1.33it/s]Round 3 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.29it/s]Round 3 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.28it/s]Round 3 Local Training:  25%|██▌       | 5/20 [00:03<00:11,  1.27it/s]Round 3 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.28it/s]Round 3 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.29it/s]Round 3 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.20it/s]Round 3 Local Training:  45%|████▌     | 9/20 [00:07<00:08,  1.23it/s]Round 3 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.27it/s]Round 3 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.30it/s]Round 3 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.28it/s]Round 3 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.28it/s]Round 3 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.29it/s]Round 3 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.32it/s]Round 3 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.30it/s]Round 3 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.30it/s]Round 3 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.29it/s]Round 3 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.31it/s]Round 3 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.33it/s]                                                                       Round 3 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 3 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 3: PM aggregation and cluster update done
+
+------------- Round number: 3 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 15.91it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 13.84it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 14.28it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 15.02it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 15.44it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 15.77it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 15.89it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 15.99it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 15.16it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 14.86it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.75it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.70it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.41it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.50it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.54it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.55it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.57it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.58it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.58it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.44it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.48it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.52it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.51it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.43it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.45it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.48it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.37it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.43it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.48it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.41it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5967/0.5940/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5967/0.5939/0.5978
+Server: Fusion Argmax Agreement (with PM/GM): 0.7976/0.4592
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 4: training 20 clients
+Round 4 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 4 Local Training:   5%|▌         | 1/20 [00:00<00:15,  1.25it/s]Round 4 Local Training:  10%|█         | 2/20 [00:01<00:14,  1.27it/s]Round 4 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.25it/s]Round 4 Local Training:  20%|██        | 4/20 [00:03<00:13,  1.18it/s]Round 4 Local Training:  25%|██▌       | 5/20 [00:04<00:12,  1.24it/s]Round 4 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.24it/s]Round 4 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.25it/s]Round 4 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.27it/s]Round 4 Local Training:  45%|████▌     | 9/20 [00:07<00:08,  1.31it/s]Round 4 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.32it/s]Round 4 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.29it/s]Round 4 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.30it/s]Round 4 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.29it/s]Round 4 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.30it/s]Round 4 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.30it/s]Round 4 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.29it/s]Round 4 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.29it/s]Round 4 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.31it/s]Round 4 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.24it/s]Round 4 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.25it/s]                                                                       Round 4 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 4 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1200
+[FedCD] Aligned cluster labels: 0->0, 1->2, 2->1, 3->3
+
+[FedCD] Round 4: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 4: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   2%|▎         | 1/40 [00:00<00:04,  8.90it/s]Distill GM from PM teachers [1/3]:   8%|▊         | 3/40 [00:00<00:03, 12.27it/s]Distill GM from PM teachers [1/3]:  12%|█▎        | 5/40 [00:00<00:02, 13.24it/s]Distill GM from PM teachers [1/3]:  18%|█▊        | 7/40 [00:00<00:02, 13.49it/s]Distill GM from PM teachers [1/3]:  22%|██▎       | 9/40 [00:00<00:02, 13.76it/s]Distill GM from PM teachers [1/3]:  28%|██▊       | 11/40 [00:00<00:02, 13.86it/s]Distill GM from PM teachers [1/3]:  32%|███▎      | 13/40 [00:00<00:02, 13.41it/s]Distill GM from PM teachers [1/3]:  38%|███▊      | 15/40 [00:01<00:01, 13.67it/s]Distill GM from PM teachers [1/3]:  42%|████▎     | 17/40 [00:01<00:01, 13.86it/s]Distill GM from PM teachers [1/3]:  48%|████▊     | 19/40 [00:01<00:01, 14.09it/s]Distill GM from PM teachers [1/3]:  52%|█████▎    | 21/40 [00:01<00:01, 14.23it/s]Distill GM from PM teachers [1/3]:  57%|█████▊    | 23/40 [00:01<00:01, 14.31it/s]Distill GM from PM teachers [1/3]:  62%|██████▎   | 25/40 [00:01<00:01, 14.34it/s]Distill GM from PM teachers [1/3]:  68%|██████▊   | 27/40 [00:01<00:00, 13.02it/s]Distill GM from PM teachers [1/3]:  72%|███████▎  | 29/40 [00:02<00:00, 13.30it/s]Distill GM from PM teachers [1/3]:  78%|███████▊  | 31/40 [00:02<00:00, 13.49it/s]Distill GM from PM teachers [1/3]:  82%|████████▎ | 33/40 [00:02<00:00, 13.68it/s]Distill GM from PM teachers [1/3]:  88%|████████▊ | 35/40 [00:02<00:00, 13.79it/s]Distill GM from PM teachers [1/3]:  92%|█████████▎| 37/40 [00:02<00:00, 13.90it/s]Distill GM from PM teachers [1/3]:  98%|█████████▊| 39/40 [00:02<00:00, 14.00it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:03, 11.16it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:03, 11.66it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 12.64it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 13.07it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.39it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:02, 13.54it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.57it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 13.52it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.69it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 13.87it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.92it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 14.00it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.92it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:02<00:00, 13.24it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.43it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 13.44it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.62it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.74it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.79it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:03, 11.55it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 12.23it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 13.07it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 13.45it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.51it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:02, 13.61it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.76it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 12.53it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 12.97it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 13.31it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.55it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 13.74it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.76it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:02<00:00, 13.62it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.54it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 13.73it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.86it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.96it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.03it/s]Distill GM from PM teachers [3/3]: 100%|██████████| 40/40 [00:02<00:00, 14.50it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 4: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 4 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 16.37it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 14.80it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 15.51it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 15.83it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 16.04it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 16.16it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 16.13it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 16.02it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 14.49it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 13.85it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.69it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.69it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:05,  3.20it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.38it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.48it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.30it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.38it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.47it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.53it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.57it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.58it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.62it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.62it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.48it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.52it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.55it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.36it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.44it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.51it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.55it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5967/0.5938/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5967/0.5938/0.5978
+Server: Fusion Argmax Agreement (with PM/GM): 0.7976/0.4592
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Current Diff: 0.000000 | Trend Slope: -0.000000
+[ACT] Slowdown detected (Diff < Trend)! Reversing direction and decaying step.
+[ACT] Updated Threshold: 0.1200 -> 0.1110 (Dir: -1, Step: 0.0090)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 5: training 20 clients
+Round 5 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 5 Local Training:   5%|▌         | 1/20 [00:00<00:15,  1.23it/s]Round 5 Local Training:  10%|█         | 2/20 [00:01<00:13,  1.29it/s]Round 5 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.30it/s]Round 5 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.30it/s]Round 5 Local Training:  25%|██▌       | 5/20 [00:04<00:12,  1.21it/s]Round 5 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.24it/s]Round 5 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.28it/s]Round 5 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.25it/s]Round 5 Local Training:  45%|████▌     | 9/20 [00:07<00:08,  1.25it/s]Round 5 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.28it/s]Round 5 Local Training:  55%|█████▌    | 11/20 [00:08<00:07,  1.28it/s]Round 5 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.29it/s]Round 5 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.28it/s]Round 5 Local Training:  70%|███████   | 14/20 [00:11<00:04,  1.28it/s]Round 5 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.30it/s]Round 5 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.29it/s]Round 5 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.28it/s]Round 5 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.30it/s]Round 5 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.29it/s]Round 5 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.29it/s]                                                                       Round 5 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 5 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 5: PM aggregation and cluster update done
+
+------------- Round number: 5 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 16.31it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 13.62it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:01, 13.70it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 14.64it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 15.20it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 15.52it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 15.71it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 15.84it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 13.64it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 14.15it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.57it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:05,  3.57it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:05,  3.25it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.37it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.43it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.13it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.26it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.34it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.38it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.39it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.41it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.41it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.41it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.38it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.39it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.09it/s]Training Metrics:  85%|████████▌ | 17/20 [00:05<00:00,  3.20it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.27it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.20it/s]Training Metrics: 100%|██████████| 20/20 [00:06<00:00,  3.29it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5968/0.5937/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5967/0.5936/0.5978
+Server: Fusion Argmax Agreement (with PM/GM): 0.7977/0.4591
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 6: training 20 clients
+Round 6 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 6 Local Training:   5%|▌         | 1/20 [00:00<00:14,  1.35it/s]Round 6 Local Training:  10%|█         | 2/20 [00:01<00:13,  1.31it/s]Round 6 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.27it/s]Round 6 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.25it/s]Round 6 Local Training:  25%|██▌       | 5/20 [00:03<00:11,  1.27it/s]Round 6 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.23it/s]Round 6 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.23it/s]Round 6 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.21it/s]Round 6 Local Training:  45%|████▌     | 9/20 [00:07<00:09,  1.22it/s]Round 6 Local Training:  50%|█████     | 10/20 [00:08<00:08,  1.15it/s]Round 6 Local Training:  55%|█████▌    | 11/20 [00:09<00:07,  1.18it/s]Round 6 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.21it/s]Round 6 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.20it/s]Round 6 Local Training:  70%|███████   | 14/20 [00:11<00:04,  1.23it/s]Round 6 Local Training:  75%|███████▌  | 15/20 [00:12<00:04,  1.25it/s]Round 6 Local Training:  80%|████████  | 16/20 [00:13<00:03,  1.24it/s]Round 6 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.25it/s]Round 6 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.26it/s]Round 6 Local Training:  95%|█████████▌| 19/20 [00:15<00:00,  1.28it/s]Round 6 Local Training: 100%|██████████| 20/20 [00:16<00:00,  1.27it/s]                                                                       Round 6 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 6 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1110
+[FedCD] Aligned cluster labels: 0->0, 1->2, 2->1, 3->3
+
+[FedCD] Round 6: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 6: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:02, 13.79it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 14.11it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 13.08it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 13.44it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.72it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:02, 13.93it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:01<00:01, 14.07it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 14.11it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.16it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 13.07it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.40it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 13.72it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.87it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:02<00:00, 14.07it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.09it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 14.16it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.32it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.18it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.43it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 14.48it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 14.40it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.44it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 14.38it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 12.82it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:02, 13.35it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.72it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 13.99it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.15it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 14.27it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.37it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 13.50it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.73it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:02<00:00, 13.93it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.08it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 14.15it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.09it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.47it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.65it/s]Distill GM from PM teachers [2/3]: 100%|██████████| 40/40 [00:02<00:00, 14.73it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 14.36it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 14.34it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.36it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 14.33it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.07it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:02, 13.00it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.48it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 13.82it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.08it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 14.13it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.52it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 13.81it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:01, 14.00it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:02<00:00, 14.13it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.24it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 14.31it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.19it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.50it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.73it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 6: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 6 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 16.80it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 17.07it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 17.00it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 16.76it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 14.07it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 14.06it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 14.81it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 15.36it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 15.73it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 16.16it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.38it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:06,  2.68it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:05,  3.04it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.24it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.36it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.21it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.30it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.39it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.13it/s]Training Metrics:  50%|█████     | 10/20 [00:03<00:03,  3.25it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.35it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.42it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.39it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.47it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.52it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.30it/s]Training Metrics:  85%|████████▌ | 17/20 [00:05<00:00,  3.39it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.50it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.54it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.50it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5968/0.5935/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5967/0.5933/0.5979
+Server: Fusion Argmax Agreement (with PM/GM): 0.7977/0.4591
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Collecting history (n=1)...
+[ACT] Updated Threshold: 0.1110 -> 0.1020 (Dir: -1, Step: 0.0090)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 7: training 20 clients
+Round 7 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 7 Local Training:   5%|▌         | 1/20 [00:00<00:14,  1.30it/s]Round 7 Local Training:  10%|█         | 2/20 [00:01<00:13,  1.32it/s]Round 7 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.33it/s]Round 7 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.33it/s]Round 7 Local Training:  25%|██▌       | 5/20 [00:03<00:11,  1.31it/s]Round 7 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.32it/s]Round 7 Local Training:  35%|███▌      | 7/20 [00:05<00:09,  1.31it/s]Round 7 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.33it/s]Round 7 Local Training:  45%|████▌     | 9/20 [00:06<00:08,  1.32it/s]Round 7 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.30it/s]Round 7 Local Training:  55%|█████▌    | 11/20 [00:08<00:07,  1.28it/s]Round 7 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.30it/s]Round 7 Local Training:  65%|██████▌   | 13/20 [00:09<00:05,  1.31it/s]Round 7 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.28it/s]Round 7 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.27it/s]Round 7 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.27it/s]Round 7 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.22it/s]Round 7 Local Training:  90%|█████████ | 18/20 [00:13<00:01,  1.26it/s]Round 7 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.28it/s]Round 7 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.28it/s]                                                                       Round 7 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 7 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 7: PM aggregation and cluster update done
+
+------------- Round number: 7 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 16.61it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 16.55it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 16.41it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 16.39it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 14.01it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 13.79it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 14.49it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 14.90it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 15.37it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 15.61it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.36it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:05,  3.51it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.59it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.36it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.43it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.48it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.50it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.50it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.51it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.52it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.32it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.40it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.46it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.49it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.43it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.49it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.55it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.43it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.50it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.55it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5968/0.5933/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5967/0.5930/0.5979
+Server: Fusion Argmax Agreement (with PM/GM): 0.7977/0.4591
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 8: training 20 clients
+Round 8 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 8 Local Training:   5%|▌         | 1/20 [00:00<00:15,  1.26it/s]Round 8 Local Training:  10%|█         | 2/20 [00:01<00:14,  1.27it/s]Round 8 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.30it/s]Round 8 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.33it/s]Round 8 Local Training:  25%|██▌       | 5/20 [00:03<00:11,  1.31it/s]Round 8 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.29it/s]Round 8 Local Training:  35%|███▌      | 7/20 [00:05<00:09,  1.30it/s]Round 8 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.32it/s]Round 8 Local Training:  45%|████▌     | 9/20 [00:06<00:08,  1.32it/s]Round 8 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.30it/s]Round 8 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.30it/s]Round 8 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.28it/s]Round 8 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.29it/s]Round 8 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.26it/s]Round 8 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.27it/s]Round 8 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.26it/s]Round 8 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.25it/s]Round 8 Local Training:  90%|█████████ | 18/20 [00:13<00:01,  1.28it/s]Round 8 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.29it/s]Round 8 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.30it/s]                                                                       Round 8 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 8 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1020
+
+[FedCD] Round 8: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 8: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:02, 13.91it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 14.07it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.09it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 14.02it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 12.55it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:02, 13.03it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.38it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 13.64it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.85it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 13.95it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.98it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 13.29it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.25it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:02<00:00, 13.61it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.86it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 14.08it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.20it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.13it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.62it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 14.32it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 14.34it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.46it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 14.52it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.53it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:02, 13.52it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:00<00:01, 13.82it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 14.07it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.26it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 14.41it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.51it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 13.33it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.60it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:02<00:00, 13.58it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.78it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 13.92it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.04it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.13it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.63it/s]Distill GM from PM teachers [2/3]: 100%|██████████| 40/40 [00:02<00:00, 14.99it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 14.34it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 14.29it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.19it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 14.20it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.90it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:01, 14.01it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.17it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 14.31it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.39it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 14.42it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.48it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 13.60it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.31it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:02<00:00, 13.50it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.77it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 13.92it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.11it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.21it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.23it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 8: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 8 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 13.57it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 15.51it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 16.20it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 16.51it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 16.66it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 16.73it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 13.94it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 13.94it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 14.79it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 15.42it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:04,  3.84it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:05,  3.56it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.65it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.69it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.42it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.49it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.55it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.46it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.43it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.50it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.55it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.29it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.39it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.46it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.39it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.46it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.52it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.58it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.50it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.58it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5967/0.5930/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4592
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5967/0.5927/0.5979
+Server: Fusion Argmax Agreement (with PM/GM): 0.7977/0.4591
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Current Diff: 0.000000 | Trend Slope: -0.000000
+[ACT] Slowdown detected (Diff < Trend)! Reversing direction and decaying step.
+[ACT] Updated Threshold: 0.1020 -> 0.1101 (Dir: 1, Step: 0.0081)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 9: training 20 clients
+Round 9 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 9 Local Training:   5%|▌         | 1/20 [00:00<00:13,  1.37it/s]Round 9 Local Training:  10%|█         | 2/20 [00:01<00:13,  1.37it/s]Round 9 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.35it/s]Round 9 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.30it/s]Round 9 Local Training:  25%|██▌       | 5/20 [00:03<00:11,  1.29it/s]Round 9 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.17it/s]Round 9 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.21it/s]Round 9 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.23it/s]Round 9 Local Training:  45%|████▌     | 9/20 [00:07<00:08,  1.24it/s]Round 9 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.25it/s]Round 9 Local Training:  55%|█████▌    | 11/20 [00:08<00:07,  1.24it/s]Round 9 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.27it/s]Round 9 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.24it/s]Round 9 Local Training:  70%|███████   | 14/20 [00:11<00:04,  1.24it/s]Round 9 Local Training:  75%|███████▌  | 15/20 [00:11<00:04,  1.24it/s]Round 9 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.26it/s]Round 9 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.28it/s]Round 9 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.25it/s]Round 9 Local Training:  95%|█████████▌| 19/20 [00:15<00:00,  1.25it/s]Round 9 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.27it/s]                                                                       Round 9 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                              [FedCD] Round 9 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 9: PM aggregation and cluster update done
+
+------------- Round number: 9 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 15.77it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 16.34it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 16.41it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 16.51it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 16.48it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 16.30it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 13.54it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 13.39it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 14.20it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 14.86it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.64it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:05,  3.02it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:05,  3.29it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.43it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.35it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.43it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.50it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.29it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.34it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.42it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.42it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.31it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.36it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.40it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.38it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.42it/s]Training Metrics:  85%|████████▌ | 17/20 [00:05<00:00,  3.48it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.34it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.36it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.44it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5967/0.5928/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7972/0.4590
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5967/0.5923/0.5979
+Server: Fusion Argmax Agreement (with PM/GM): 0.7977/0.4591
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 10: training 20 clients
+Round 10 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 10 Local Training:   5%|▌         | 1/20 [00:00<00:14,  1.33it/s]Round 10 Local Training:  10%|█         | 2/20 [00:01<00:15,  1.16it/s]Round 10 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.23it/s]Round 10 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.26it/s]Round 10 Local Training:  25%|██▌       | 5/20 [00:04<00:11,  1.26it/s]Round 10 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.25it/s]Round 10 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.25it/s]Round 10 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.27it/s]Round 10 Local Training:  45%|████▌     | 9/20 [00:07<00:08,  1.27it/s]Round 10 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.27it/s]Round 10 Local Training:  55%|█████▌    | 11/20 [00:08<00:07,  1.27it/s]Round 10 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.25it/s]Round 10 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.26it/s]Round 10 Local Training:  70%|███████   | 14/20 [00:11<00:04,  1.25it/s]Round 10 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.25it/s]Round 10 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.26it/s]Round 10 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.26it/s]Round 10 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.26it/s]Round 10 Local Training:  95%|█████████▌| 19/20 [00:15<00:00,  1.28it/s]Round 10 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.28it/s]                                                                        Round 10 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 10 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1101
+[FedCD] Aligned cluster labels: 0->0, 1->1, 2->3, 3->2
+
+[FedCD] Round 10: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 10: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:02, 13.45it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 14.08it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.20it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 14.26it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.34it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:02, 13.29it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:01<00:02, 12.85it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 13.22it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.53it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 13.74it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.90it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 13.62it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.78it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:02<00:00, 13.84it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.97it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 14.03it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.07it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.07it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 12.84it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 13.88it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 14.07it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.27it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 14.39it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.01it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:02, 13.37it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.80it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 13.94it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.11it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 14.04it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.68it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 13.77it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.94it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:02<00:00, 14.00it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.08it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 14.18it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.40it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.63it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.20it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 14.25it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 14.32it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.27it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 13.48it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.70it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:02, 13.88it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.99it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 14.04it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.99it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 12.83it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 12.83it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 13.20it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.55it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:02<00:00, 13.82it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.98it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 14.02it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.48it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.58it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.72it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 10: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 10 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 17.11it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 17.11it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 16.69it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 13.79it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 14.29it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 15.08it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 15.55it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 15.94it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 16.29it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 16.54it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.31it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:05,  3.50it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.57it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.59it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.60it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.61it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.39it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.44it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.47it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:03,  3.30it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.37it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  2.92it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  2.94it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.10it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.24it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.31it/s]Training Metrics:  85%|████████▌ | 17/20 [00:05<00:00,  3.36it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.44it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.47it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.46it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5967/0.5924/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5966/0.5918/0.5979
+Server: Fusion Argmax Agreement (with PM/GM): 0.7976/0.4592
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Collecting history (n=1)...
+[ACT] Updated Threshold: 0.1101 -> 0.1182 (Dir: 1, Step: 0.0081)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 11: training 20 clients
+Round 11 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 11 Local Training:   5%|▌         | 1/20 [00:00<00:15,  1.26it/s]Round 11 Local Training:  10%|█         | 2/20 [00:01<00:14,  1.28it/s]Round 11 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.28it/s]Round 11 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.31it/s]Round 11 Local Training:  25%|██▌       | 5/20 [00:03<00:11,  1.28it/s]Round 11 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.26it/s]Round 11 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.27it/s]Round 11 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.30it/s]Round 11 Local Training:  45%|████▌     | 9/20 [00:06<00:08,  1.31it/s]Round 11 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.32it/s]Round 11 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.31it/s]Round 11 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.32it/s]Round 11 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.28it/s]Round 11 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.31it/s]Round 11 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.31it/s]Round 11 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.28it/s]Round 11 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.22it/s]Round 11 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.25it/s]Round 11 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.26it/s]Round 11 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.28it/s]                                                                        Round 11 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 11 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 11: PM aggregation and cluster update done
+
+------------- Round number: 11 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 15.83it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 13.33it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:01, 13.67it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 14.67it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 15.27it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 15.66it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 15.85it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 15.67it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 14.81it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 15.31it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:06,  3.15it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:05,  3.32it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.46it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.47it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.46it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.48it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:04,  3.24it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.31it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.36it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.40it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.42it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.44it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.46it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.30it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.35it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.39it/s]Training Metrics:  85%|████████▌ | 17/20 [00:05<00:00,  3.34it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.43it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.50it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.53it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5966/0.5920/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5965/0.5913/0.5979
+Server: Fusion Argmax Agreement (with PM/GM): 0.7976/0.4592
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 12: training 20 clients
+Round 12 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 12 Local Training:   5%|▌         | 1/20 [00:00<00:14,  1.30it/s]Round 12 Local Training:  10%|█         | 2/20 [00:01<00:16,  1.08it/s]Round 12 Local Training:  15%|█▌        | 3/20 [00:02<00:14,  1.14it/s]Round 12 Local Training:  20%|██        | 4/20 [00:03<00:13,  1.19it/s]Round 12 Local Training:  25%|██▌       | 5/20 [00:04<00:12,  1.22it/s]Round 12 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.25it/s]Round 12 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.27it/s]Round 12 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.26it/s]Round 12 Local Training:  45%|████▌     | 9/20 [00:07<00:08,  1.26it/s]Round 12 Local Training:  50%|█████     | 10/20 [00:08<00:07,  1.26it/s]Round 12 Local Training:  55%|█████▌    | 11/20 [00:08<00:07,  1.25it/s]Round 12 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.27it/s]Round 12 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.26it/s]Round 12 Local Training:  70%|███████   | 14/20 [00:11<00:04,  1.24it/s]Round 12 Local Training:  75%|███████▌  | 15/20 [00:12<00:04,  1.25it/s]Round 12 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.25it/s]Round 12 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.25it/s]Round 12 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.27it/s]Round 12 Local Training:  95%|█████████▌| 19/20 [00:15<00:00,  1.27it/s]Round 12 Local Training: 100%|██████████| 20/20 [00:16<00:00,  1.26it/s]                                                                        Round 12 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 12 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1182
+[FedCD] Aligned cluster labels: 0->1, 1->0, 2->3, 3->2, 4->4
+
+[FedCD] Round 12: Clustering Result:
+  Cluster 0 (4 clients): [4, 5, 6, 7]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+  Cluster 4 (4 clients): [8, 9, 10, 11]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 12: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:02, 13.83it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 13.90it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 12.46it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 12.56it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.06it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:02, 13.40it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.65it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 13.72it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.14it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 12.59it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 12.99it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 13.34it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.59it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:02<00:00, 13.74it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.69it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 13.05it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.34it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.55it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.46it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 13.68it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 12.75it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 12.67it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 13.15it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.47it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:02, 13.69it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.83it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 12.71it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 13.06it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 13.43it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.51it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 13.65it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.80it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:02<00:00, 12.81it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 12.68it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 13.01it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.30it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.51it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.68it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 13.81it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 12.05it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 12.81it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 13.23it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.47it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:02, 13.65it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:01<00:01, 13.76it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 12.92it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 12.43it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 12.87it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 13.26it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 13.57it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:01, 13.70it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:02<00:00, 13.67it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.20it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 13.52it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 13.74it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 13.86it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.93it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 12: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 12 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 13.01it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 14.73it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 15.11it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 15.51it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 15.77it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 15.90it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 15.91it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 15.85it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 14.78it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 10.92it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.54it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:05,  3.49it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.43it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.48it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.47it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.37it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.41it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.43it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.43it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.42it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.42it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.22it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.27it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.31it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.31it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.32it/s]Training Metrics:  85%|████████▌ | 17/20 [00:05<00:00,  3.36it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.38it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.31it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.35it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5965/0.5916/0.5978
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5964/0.5907/0.5978
+Server: Fusion Argmax Agreement (with PM/GM): 0.7975/0.4593
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Current Diff: 0.000000 | Trend Slope: -0.000000
+[ACT] Slowdown detected (Diff < Trend)! Reversing direction and decaying step.
+[ACT] Updated Threshold: 0.1182 -> 0.1109 (Dir: -1, Step: 0.0073)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0000 (samples: 2000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+  Cluster 4: 0.1050 (samples: 2000)
+
+[FedCD] Round 13: training 20 clients
+Round 13 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 13 Local Training:   5%|▌         | 1/20 [00:00<00:15,  1.25it/s]Round 13 Local Training:  10%|█         | 2/20 [00:01<00:14,  1.25it/s]Round 13 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.27it/s]Round 13 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.29it/s]Round 13 Local Training:  25%|██▌       | 5/20 [00:04<00:12,  1.20it/s]Round 13 Local Training:  30%|███       | 6/20 [00:04<00:11,  1.21it/s]Round 13 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.20it/s]Round 13 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.24it/s]Round 13 Local Training:  45%|████▌     | 9/20 [00:07<00:09,  1.21it/s]Round 13 Local Training:  50%|█████     | 10/20 [00:08<00:08,  1.25it/s]Round 13 Local Training:  55%|█████▌    | 11/20 [00:08<00:07,  1.22it/s]Round 13 Local Training:  60%|██████    | 12/20 [00:09<00:06,  1.23it/s]Round 13 Local Training:  65%|██████▌   | 13/20 [00:10<00:05,  1.24it/s]Round 13 Local Training:  70%|███████   | 14/20 [00:11<00:04,  1.26it/s]Round 13 Local Training:  75%|███████▌  | 15/20 [00:12<00:03,  1.26it/s]Round 13 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.28it/s]Round 13 Local Training:  85%|████████▌ | 17/20 [00:13<00:02,  1.26it/s]Round 13 Local Training:  90%|█████████ | 18/20 [00:14<00:01,  1.26it/s]Round 13 Local Training:  95%|█████████▌| 19/20 [00:15<00:00,  1.28it/s]Round 13 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.29it/s]                                                                        Round 13 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 13 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 13: PM aggregation and cluster update done
+
+------------- Round number: 13 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 13.67it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:01, 13.16it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 14.67it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 15.50it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 15.97it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 16.32it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 16.49it/s]Testing Clients:  80%|████████  | 16/20 [00:01<00:00, 15.60it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 15.52it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 15.27it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.60it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:05,  3.59it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.44it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.50it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.51it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.53it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.51it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.51it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.49it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.50it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.51it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.51it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:02,  3.43it/s]Training Metrics:  70%|███████   | 14/20 [00:04<00:01,  3.48it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.50it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.38it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.45it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.51it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.33it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.35it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5964/0.5910/0.5977
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5963/0.5901/0.5978
+Server: Fusion Argmax Agreement (with PM/GM): 0.7974/0.4594
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0000 (samples: 2000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+  Cluster 4: 0.1050 (samples: 2000)
+
+[FedCD] Round 14: training 20 clients
+Round 14 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 14 Local Training:   5%|▌         | 1/20 [00:00<00:17,  1.11it/s]Round 14 Local Training:  10%|█         | 2/20 [00:01<00:14,  1.21it/s]Round 14 Local Training:  15%|█▌        | 3/20 [00:02<00:13,  1.29it/s]Round 14 Local Training:  20%|██        | 4/20 [00:03<00:12,  1.33it/s]Round 14 Local Training:  25%|██▌       | 5/20 [00:03<00:11,  1.33it/s]Round 14 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.32it/s]Round 14 Local Training:  35%|███▌      | 7/20 [00:05<00:09,  1.35it/s]Round 14 Local Training:  40%|████      | 8/20 [00:06<00:08,  1.36it/s]Round 14 Local Training:  45%|████▌     | 9/20 [00:06<00:08,  1.37it/s]Round 14 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.33it/s]Round 14 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.34it/s]Round 14 Local Training:  60%|██████    | 12/20 [00:09<00:05,  1.34it/s]Round 14 Local Training:  65%|██████▌   | 13/20 [00:09<00:05,  1.35it/s]Round 14 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.32it/s]Round 14 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.33it/s]Round 14 Local Training:  80%|████████  | 16/20 [00:12<00:03,  1.27it/s]Round 14 Local Training:  85%|████████▌ | 17/20 [00:12<00:02,  1.31it/s]Round 14 Local Training:  90%|█████████ | 18/20 [00:13<00:01,  1.31it/s]Round 14 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.33it/s]Round 14 Local Training: 100%|██████████| 20/20 [00:15<00:00,  1.34it/s]                                                                        Round 14 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 14 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1109
+[FedCD] Aligned cluster labels: 0->0, 1->1, 2->3, 3->2
+
+[FedCD] Round 14: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 14: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:02, 14.40it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 13.67it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.05it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 14.26it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.40it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:01, 14.50it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.56it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 14.57it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.59it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 14.61it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.63it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 14.64it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.69it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:01<00:00, 14.71it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.73it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 14.67it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.64it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.74it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.75it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 15.00it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 14.93it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.83it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 13.82it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.08it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:01, 14.29it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.38it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 14.41it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.43it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 14.46it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.45it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 14.49it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.50it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:01<00:00, 14.56it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.64it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 14.66it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.60it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.58it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.62it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 14.44it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 14.67it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.85it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 14.91it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 13.36it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:02, 13.69it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.03it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 14.24it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.41it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 14.52it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.59it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 14.64it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.68it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:01<00:00, 14.74it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.79it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 14.81it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.84it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.87it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.79it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 14: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 14 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 17.41it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 17.73it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 17.79it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 17.79it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 17.79it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 17.78it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 17.72it/s]Testing Clients:  80%|████████  | 16/20 [00:00<00:00, 17.26it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 16.76it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 16.82it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:04,  3.81it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.80it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.80it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.68it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.69it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.70it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.69it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.70it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.70it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.69it/s]Training Metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.66it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.65it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.63it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.61it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.58it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.56it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.60it/s]Training Metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.62it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.62it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.64it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5963/0.5905/0.5977
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7971/0.4591
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5962/0.5894/0.5978
+Server: Fusion Argmax Agreement (with PM/GM): 0.7973/0.4595
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Collecting history (n=1)...
+[ACT] Updated Threshold: 0.1109 -> 0.1036 (Dir: -1, Step: 0.0073)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 15: training 20 clients
+Round 15 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 15 Local Training:   5%|▌         | 1/20 [00:00<00:13,  1.46it/s]Round 15 Local Training:  10%|█         | 2/20 [00:01<00:14,  1.28it/s]Round 15 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.33it/s]Round 15 Local Training:  20%|██        | 4/20 [00:02<00:11,  1.36it/s]Round 15 Local Training:  25%|██▌       | 5/20 [00:03<00:10,  1.37it/s]Round 15 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.38it/s]Round 15 Local Training:  35%|███▌      | 7/20 [00:05<00:09,  1.38it/s]Round 15 Local Training:  40%|████      | 8/20 [00:05<00:08,  1.38it/s]Round 15 Local Training:  45%|████▌     | 9/20 [00:06<00:07,  1.38it/s]Round 15 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.38it/s]Round 15 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.39it/s]Round 15 Local Training:  60%|██████    | 12/20 [00:08<00:05,  1.39it/s]Round 15 Local Training:  65%|██████▌   | 13/20 [00:09<00:05,  1.39it/s]Round 15 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.40it/s]Round 15 Local Training:  75%|███████▌  | 15/20 [00:10<00:03,  1.40it/s]Round 15 Local Training:  80%|████████  | 16/20 [00:11<00:02,  1.41it/s]Round 15 Local Training:  85%|████████▌ | 17/20 [00:12<00:02,  1.41it/s]Round 15 Local Training:  90%|█████████ | 18/20 [00:12<00:01,  1.40it/s]Round 15 Local Training:  95%|█████████▌| 19/20 [00:13<00:00,  1.39it/s]Round 15 Local Training: 100%|██████████| 20/20 [00:14<00:00,  1.39it/s]                                                                        Round 15 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 15 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 15: PM aggregation and cluster update done
+
+------------- Round number: 15 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 17.07it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 17.22it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 16.96it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 17.00it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 17.11it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 17.08it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 17.20it/s]Testing Clients:  80%|████████  | 16/20 [00:00<00:00, 17.35it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 17.51it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 17.61it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:04,  3.81it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.80it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.77it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.76it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.73it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.71it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.71it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.69it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.68it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.68it/s]Training Metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.68it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.68it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.68it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.67it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.66it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.66it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.67it/s]Training Metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.67it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.67it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.67it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5962/0.5898/0.5977
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7970/0.4592
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5961/0.5886/0.5977
+Server: Fusion Argmax Agreement (with PM/GM): 0.7972/0.4596
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 16: training 20 clients
+Round 16 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 16 Local Training:   5%|▌         | 1/20 [00:00<00:13,  1.37it/s]Round 16 Local Training:  10%|█         | 2/20 [00:01<00:13,  1.37it/s]Round 16 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.36it/s]Round 16 Local Training:  20%|██        | 4/20 [00:02<00:11,  1.36it/s]Round 16 Local Training:  25%|██▌       | 5/20 [00:03<00:11,  1.36it/s]Round 16 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.36it/s]Round 16 Local Training:  35%|███▌      | 7/20 [00:05<00:10,  1.27it/s]Round 16 Local Training:  40%|████      | 8/20 [00:06<00:09,  1.30it/s]Round 16 Local Training:  45%|████▌     | 9/20 [00:06<00:08,  1.32it/s]Round 16 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.33it/s]Round 16 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.33it/s]Round 16 Local Training:  60%|██████    | 12/20 [00:08<00:05,  1.34it/s]Round 16 Local Training:  65%|██████▌   | 13/20 [00:09<00:05,  1.35it/s]Round 16 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.35it/s]Round 16 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.36it/s]Round 16 Local Training:  80%|████████  | 16/20 [00:11<00:02,  1.37it/s]Round 16 Local Training:  85%|████████▌ | 17/20 [00:12<00:02,  1.37it/s]Round 16 Local Training:  90%|█████████ | 18/20 [00:13<00:01,  1.38it/s]Round 16 Local Training:  95%|█████████▌| 19/20 [00:14<00:00,  1.39it/s]Round 16 Local Training: 100%|██████████| 20/20 [00:14<00:00,  1.40it/s]                                                                        Round 16 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 16 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1036
+[FedCD] Aligned cluster labels: 0->0, 1->2, 2->1, 3->3
+
+[FedCD] Round 16: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 16: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:02, 14.17it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 14.35it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.44it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 14.52it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.55it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:01, 14.53it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.53it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 14.48it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.44it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 14.54it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.55it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 14.57it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.63it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:01<00:00, 14.63it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.69it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 14.74it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.70it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.66it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.57it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 14.54it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 14.52it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.54it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 14.49it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.56it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:01, 14.58it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.62it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 14.66it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.68it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 14.70it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.59it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 14.58it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.58it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:01<00:00, 14.59it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.62it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 14.60it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.56it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.55it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.58it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 14.68it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 14.77it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.81it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 14.80it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.79it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:01, 14.76it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.70it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 14.66it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.69it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 14.72it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.63it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 14.63it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.62it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:01<00:00, 14.60it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.53it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 14.53it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.59it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.62it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.64it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 16: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 16 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 17.64it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 17.90it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 17.87it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 17.72it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 17.59it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 17.38it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 17.18it/s]Testing Clients:  80%|████████  | 16/20 [00:00<00:00, 17.17it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 17.20it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 17.23it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.72it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.74it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.74it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.75it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.74it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.73it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.71it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.71it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.70it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.69it/s]Training Metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.68it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.67it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.65it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.65it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.65it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.65it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.67it/s]Training Metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.63it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.62it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.65it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5961/0.5890/0.5976
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7969/0.4593
+Server: Overall Averaged Global Test Accuracy: 0.1125
+Server: Fusion PM Weight (mean/min/max): 0.5959/0.5877/0.5977
+Server: Fusion Argmax Agreement (with PM/GM): 0.7971/0.4597
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Current Diff: 0.000000 | Trend Slope: -0.000000
+[ACT] Slowdown detected (Diff < Trend)! Reversing direction and decaying step.
+[ACT] Updated Threshold: 0.1036 -> 0.1102 (Dir: 1, Step: 0.0066)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 17: training 20 clients
+Round 17 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 17 Local Training:   5%|▌         | 1/20 [00:00<00:14,  1.33it/s]Round 17 Local Training:  10%|█         | 2/20 [00:01<00:13,  1.35it/s]Round 17 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.37it/s]Round 17 Local Training:  20%|██        | 4/20 [00:02<00:11,  1.37it/s]Round 17 Local Training:  25%|██▌       | 5/20 [00:03<00:10,  1.37it/s]Round 17 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.38it/s]Round 17 Local Training:  35%|███▌      | 7/20 [00:05<00:09,  1.38it/s]Round 17 Local Training:  40%|████      | 8/20 [00:05<00:08,  1.37it/s]Round 17 Local Training:  45%|████▌     | 9/20 [00:06<00:07,  1.38it/s]Round 17 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.38it/s]Round 17 Local Training:  55%|█████▌    | 11/20 [00:08<00:06,  1.30it/s]Round 17 Local Training:  60%|██████    | 12/20 [00:08<00:06,  1.32it/s]Round 17 Local Training:  65%|██████▌   | 13/20 [00:09<00:05,  1.34it/s]Round 17 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.36it/s]Round 17 Local Training:  75%|███████▌  | 15/20 [00:11<00:03,  1.37it/s]Round 17 Local Training:  80%|████████  | 16/20 [00:11<00:02,  1.37it/s]Round 17 Local Training:  85%|████████▌ | 17/20 [00:12<00:02,  1.38it/s]Round 17 Local Training:  90%|█████████ | 18/20 [00:13<00:01,  1.38it/s]Round 17 Local Training:  95%|█████████▌| 19/20 [00:13<00:00,  1.37it/s]Round 17 Local Training: 100%|██████████| 20/20 [00:14<00:00,  1.38it/s]                                                                        Round 17 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 17 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 17: PM aggregation and cluster update done
+
+------------- Round number: 17 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 17.26it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 17.40it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 17.36it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 17.42it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 17.61it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 17.70it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 17.71it/s]Testing Clients:  80%|████████  | 16/20 [00:00<00:00, 17.68it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 17.78it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 17.90it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:04,  3.83it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.84it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.83it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.83it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:03,  3.80it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.79it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.78it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.77it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.76it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.76it/s]Training Metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.75it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.75it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.73it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.71it/s]Training Metrics:  75%|███████▌  | 15/20 [00:03<00:01,  3.70it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.70it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.73it/s]Training Metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.72it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.72it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.72it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5959/0.5882/0.5976
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7969/0.4593
+Server: Overall Averaged Global Test Accuracy: 0.1124
+Server: Fusion PM Weight (mean/min/max): 0.5957/0.5867/0.5977
+Server: Fusion Argmax Agreement (with PM/GM): 0.7970/0.4598
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 18: training 20 clients
+Round 18 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 18 Local Training:   5%|▌         | 1/20 [00:00<00:13,  1.41it/s]Round 18 Local Training:  10%|█         | 2/20 [00:01<00:12,  1.41it/s]Round 18 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.40it/s]Round 18 Local Training:  20%|██        | 4/20 [00:02<00:11,  1.39it/s]Round 18 Local Training:  25%|██▌       | 5/20 [00:03<00:10,  1.40it/s]Round 18 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.40it/s]Round 18 Local Training:  35%|███▌      | 7/20 [00:04<00:09,  1.40it/s]Round 18 Local Training:  40%|████      | 8/20 [00:05<00:08,  1.40it/s]Round 18 Local Training:  45%|████▌     | 9/20 [00:06<00:07,  1.39it/s]Round 18 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.40it/s]Round 18 Local Training:  55%|█████▌    | 11/20 [00:07<00:06,  1.39it/s]Round 18 Local Training:  60%|██████    | 12/20 [00:08<00:05,  1.39it/s]Round 18 Local Training:  65%|██████▌   | 13/20 [00:09<00:05,  1.39it/s]Round 18 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.38it/s]Round 18 Local Training:  75%|███████▌  | 15/20 [00:10<00:03,  1.38it/s]Round 18 Local Training:  80%|████████  | 16/20 [00:11<00:03,  1.30it/s]Round 18 Local Training:  85%|████████▌ | 17/20 [00:12<00:02,  1.33it/s]Round 18 Local Training:  90%|█████████ | 18/20 [00:13<00:01,  1.35it/s]Round 18 Local Training:  95%|█████████▌| 19/20 [00:13<00:00,  1.36it/s]Round 18 Local Training: 100%|██████████| 20/20 [00:14<00:00,  1.37it/s]                                                                        Round 18 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 18 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1102
+[FedCD] Aligned cluster labels: 0->0, 1->3, 2->1, 3->2
+
+[FedCD] Round 18: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 18: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:02, 14.28it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 14.49it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.55it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 14.57it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.56it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:01, 14.57it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.59it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 14.61it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.62it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 14.66it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.55it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 14.58it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.60it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:01<00:00, 14.62it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.58it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 14.61it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.57it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.58it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.92it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 14.30it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 14.26it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.26it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 14.25it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.25it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:01, 14.29it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.20it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 14.25it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.33it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 14.35it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.33it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 14.41it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.45it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:01<00:00, 14.47it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.53it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 14.58it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.61it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.64it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.64it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 14.51it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 14.47it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.41it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 14.51it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.51it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:01, 14.43it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.51it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 14.59it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.55it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 14.57it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.59it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 14.59it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.64it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:01<00:00, 14.69it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.70it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 14.66it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.64it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.63it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.59it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 18: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 18 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 17.65it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 17.82it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 17.77it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 17.85it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 17.87it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 17.84it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 17.73it/s]Testing Clients:  80%|████████  | 16/20 [00:00<00:00, 17.71it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 17.82it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 17.81it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.73it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.72it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.73it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.73it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.71it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:03,  3.69it/s]Training Metrics:  35%|███▌      | 7/20 [00:01<00:03,  3.69it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.69it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:02,  3.67it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.66it/s]Training Metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.66it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.65it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.63it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.11it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.25it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.35it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.45it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.52it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.57it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.62it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5957/0.5873/0.5975
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7967/0.4595
+Server: Overall Averaged Global Test Accuracy: 0.1124
+Server: Fusion PM Weight (mean/min/max): 0.5955/0.5856/0.5976
+Server: Fusion Argmax Agreement (with PM/GM): 0.7969/0.4599
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Collecting history (n=1)...
+[ACT] Updated Threshold: 0.1102 -> 0.1167 (Dir: 1, Step: 0.0066)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 19: training 20 clients
+Round 19 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 19 Local Training:   5%|▌         | 1/20 [00:00<00:13,  1.41it/s]Round 19 Local Training:  10%|█         | 2/20 [00:01<00:12,  1.39it/s]Round 19 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.39it/s]Round 19 Local Training:  20%|██        | 4/20 [00:02<00:11,  1.40it/s]Round 19 Local Training:  25%|██▌       | 5/20 [00:03<00:10,  1.37it/s]Round 19 Local Training:  30%|███       | 6/20 [00:04<00:10,  1.38it/s]Round 19 Local Training:  35%|███▌      | 7/20 [00:05<00:09,  1.39it/s]Round 19 Local Training:  40%|████      | 8/20 [00:05<00:08,  1.40it/s]Round 19 Local Training:  45%|████▌     | 9/20 [00:06<00:07,  1.39it/s]Round 19 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.39it/s]Round 19 Local Training:  55%|█████▌    | 11/20 [00:07<00:06,  1.40it/s]Round 19 Local Training:  60%|██████    | 12/20 [00:08<00:05,  1.40it/s]Round 19 Local Training:  65%|██████▌   | 13/20 [00:09<00:04,  1.41it/s]Round 19 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.40it/s]Round 19 Local Training:  75%|███████▌  | 15/20 [00:10<00:03,  1.41it/s]Round 19 Local Training:  80%|████████  | 16/20 [00:11<00:02,  1.40it/s]Round 19 Local Training:  85%|████████▌ | 17/20 [00:12<00:02,  1.40it/s]Round 19 Local Training:  90%|█████████ | 18/20 [00:12<00:01,  1.41it/s]Round 19 Local Training:  95%|█████████▌| 19/20 [00:13<00:00,  1.41it/s]Round 19 Local Training: 100%|██████████| 20/20 [00:14<00:00,  1.41it/s]                                                                        Round 19 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 19 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 19: PM aggregation and cluster update done
+
+------------- Round number: 19 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 17.65it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 18.06it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 18.09it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 18.09it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 17.84it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 17.75it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 17.62it/s]Testing Clients:  80%|████████  | 16/20 [00:00<00:00, 17.62it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 17.77it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 17.72it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.80it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.81it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.80it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.78it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.12it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.29it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.42it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.51it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.56it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.59it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.62it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.63it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.63it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.65it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.65it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.66it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.70it/s]Training Metrics:  90%|█████████ | 18/20 [00:04<00:00,  3.74it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.77it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.77it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5955/0.5863/0.5975
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7965/0.4597
+Server: Overall Averaged Global Test Accuracy: 0.1124
+Server: Fusion PM Weight (mean/min/max): 0.5953/0.5844/0.5975
+Server: Fusion Argmax Agreement (with PM/GM): 0.7968/0.4600
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+[FedCD] Round 20: training 20 clients
+Round 20 Local Training:   0%|          | 0/20 [00:00<?, ?it/s]Round 20 Local Training:   5%|▌         | 1/20 [00:00<00:13,  1.45it/s]Round 20 Local Training:  10%|█         | 2/20 [00:01<00:12,  1.42it/s]Round 20 Local Training:  15%|█▌        | 3/20 [00:02<00:12,  1.40it/s]Round 20 Local Training:  20%|██        | 4/20 [00:02<00:11,  1.40it/s]Round 20 Local Training:  25%|██▌       | 5/20 [00:03<00:10,  1.40it/s]Round 20 Local Training:  30%|███       | 6/20 [00:04<00:09,  1.40it/s]Round 20 Local Training:  35%|███▌      | 7/20 [00:04<00:09,  1.41it/s]Round 20 Local Training:  40%|████      | 8/20 [00:05<00:09,  1.32it/s]Round 20 Local Training:  45%|████▌     | 9/20 [00:06<00:08,  1.34it/s]Round 20 Local Training:  50%|█████     | 10/20 [00:07<00:07,  1.35it/s]Round 20 Local Training:  55%|█████▌    | 11/20 [00:07<00:06,  1.37it/s]Round 20 Local Training:  60%|██████    | 12/20 [00:08<00:05,  1.37it/s]Round 20 Local Training:  65%|██████▌   | 13/20 [00:09<00:05,  1.38it/s]Round 20 Local Training:  70%|███████   | 14/20 [00:10<00:04,  1.38it/s]Round 20 Local Training:  75%|███████▌  | 15/20 [00:10<00:03,  1.38it/s]Round 20 Local Training:  80%|████████  | 16/20 [00:11<00:02,  1.37it/s]Round 20 Local Training:  85%|████████▌ | 17/20 [00:12<00:02,  1.36it/s]Round 20 Local Training:  90%|█████████ | 18/20 [00:13<00:01,  1.37it/s]Round 20 Local Training:  95%|█████████▌| 19/20 [00:13<00:00,  1.36it/s]Round 20 Local Training: 100%|██████████| 20/20 [00:14<00:00,  1.35it/s]                                                                        Round 20 Collecting PMs:   0%|          | 0/20 [00:00<?, ?it/s]                                                               [FedCD] Round 20 Total Uplink Size: 26.28 MB (Avg: 1.31 MB/client)
+[FedCD] Using Agglomerative Clustering (L2 Normalized) with threshold=0.1167
+[FedCD] Aligned cluster labels: 0->0, 1->3, 2->2, 3->1
+
+[FedCD] Round 20: Clustering Result:
+  Cluster 0 (8 clients): [4, 5, 6, 7, 8, 9, 10, 11]
+  Cluster 1 (4 clients): [16, 17, 18, 19]
+  Cluster 2 (4 clients): [0, 1, 2, 3]
+  Cluster 3 (4 clients): [12, 13, 14, 15]
+[FedCD] Broadcast Cluster PM Size: 1.31 MB per client (in cluster)
+[FedCD] Round 20: PM aggregation and cluster update done
+Distill GM from PM teachers [1/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [1/3]:   5%|▌         | 2/40 [00:00<00:02, 13.63it/s]Distill GM from PM teachers [1/3]:  10%|█         | 4/40 [00:00<00:02, 13.89it/s]Distill GM from PM teachers [1/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.08it/s]Distill GM from PM teachers [1/3]:  20%|██        | 8/40 [00:00<00:02, 14.10it/s]Distill GM from PM teachers [1/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.03it/s]Distill GM from PM teachers [1/3]:  30%|███       | 12/40 [00:00<00:01, 14.08it/s]Distill GM from PM teachers [1/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.12it/s]Distill GM from PM teachers [1/3]:  40%|████      | 16/40 [00:01<00:01, 14.11it/s]Distill GM from PM teachers [1/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.09it/s]Distill GM from PM teachers [1/3]:  50%|█████     | 20/40 [00:01<00:01, 14.13it/s]Distill GM from PM teachers [1/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.15it/s]Distill GM from PM teachers [1/3]:  60%|██████    | 24/40 [00:01<00:01, 13.94it/s]Distill GM from PM teachers [1/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.01it/s]Distill GM from PM teachers [1/3]:  70%|███████   | 28/40 [00:01<00:00, 13.87it/s]Distill GM from PM teachers [1/3]:  75%|███████▌  | 30/40 [00:02<00:00, 13.95it/s]Distill GM from PM teachers [1/3]:  80%|████████  | 32/40 [00:02<00:00, 13.97it/s]Distill GM from PM teachers [1/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.05it/s]Distill GM from PM teachers [1/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.07it/s]Distill GM from PM teachers [1/3]:  95%|█████████▌| 38/40 [00:02<00:00, 13.98it/s]                                                                                  Distill GM from PM teachers [2/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [2/3]:   5%|▌         | 2/40 [00:00<00:02, 14.13it/s]Distill GM from PM teachers [2/3]:  10%|█         | 4/40 [00:00<00:02, 14.02it/s]Distill GM from PM teachers [2/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.15it/s]Distill GM from PM teachers [2/3]:  20%|██        | 8/40 [00:00<00:02, 14.20it/s]Distill GM from PM teachers [2/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.20it/s]Distill GM from PM teachers [2/3]:  30%|███       | 12/40 [00:00<00:01, 14.21it/s]Distill GM from PM teachers [2/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.18it/s]Distill GM from PM teachers [2/3]:  40%|████      | 16/40 [00:01<00:01, 14.14it/s]Distill GM from PM teachers [2/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.15it/s]Distill GM from PM teachers [2/3]:  50%|█████     | 20/40 [00:01<00:01, 14.17it/s]Distill GM from PM teachers [2/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.22it/s]Distill GM from PM teachers [2/3]:  60%|██████    | 24/40 [00:01<00:01, 14.23it/s]Distill GM from PM teachers [2/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.24it/s]Distill GM from PM teachers [2/3]:  70%|███████   | 28/40 [00:01<00:00, 14.22it/s]Distill GM from PM teachers [2/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.23it/s]Distill GM from PM teachers [2/3]:  80%|████████  | 32/40 [00:02<00:00, 14.23it/s]Distill GM from PM teachers [2/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.28it/s]Distill GM from PM teachers [2/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.33it/s]Distill GM from PM teachers [2/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.37it/s]                                                                                  Distill GM from PM teachers [3/3]:   0%|          | 0/40 [00:00<?, ?it/s]Distill GM from PM teachers [3/3]:   5%|▌         | 2/40 [00:00<00:02, 14.36it/s]Distill GM from PM teachers [3/3]:  10%|█         | 4/40 [00:00<00:02, 14.39it/s]Distill GM from PM teachers [3/3]:  15%|█▌        | 6/40 [00:00<00:02, 14.40it/s]Distill GM from PM teachers [3/3]:  20%|██        | 8/40 [00:00<00:02, 14.39it/s]Distill GM from PM teachers [3/3]:  25%|██▌       | 10/40 [00:00<00:02, 14.38it/s]Distill GM from PM teachers [3/3]:  30%|███       | 12/40 [00:00<00:01, 14.42it/s]Distill GM from PM teachers [3/3]:  35%|███▌      | 14/40 [00:00<00:01, 14.43it/s]Distill GM from PM teachers [3/3]:  40%|████      | 16/40 [00:01<00:01, 14.38it/s]Distill GM from PM teachers [3/3]:  45%|████▌     | 18/40 [00:01<00:01, 14.38it/s]Distill GM from PM teachers [3/3]:  50%|█████     | 20/40 [00:01<00:01, 14.38it/s]Distill GM from PM teachers [3/3]:  55%|█████▌    | 22/40 [00:01<00:01, 14.32it/s]Distill GM from PM teachers [3/3]:  60%|██████    | 24/40 [00:01<00:01, 14.31it/s]Distill GM from PM teachers [3/3]:  65%|██████▌   | 26/40 [00:01<00:00, 14.34it/s]Distill GM from PM teachers [3/3]:  70%|███████   | 28/40 [00:01<00:00, 14.39it/s]Distill GM from PM teachers [3/3]:  75%|███████▌  | 30/40 [00:02<00:00, 14.36it/s]Distill GM from PM teachers [3/3]:  80%|████████  | 32/40 [00:02<00:00, 14.33it/s]Distill GM from PM teachers [3/3]:  85%|████████▌ | 34/40 [00:02<00:00, 14.32it/s]Distill GM from PM teachers [3/3]:  90%|█████████ | 36/40 [00:02<00:00, 14.34it/s]Distill GM from PM teachers [3/3]:  95%|█████████▌| 38/40 [00:02<00:00, 14.30it/s]                                                                                  [FedCD] Broadcast GM Size: 0.26 MB per client
+[FedCD] Round 20: Server-side PM-teacher GM distillation/update done
+
+------------- Round number: 20 -------------
+Testing Clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing Clients:  10%|█         | 2/20 [00:00<00:01, 16.92it/s]Testing Clients:  20%|██        | 4/20 [00:00<00:00, 16.92it/s]Testing Clients:  30%|███       | 6/20 [00:00<00:00, 16.74it/s]Testing Clients:  40%|████      | 8/20 [00:00<00:00, 16.75it/s]Testing Clients:  50%|█████     | 10/20 [00:00<00:00, 16.72it/s]Testing Clients:  60%|██████    | 12/20 [00:00<00:00, 16.75it/s]Testing Clients:  70%|███████   | 14/20 [00:00<00:00, 16.60it/s]Testing Clients:  80%|████████  | 16/20 [00:00<00:00, 16.54it/s]Testing Clients:  90%|█████████ | 18/20 [00:01<00:00, 16.69it/s]Testing Clients: 100%|██████████| 20/20 [00:01<00:00, 16.79it/s]                                                                Training Metrics:   0%|          | 0/20 [00:00<?, ?it/s]Training Metrics:   5%|▌         | 1/20 [00:00<00:05,  3.76it/s]Training Metrics:  10%|█         | 2/20 [00:00<00:04,  3.76it/s]Training Metrics:  15%|█▌        | 3/20 [00:00<00:04,  3.76it/s]Training Metrics:  20%|██        | 4/20 [00:01<00:04,  3.76it/s]Training Metrics:  25%|██▌       | 5/20 [00:01<00:04,  3.74it/s]Training Metrics:  30%|███       | 6/20 [00:01<00:04,  3.10it/s]Training Metrics:  35%|███▌      | 7/20 [00:02<00:03,  3.29it/s]Training Metrics:  40%|████      | 8/20 [00:02<00:03,  3.42it/s]Training Metrics:  45%|████▌     | 9/20 [00:02<00:03,  3.49it/s]Training Metrics:  50%|█████     | 10/20 [00:02<00:02,  3.56it/s]Training Metrics:  55%|█████▌    | 11/20 [00:03<00:02,  3.58it/s]Training Metrics:  60%|██████    | 12/20 [00:03<00:02,  3.62it/s]Training Metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.63it/s]Training Metrics:  70%|███████   | 14/20 [00:03<00:01,  3.65it/s]Training Metrics:  75%|███████▌  | 15/20 [00:04<00:01,  3.64it/s]Training Metrics:  80%|████████  | 16/20 [00:04<00:01,  3.66it/s]Training Metrics:  85%|████████▌ | 17/20 [00:04<00:00,  3.67it/s]Training Metrics:  90%|█████████ | 18/20 [00:05<00:00,  3.69it/s]Training Metrics:  95%|█████████▌| 19/20 [00:05<00:00,  3.71it/s]Training Metrics: 100%|██████████| 20/20 [00:05<00:00,  3.72it/s]                                                                 Server: Overall Averaged Local Test Accuracy: 0.1125
+Server: PM-only Local Test Accuracy: 0.1154
+Server: GM-only Local Test Accuracy: 0.1113
+Server: Local Fusion PM Weight (mean/min/max): 0.5952/0.5851/0.5974
+Server: Local Fusion Argmax Agreement (with PM/GM): 0.7965/0.4597
+Server: Overall Averaged Global Test Accuracy: 0.1124
+Server: Fusion PM Weight (mean/min/max): 0.5950/0.5831/0.5975
+Server: Fusion Argmax Agreement (with PM/GM): 0.7968/0.4600
+Server: GM-only Global Test Accuracy: 0.1113
+Server: PM-only Global Test Accuracy: 0.1154
+Server: Overall Averaged Test AUC: 0.5245
+Server: Overall Averaged Train Loss: 2.3016
+[ACT] Mean Acc: 0.1125 | Current Diff: 0.000000 | Trend Slope: -0.000000
+[ACT] Slowdown detected (Diff < Trend)! Reversing direction and decaying step.
+[ACT] Updated Threshold: 0.1167 -> 0.1108 (Dir: -1, Step: 0.0059)
+Server: Cluster-wise Accuracy Detail:
+  Cluster 0: 0.0525 (samples: 4000)
+  Cluster 1: 0.3110 (samples: 2000)
+  Cluster 2: 0.1465 (samples: 2000)
+  Cluster 3: 0.0000 (samples: 2000)
+
+Training finished. Saving results...
+File path: logs/FedCD/GM_VGG8W256_PM_VGG8W1290_Fext_SmallFExt/pat/NC_20/date_20260222/time_160341/Cifar10_pat_nc20_FedCD_train_0.h5
+
+Average time cost: 824.44s.
+Length:  21
+std for best accuracy: 0.0
+mean for best accuracy: 0.1125
+All done!
+
+Storage on cpu
+-------------------------------------------------------------------------------
+Total Tensors: 161856722 	Used Memory: 470.37M
+-------------------------------------------------------------------------------

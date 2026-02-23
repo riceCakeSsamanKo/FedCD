@@ -44,6 +44,31 @@ class SmallFExt(nn.Module):
         x = self.fc(x)
         return x
 
+
+class TinyFExt(nn.Module):
+    def __init__(self, in_channels=3, out_dim=256):
+        super().__init__()
+        self.out_dim = out_dim
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels, 16, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        self.pool = nn.AdaptiveAvgPool2d((2, 2))
+        self.fc = nn.Linear(64 * 2 * 2, out_dim)
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.pool(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
+        return x
+
 ###########################################################
 
 # https://github.com/jindongwang/Deep-learning-activity-recognition/blob/master/pytorch/network.py

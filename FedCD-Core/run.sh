@@ -14,11 +14,11 @@ LR="${LR:-0.005}"
 BATCH_SIZE="${BATCH_SIZE:-128}"
 GOAL="${GOAL:-train}"
 
-# Fixed FedCD setting: exp_011_client_conf_gm256_pm1280
-GM_MODEL="${GM_MODEL:-VGG8W256}"
-PM_MODEL="${PM_MODEL:-VGG8W1280}"
+# Fixed FedCD setting (reference: GM_VGG8W224_PM_VGG8W1322_Fext_SmallFExt)
+GM_MODEL="${GM_MODEL:-VGG8W224}"
+PM_MODEL="${PM_MODEL:-VGG8W1322}"
 FEXT_MODEL="${FEXT_MODEL:-SmallFExt}"
-FEXT_DIM="${FEXT_DIM:-512}"
+FEXT_DIM="${FEXT_DIM:-256}"
 
 # Teacher setup (client_conf)
 TEACHER_PROXY_DATASET="${TEACHER_PROXY_DATASET:-Cifar100}"
@@ -28,6 +28,12 @@ TEACHER_ABSTAIN_THRESHOLD="${TEACHER_ABSTAIN_THRESHOLD:-0.3}"
 TEACHER_TEACHER_ABSTAIN_THRESHOLD="${TEACHER_TEACHER_ABSTAIN_THRESHOLD:-0.5}"
 TEACHER_MIN_ACTIVE="${TEACHER_MIN_ACTIVE:-2}"
 TEACHER_CONSENSUS_MIN_RATIO="${TEACHER_CONSENSUS_MIN_RATIO:-0.6}"
+FEDCD_PM_TEACHER_SAMPLES="${FEDCD_PM_TEACHER_SAMPLES:-50000}"
+FEDCD_PM_TEACHER_BATCH_SIZE="${FEDCD_PM_TEACHER_BATCH_SIZE:-256}"
+FEDCD_PM_TEACHER_EPOCHS="${FEDCD_PM_TEACHER_EPOCHS:-6}"
+FEDCD_INIT_EPOCHS="${FEDCD_INIT_EPOCHS:-5}"
+FEDCD_INIT_SAMPLES="${FEDCD_INIT_SAMPLES:-50000}"
+FEDCD_INIT_BATCH_SIZE="${FEDCD_INIT_BATCH_SIZE:-256}"
 
 # PM-first inference fusion defaults
 FEDCD_ENTROPY_TEMP_PM="${FEDCD_ENTROPY_TEMP_PM:-1.0}"
@@ -45,18 +51,42 @@ FEDCD_ENTROPY_USE_OOD_GATE="${FEDCD_ENTROPY_USE_OOD_GATE:-true}"
 FEDCD_ENTROPY_OOD_SCALE="${FEDCD_ENTROPY_OOD_SCALE:-0.5}"
 FEDCD_ENTROPY_OOD_USE_CLASS_STATS="${FEDCD_ENTROPY_OOD_USE_CLASS_STATS:-true}"
 FEDCD_ENTROPY_OOD_CLASS_MIX="${FEDCD_ENTROPY_OOD_CLASS_MIX:-0.6}"
-FEDCD_FUSION_MODE="${FEDCD_FUSION_MODE:-router_soft}"
+FEDCD_FUSION_MODE="${FEDCD_FUSION_MODE:-safe_logit}"
+FEDCD_LEARNED_BLEND_ALPHA="${FEDCD_LEARNED_BLEND_ALPHA:-0.5}"
+FEDCD_LEARNED_BLEND_AUTO_TUNE="${FEDCD_LEARNED_BLEND_AUTO_TUNE:-false}"
+FEDCD_LEARNED_BLEND_PERIOD="${FEDCD_LEARNED_BLEND_PERIOD:-1}"
+FEDCD_LEARNED_BLEND_CANDIDATES="${FEDCD_LEARNED_BLEND_CANDIDATES:-11}"
+FEDCD_SAFE_FUSION_HIDDEN_DIM="${FEDCD_SAFE_FUSION_HIDDEN_DIM:-64}"
+FEDCD_SAFE_FUSION_DROPOUT="${FEDCD_SAFE_FUSION_DROPOUT:-0.0}"
+FEDCD_SAFE_FUSION_PM_PRIOR="${FEDCD_SAFE_FUSION_PM_PRIOR:-0.8}"
+FEDCD_SAFE_FUSION_TEMPERATURE="${FEDCD_SAFE_FUSION_TEMPERATURE:-1.0}"
+FEDCD_SAFE_FUSION_MIN_PM_WEIGHT="${FEDCD_SAFE_FUSION_MIN_PM_WEIGHT:-0.0}"
+FEDCD_SAFE_FUSION_MAX_PM_WEIGHT="${FEDCD_SAFE_FUSION_MAX_PM_WEIGHT:-1.0}"
+FEDCD_SAFE_FUSION_LOSS_WEIGHT="${FEDCD_SAFE_FUSION_LOSS_WEIGHT:-0.3}"
+FEDCD_SAFE_FUSION_MARGIN="${FEDCD_SAFE_FUSION_MARGIN:-0.02}"
+FEDCD_SAFE_FUSION_LR_SCALE="${FEDCD_SAFE_FUSION_LR_SCALE:-1.0}"
+FEDCD_SAFE_FUSION_ROUTE_WEIGHT="${FEDCD_SAFE_FUSION_ROUTE_WEIGHT:-0.6}"
+FEDCD_SAFE_FUSION_ROUTE_TAU="${FEDCD_SAFE_FUSION_ROUTE_TAU:-0.2}"
+FEDCD_SAFE_FUSION_ROUTE_FLOOR="${FEDCD_SAFE_FUSION_ROUTE_FLOOR:-0.05}"
+FEDCD_SAFE_FUSION_ROUTE_GAP_POWER="${FEDCD_SAFE_FUSION_ROUTE_GAP_POWER:-1.0}"
 FEDCD_PM_DEFER_CONF_THRESHOLD="${FEDCD_PM_DEFER_CONF_THRESHOLD:-0.55}"
 FEDCD_PM_DEFER_GM_MARGIN="${FEDCD_PM_DEFER_GM_MARGIN:-0.02}"
 FEDCD_PM_DEFER_OOD_THRESHOLD="${FEDCD_PM_DEFER_OOD_THRESHOLD:-0.35}"
-FEDCD_ROUTER_ENABLE="${FEDCD_ROUTER_ENABLE:-true}"
+FEDCD_BRANCH_TEMP_CALIBRATION_ENABLE="${FEDCD_BRANCH_TEMP_CALIBRATION_ENABLE:-false}"
+FEDCD_BRANCH_TEMP_CALIBRATION_PERIOD="${FEDCD_BRANCH_TEMP_CALIBRATION_PERIOD:-1}"
+FEDCD_BRANCH_TEMP_CALIBRATION_STEPS="${FEDCD_BRANCH_TEMP_CALIBRATION_STEPS:-80}"
+FEDCD_BRANCH_TEMP_CALIBRATION_LR="${FEDCD_BRANCH_TEMP_CALIBRATION_LR:-0.05}"
+FEDCD_BRANCH_TEMP_MIN="${FEDCD_BRANCH_TEMP_MIN:-0.5}"
+FEDCD_BRANCH_TEMP_MAX="${FEDCD_BRANCH_TEMP_MAX:-5.0}"
+FEDCD_BRANCH_TEMP_SAMPLES="${FEDCD_BRANCH_TEMP_SAMPLES:-512}"
+FEDCD_ROUTER_ENABLE="${FEDCD_ROUTER_ENABLE:-false}"
 FEDCD_ROUTER_TYPE="${FEDCD_ROUTER_TYPE:-attention}"
 FEDCD_ROUTER_HIDDEN_DIM="${FEDCD_ROUTER_HIDDEN_DIM:-128}"
 FEDCD_ROUTER_ATTN_DIM="${FEDCD_ROUTER_ATTN_DIM:-128}"
 FEDCD_ROUTER_ATTN_HEADS="${FEDCD_ROUTER_ATTN_HEADS:-4}"
 FEDCD_ROUTER_DROPOUT="${FEDCD_ROUTER_DROPOUT:-0.0}"
 FEDCD_ROUTER_LR_SCALE="${FEDCD_ROUTER_LR_SCALE:-1.0}"
-FEDCD_ROUTER_LOSS_WEIGHT="${FEDCD_ROUTER_LOSS_WEIGHT:-0.2}"
+FEDCD_ROUTER_LOSS_WEIGHT="${FEDCD_ROUTER_LOSS_WEIGHT:-0.0}"
 FEDCD_ROUTER_THRESHOLD="${FEDCD_ROUTER_THRESHOLD:-0.55}"
 FEDCD_ROUTER_TEMPERATURE="${FEDCD_ROUTER_TEMPERATURE:-1.0}"
 FEDCD_ROUTER_NEG_STD_SCALE="${FEDCD_ROUTER_NEG_STD_SCALE:-2.0}"
@@ -80,12 +110,20 @@ FEDCD_ROUTER_SOFT_LABEL_FLOOR="${FEDCD_ROUTER_SOFT_LABEL_FLOOR:-0.05}"
 FEDCD_ROUTER_BALANCE_WEIGHT="${FEDCD_ROUTER_BALANCE_WEIGHT:-0.1}"
 FEDCD_ROUTER_BALANCE_TARGET="${FEDCD_ROUTER_BALANCE_TARGET:-0.55}"
 FEDCD_ROUTER_BALANCE_TOLERANCE="${FEDCD_ROUTER_BALANCE_TOLERANCE:-0.2}"
+FEDCD_ROUTER_SERVER_DISTILL_ENABLE="${FEDCD_ROUTER_SERVER_DISTILL_ENABLE:-false}"
+FEDCD_ROUTER_SERVER_NEG_MODE="${FEDCD_ROUTER_SERVER_NEG_MODE:-all_other}"
+FEDCD_ROUTER_SERVER_NEG_TOPK="${FEDCD_ROUTER_SERVER_NEG_TOPK:-2}"
+FEDCD_ROUTER_SERVER_SYNTH_WEIGHT="${FEDCD_ROUTER_SERVER_SYNTH_WEIGHT:-0.0}"
+FEDCD_ROUTER_SERVER_SYNTH_SAMPLES="${FEDCD_ROUTER_SERVER_SYNTH_SAMPLES:-128}"
 FEDCD_LOCAL_PM_ONLY_OBJECTIVE="${FEDCD_LOCAL_PM_ONLY_OBJECTIVE:-false}"
+FEDCD_GM_UPDATE_MODE="${FEDCD_GM_UPDATE_MODE:-server_pm_teacher}"
+FEDCD_PM_TO_GM_MASK_ENABLE="${FEDCD_PM_TO_GM_MASK_ENABLE:-false}"
+FEDCD_PM_TO_GM_MASK_UNIFIED="${FEDCD_PM_TO_GM_MASK_UNIFIED:-true}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=========================================================="
-echo "FedCD baseline-aligned run (exp_011_client_conf_gm256_pm1280)"
+echo "FedCD baseline-aligned run (GM224/PM1322/SmallFExt + routing-focused fusion)"
 echo "dataset=${DATASET} nc=${NUM_CLIENTS} gr=${GLOBAL_ROUNDS} ls=${LOCAL_EPOCHS} lr=${LR} lbs=${BATCH_SIZE}"
 echo "model: GM=${GM_MODEL}, PM=${PM_MODEL}, FExt=${FEXT_MODEL}"
 echo "teacher: source=${TEACHER_SOURCE}, topk=${TEACHER_TOPK}, min_active=${TEACHER_MIN_ACTIVE}"
@@ -145,7 +183,9 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_gm_logits_weight 0.0 \
     --fedcd_local_pm_only_objective "${FEDCD_LOCAL_PM_ONLY_OBJECTIVE}" \
     --fedcd_gm_lr_scale 0.1 \
-    --fedcd_gm_update_mode server_pm_teacher \
+    --fedcd_gm_update_mode "${FEDCD_GM_UPDATE_MODE}" \
+    --fedcd_pm_to_gm_mask_enable "${FEDCD_PM_TO_GM_MASK_ENABLE}" \
+    --fedcd_pm_to_gm_mask_unified "${FEDCD_PM_TO_GM_MASK_UNIFIED}" \
     --fedcd_hybrid_proto_blend 0.35 \
     --fedcd_entropy_temp_pm "${FEDCD_ENTROPY_TEMP_PM}" \
     --fedcd_entropy_temp_gm "${FEDCD_ENTROPY_TEMP_GM}" \
@@ -163,9 +203,33 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_entropy_ood_use_class_stats "${FEDCD_ENTROPY_OOD_USE_CLASS_STATS}" \
     --fedcd_entropy_ood_class_mix "${FEDCD_ENTROPY_OOD_CLASS_MIX}" \
     --fedcd_fusion_mode "${FEDCD_FUSION_MODE}" \
+    --fedcd_learned_blend_alpha "${FEDCD_LEARNED_BLEND_ALPHA}" \
+    --fedcd_learned_blend_auto_tune "${FEDCD_LEARNED_BLEND_AUTO_TUNE}" \
+    --fedcd_learned_blend_period "${FEDCD_LEARNED_BLEND_PERIOD}" \
+    --fedcd_learned_blend_candidates "${FEDCD_LEARNED_BLEND_CANDIDATES}" \
+    --fedcd_safe_fusion_hidden_dim "${FEDCD_SAFE_FUSION_HIDDEN_DIM}" \
+    --fedcd_safe_fusion_dropout "${FEDCD_SAFE_FUSION_DROPOUT}" \
+    --fedcd_safe_fusion_pm_prior "${FEDCD_SAFE_FUSION_PM_PRIOR}" \
+    --fedcd_safe_fusion_temperature "${FEDCD_SAFE_FUSION_TEMPERATURE}" \
+    --fedcd_safe_fusion_min_pm_weight "${FEDCD_SAFE_FUSION_MIN_PM_WEIGHT}" \
+    --fedcd_safe_fusion_max_pm_weight "${FEDCD_SAFE_FUSION_MAX_PM_WEIGHT}" \
+    --fedcd_safe_fusion_loss_weight "${FEDCD_SAFE_FUSION_LOSS_WEIGHT}" \
+    --fedcd_safe_fusion_margin "${FEDCD_SAFE_FUSION_MARGIN}" \
+    --fedcd_safe_fusion_lr_scale "${FEDCD_SAFE_FUSION_LR_SCALE}" \
+    --fedcd_safe_fusion_route_weight "${FEDCD_SAFE_FUSION_ROUTE_WEIGHT}" \
+    --fedcd_safe_fusion_route_tau "${FEDCD_SAFE_FUSION_ROUTE_TAU}" \
+    --fedcd_safe_fusion_route_floor "${FEDCD_SAFE_FUSION_ROUTE_FLOOR}" \
+    --fedcd_safe_fusion_route_gap_power "${FEDCD_SAFE_FUSION_ROUTE_GAP_POWER}" \
     --fedcd_pm_defer_conf_threshold "${FEDCD_PM_DEFER_CONF_THRESHOLD}" \
     --fedcd_pm_defer_gm_margin "${FEDCD_PM_DEFER_GM_MARGIN}" \
     --fedcd_pm_defer_ood_threshold "${FEDCD_PM_DEFER_OOD_THRESHOLD}" \
+    --fedcd_branch_temp_calibration_enable "${FEDCD_BRANCH_TEMP_CALIBRATION_ENABLE}" \
+    --fedcd_branch_temp_calibration_period "${FEDCD_BRANCH_TEMP_CALIBRATION_PERIOD}" \
+    --fedcd_branch_temp_calibration_steps "${FEDCD_BRANCH_TEMP_CALIBRATION_STEPS}" \
+    --fedcd_branch_temp_calibration_lr "${FEDCD_BRANCH_TEMP_CALIBRATION_LR}" \
+    --fedcd_branch_temp_min "${FEDCD_BRANCH_TEMP_MIN}" \
+    --fedcd_branch_temp_max "${FEDCD_BRANCH_TEMP_MAX}" \
+    --fedcd_branch_temp_samples "${FEDCD_BRANCH_TEMP_SAMPLES}" \
     --fedcd_router_enable "${FEDCD_ROUTER_ENABLE}" \
     --fedcd_router_type "${FEDCD_ROUTER_TYPE}" \
     --fedcd_router_hidden_dim "${FEDCD_ROUTER_HIDDEN_DIM}" \
@@ -197,6 +261,11 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_router_balance_weight "${FEDCD_ROUTER_BALANCE_WEIGHT}" \
     --fedcd_router_balance_target "${FEDCD_ROUTER_BALANCE_TARGET}" \
     --fedcd_router_balance_tolerance "${FEDCD_ROUTER_BALANCE_TOLERANCE}" \
+    --fedcd_router_server_distill_enable "${FEDCD_ROUTER_SERVER_DISTILL_ENABLE}" \
+    --fedcd_router_server_neg_mode "${FEDCD_ROUTER_SERVER_NEG_MODE}" \
+    --fedcd_router_server_neg_topk "${FEDCD_ROUTER_SERVER_NEG_TOPK}" \
+    --fedcd_router_server_synth_weight "${FEDCD_ROUTER_SERVER_SYNTH_WEIGHT}" \
+    --fedcd_router_server_synth_samples "${FEDCD_ROUTER_SERVER_SYNTH_SAMPLES}" \
     --fedcd_gate_reliability_ema 0.9 \
     --fedcd_gate_reliability_samples 512 \
     --fedcd_gate_feature_ema 0.9 \
@@ -206,9 +275,9 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_pm_teacher_temp 2.0 \
     --fedcd_pm_teacher_kl_weight 1.0 \
     --fedcd_pm_teacher_ce_weight 0.0 \
-    --fedcd_pm_teacher_samples 50000 \
-    --fedcd_pm_teacher_batch_size 256 \
-    --fedcd_pm_teacher_epochs 6 \
+    --fedcd_pm_teacher_samples "${FEDCD_PM_TEACHER_SAMPLES}" \
+    --fedcd_pm_teacher_batch_size "${FEDCD_PM_TEACHER_BATCH_SIZE}" \
+    --fedcd_pm_teacher_epochs "${FEDCD_PM_TEACHER_EPOCHS}" \
     --fedcd_pm_teacher_proxy_dataset "${TEACHER_PROXY_DATASET}" \
     --fedcd_pm_teacher_proxy_root "" \
     --fedcd_pm_teacher_proxy_split train \
@@ -228,10 +297,10 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_pm_teacher_rel_weight 0.1 \
     --fedcd_pm_teacher_rel_batch 64 \
     --fedcd_init_pretrain true \
-    --fedcd_init_epochs 5 \
+    --fedcd_init_epochs "${FEDCD_INIT_EPOCHS}" \
     --fedcd_init_lr 0.005 \
-    --fedcd_init_samples 50000 \
-    --fedcd_init_batch_size 256 \
+    --fedcd_init_samples "${FEDCD_INIT_SAMPLES}" \
+    --fedcd_init_batch_size "${FEDCD_INIT_BATCH_SIZE}" \
     --fedcd_init_ce_weight 1.0 \
     --fedcd_init_kd_weight 1.0 \
     --fedcd_init_entropy_weight 0.05 \

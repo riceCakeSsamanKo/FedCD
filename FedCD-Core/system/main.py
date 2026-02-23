@@ -520,6 +520,10 @@ if __name__ == "__main__":
                         help="Local GM learning-rate scale relative to base local lr.")
     parser.add_argument('--fedcd_gm_update_mode', type=str, default="local",
                         help="GM update mode: local | server_pm_teacher | server_pm_fedavg | server_proto_teacher | hybrid_local_proto")
+    parser.add_argument('--fedcd_pm_to_gm_mask_enable', type=str2bool, default=False,
+                        help="For server_pm_fedavg: build GM from averaged PM and project by parameter masking/slicing when PM is larger.")
+    parser.add_argument('--fedcd_pm_to_gm_mask_unified', type=str2bool, default=True,
+                        help="Reuse one hidden-neuron mask across rounds for PM->GM projection.")
     parser.add_argument('--fedcd_hybrid_proto_blend', type=float, default=0.35,
                         help="Blend ratio for hybrid_local_proto mode (0=local FedAvg only, 1=prototype-only).")
     parser.add_argument('--fedcd_entropy_temp_pm', type=float, default=1.0,
@@ -553,7 +557,41 @@ if __name__ == "__main__":
     parser.add_argument('--fedcd_entropy_ood_class_mix', type=float, default=0.6,
                         help="Mix ratio of class-conditional score in OOD gate (0=global only, 1=class-only).")
     parser.add_argument('--fedcd_fusion_mode', type=str, default="soft",
-                        help="Inference fusion mode: soft | pm_defer_hard | router_hard | router_soft.")
+                        help="Inference fusion mode: soft | poe_soft | learned_blend | pm_defer_hard | router_hard | router_soft | safe_logit.")
+    parser.add_argument('--fedcd_learned_blend_alpha', type=float, default=0.5,
+                        help="Fixed PM mixing weight used by learned_blend mode (0~1).")
+    parser.add_argument('--fedcd_learned_blend_auto_tune', type=str2bool, default=False,
+                        help="Auto-tune learned_blend alpha on held-out local split after each local round.")
+    parser.add_argument('--fedcd_learned_blend_period', type=int, default=1,
+                        help="Rounds between learned_blend alpha auto-tuning.")
+    parser.add_argument('--fedcd_learned_blend_candidates', type=int, default=11,
+                        help="Grid size for learned_blend alpha search in [0,1].")
+    parser.add_argument('--fedcd_safe_fusion_hidden_dim', type=int, default=64,
+                        help="Hidden dim for safe_logit output-space fusion gate.")
+    parser.add_argument('--fedcd_safe_fusion_dropout', type=float, default=0.0,
+                        help="Dropout for safe_logit gate MLP.")
+    parser.add_argument('--fedcd_safe_fusion_pm_prior', type=float, default=0.8,
+                        help="Initial PM prior probability for safe_logit fusion gate.")
+    parser.add_argument('--fedcd_safe_fusion_temperature', type=float, default=1.0,
+                        help="Gate temperature for safe_logit mode.")
+    parser.add_argument('--fedcd_safe_fusion_min_pm_weight', type=float, default=0.0,
+                        help="Minimum PM mixture weight in safe_logit mode.")
+    parser.add_argument('--fedcd_safe_fusion_max_pm_weight', type=float, default=1.0,
+                        help="Maximum PM mixture weight in safe_logit mode.")
+    parser.add_argument('--fedcd_safe_fusion_loss_weight', type=float, default=0.3,
+                        help="Safety penalty weight: enforce fused CE not worse than best(PM,GM) by margin.")
+    parser.add_argument('--fedcd_safe_fusion_margin', type=float, default=0.02,
+                        help="Allowed CE margin over best branch before safety penalty in safe_logit mode.")
+    parser.add_argument('--fedcd_safe_fusion_lr_scale', type=float, default=1.0,
+                        help="LR scale for safe_logit gate relative to base local lr.")
+    parser.add_argument('--fedcd_safe_fusion_route_weight', type=float, default=0.6,
+                        help="Auxiliary weight for branch-preference supervision of safe_logit PM weight.")
+    parser.add_argument('--fedcd_safe_fusion_route_tau', type=float, default=0.2,
+                        help="Temperature for CE-gap to PM-target mapping in safe_logit route supervision.")
+    parser.add_argument('--fedcd_safe_fusion_route_floor', type=float, default=0.05,
+                        help="Label floor for safe_logit route target to avoid hard 0/1 saturation.")
+    parser.add_argument('--fedcd_safe_fusion_route_gap_power', type=float, default=1.0,
+                        help="Exponent for CE-gap weighting in safe_logit route supervision.")
     parser.add_argument('--fedcd_pm_defer_conf_threshold', type=float, default=0.55,
                         help="For pm_defer_hard, minimum PM confidence (1-normalized entropy) to keep PM.")
     parser.add_argument('--fedcd_pm_defer_gm_margin', type=float, default=0.02,
@@ -640,6 +678,28 @@ if __name__ == "__main__":
                         help="Per-client max local train samples used to upload router feature stats each update.")
     parser.add_argument('--fedcd_router_server_period', type=int, default=1,
                         help="Round period for server router-context updates.")
+    parser.add_argument('--fedcd_router_server_neg_mode', type=str, default="all_other",
+                        help="Server router negative context mode: all_other | farthest_k.")
+    parser.add_argument('--fedcd_router_server_neg_topk', type=int, default=2,
+                        help="For farthest_k mode, number of farthest clusters used as negatives (0 = all other).")
+    parser.add_argument('--fedcd_router_server_synth_weight', type=float, default=0.0,
+                        help="Extra router BCE weight on server in/out synthetic features.")
+    parser.add_argument('--fedcd_router_server_synth_samples', type=int, default=128,
+                        help="Synthetic feature sample count for server in/out router supervision per local step.")
+    parser.add_argument('--fedcd_branch_temp_calibration_enable', type=str2bool, default=False,
+                        help="Enable post-local temperature calibration for PM/GM outputs (Guo et al., 2017 style).")
+    parser.add_argument('--fedcd_branch_temp_calibration_period', type=int, default=1,
+                        help="Rounds between post-local PM/GM temperature calibration.")
+    parser.add_argument('--fedcd_branch_temp_calibration_steps', type=int, default=80,
+                        help="Optimization steps for PM/GM temperature calibration.")
+    parser.add_argument('--fedcd_branch_temp_calibration_lr', type=float, default=0.05,
+                        help="Learning rate for PM/GM temperature calibration.")
+    parser.add_argument('--fedcd_branch_temp_min', type=float, default=0.5,
+                        help="Lower bound for calibrated PM/GM temperature.")
+    parser.add_argument('--fedcd_branch_temp_max', type=float, default=5.0,
+                        help="Upper bound for calibrated PM/GM temperature.")
+    parser.add_argument('--fedcd_branch_temp_samples', type=int, default=512,
+                        help="Maximum held-out local samples used for PM/GM temperature calibration.")
     parser.add_argument('--fedcd_gate_reliability_ema', type=float, default=0.9,
                         help="EMA factor for updating per-class PM/GM gate reliability.")
     parser.add_argument('--fedcd_gate_reliability_samples', type=int, default=512,
