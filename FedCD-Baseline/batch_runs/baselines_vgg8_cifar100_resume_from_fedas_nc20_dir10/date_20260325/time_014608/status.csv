@@ -1,0 +1,2 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc
+FedAS,dir1.0_nc20,Cifar100_dir1.0_nc20,ok,0,2026-03-25T01:46:08Z,2026-03-25T05:34:11Z

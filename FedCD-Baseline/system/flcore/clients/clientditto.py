@@ -29,7 +29,7 @@ class clientDitto(Client):
         
         start_time = time.time()
 
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.train()
 
         max_local_epochs = self.local_epochs
@@ -51,7 +51,7 @@ class clientDitto(Client):
                 loss.backward()
                 self.optimizer.step()
 
-        # self.model.cpu()
+        self.model.cpu()
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
@@ -66,7 +66,7 @@ class clientDitto(Client):
 
         start_time = time.time()
 
-        # self.model.to(self.device)
+        self.model_per.to(self.device)
         self.model_per.train()
 
         max_local_epochs = self.plocal_epochs
@@ -88,7 +88,7 @@ class clientDitto(Client):
                 loss.backward()
                 self.optimizer_per.step(self.model.parameters(), self.device)
 
-        # self.model.cpu()
+        self.model_per.cpu()
 
         self.train_time_cost['total_cost'] += time.time() - start_time
 
@@ -96,6 +96,7 @@ class clientDitto(Client):
         testloaderfull = self.load_test_data()
         # self.model = self.load_model('model')
         # self.model.to(self.device)
+        self.model_per.to(self.device)
         self.model_per.eval()
 
         test_acc = 0
@@ -118,7 +119,7 @@ class clientDitto(Client):
                 y_prob.append(F.softmax(output).detach().cpu().numpy())
                 y_true.append(label_binarize(y.detach().cpu().numpy(), classes=np.arange(self.num_classes)))
 
-        # self.model.cpu()
+        self.model_per.cpu()
 
         y_prob = np.concatenate(y_prob, axis=0)
         y_true = np.concatenate(y_true, axis=0)
@@ -129,6 +130,9 @@ class clientDitto(Client):
 
     def train_metrics_personalized(self):
         trainloader = self.load_train_data()
+        self.model.to(self.device)
+        self.model_per.to(self.device)
+        self.model.eval()
         self.model_per.eval()
 
         train_num = 0
@@ -150,4 +154,6 @@ class clientDitto(Client):
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
 
+        self.model.cpu()
+        self.model_per.cpu()
         return losses, train_num

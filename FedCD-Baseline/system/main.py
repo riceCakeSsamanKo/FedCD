@@ -207,7 +207,8 @@ def run(args):
             # args.model = args.model.to(args.device)
 
         elif model_str == "VGG8":
-            args.model = VGG8(num_classes=args.num_classes)
+            in_channels = 1 if "MNIST" in args.dataset or "Fashion" in args.dataset or "EMNIST" in args.dataset else 3
+            args.model = VGG8(num_classes=args.num_classes, in_channels=in_channels)
 
         elif model_str == "AmazonMLP":
             args.model = AmazonMLP() # .to(args.device)
@@ -533,8 +534,14 @@ if __name__ == "__main__":
     # even when launched from system/ (e.g., `cd system && python main.py`).
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-    # Structure: {repo_root}/logs/{Algorithm}/GM_{Model}/{partition}/{alpha if dir}/NC_{NC}/date_{date}/time_{time}
-    path_parts = [repo_root, "logs", args.algorithm, f"GM_{model_name}", partition_info]
+    dataset_name = args.dataset.split("_")[0] if isinstance(args.dataset, str) and len(args.dataset) > 0 else "UnknownDataset"
+    dataset_name = dataset_name.replace("/", "-")
+    if dataset_name == "Cifar10":
+        dataset_name = "cifar10"
+
+    # Structure:
+    # {repo_root}/logs/{dataset}/{Algorithm}/GM_{Model}/{partition}/{alpha if dir}/NC_{NC}/date_{date}/time_{time}
+    path_parts = [repo_root, "logs", dataset_name, args.algorithm, f"GM_{model_name}", partition_info]
     if partition_info == "dir" and alpha_info:
         path_parts.append(alpha_info)
     path_parts.extend([f"NC_{args.num_clients}", f"date_{date_str}", f"time_{timestamp}"])

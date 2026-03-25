@@ -1,0 +1,2 @@
+round,local_test_acc,pm_local_test_acc,gm_local_test_acc,global_test_acc,gm_only_global_test_acc,pm_global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb
+0,0.5000,0.4995,0.1000,0.1000,0.1000,0.0998,1.9943,78.6281,78.6281,157.2562

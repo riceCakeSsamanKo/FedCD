@@ -12,7 +12,7 @@ class clientBN(Client):
         
         start_time = time.time()
 
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.train()
 
         max_local_epochs = self.local_epochs
@@ -34,7 +34,7 @@ class clientBN(Client):
                 loss.backward()
                 self.optimizer.step()
 
-        # self.model.cpu()
+        self.model.cpu()
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()

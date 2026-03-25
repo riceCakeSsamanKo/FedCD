@@ -9,7 +9,7 @@ class clientLG(Client):
 
     def train(self):
         trainloader = self.load_train_data()
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.train()
         
         start_time = time.time()
@@ -33,7 +33,7 @@ class clientLG(Client):
                 loss.backward()
                 self.optimizer.step()
 
-        # self.model.cpu()
+        self.model.to("cpu")
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
@@ -44,4 +44,4 @@ class clientLG(Client):
         
     def set_parameters(self, head):
         for new_param, old_param in zip(head.parameters(), self.model.head.parameters()):
-            old_param.data = new_param.data.clone()
+            old_param.data = new_param.data.clone().to(old_param.device)

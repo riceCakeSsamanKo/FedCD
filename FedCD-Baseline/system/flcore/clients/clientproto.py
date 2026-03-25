@@ -22,7 +22,7 @@ class clientProto(Client):
         trainloader = self.load_train_data()
         start_time = time.time()
 
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.train()
 
         max_local_epochs = self.local_epochs
@@ -74,10 +74,22 @@ class clientProto(Client):
 
 
     def set_protos(self, global_protos):
-        self.global_protos = global_protos
+        if global_protos is None:
+            self.global_protos = None
+            return
+
+        moved = {}
+        items = global_protos.items() if hasattr(global_protos, "items") else enumerate(global_protos)
+        for key, proto in items:
+            if type(proto) == type([]) or proto is None:
+                moved[key] = []
+            else:
+                moved[key] = proto.detach().to(self.device)
+        self.global_protos = moved
 
     def collect_protos(self):
         trainloader = self.load_train_data()
+        self.model.to(self.device)
         self.model.eval()
 
         protos = defaultdict(list)
@@ -101,7 +113,7 @@ class clientProto(Client):
     def test_metrics(self):
         testloaderfull = self.load_test_data()
         # self.model = self.load_model('model')
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.eval()
 
         test_acc = 0
@@ -133,7 +145,7 @@ class clientProto(Client):
     def train_metrics(self):
         trainloader = self.load_train_data()
         # self.model = self.load_model('model')
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.eval()
 
         train_num = 0

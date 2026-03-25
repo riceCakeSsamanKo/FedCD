@@ -19,7 +19,9 @@ class clientNTD(Client):
 
     def train(self):
         trainloader = self.load_train_data()
-        # self.model.to(self.device)
+        self.model.to(self.device)
+        if self.global_model is not None:
+            self.global_model.to(self.device)
         self.model.train()
         
         start_time = time.time()
@@ -45,7 +47,9 @@ class clientNTD(Client):
                 loss.backward()
                 self.optimizer.step()
 
-        # self.model.cpu()
+        self.model.cpu()
+        if self.global_model is not None:
+            self.global_model.cpu()
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
@@ -57,7 +61,8 @@ class clientNTD(Client):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):
             old_param.data = new_param.data.clone()
 
-        self.global_model = model.eval().requires_grad_(False)
+        self.global_model = copy.deepcopy(model)
+        self.global_model.eval().requires_grad_(False)
 
     # https://github.com/Lee-Gihun/FedNTD/blob/master/algorithms/fedntd/criterion.py#L30
     def _ntd_loss(self, logits, dg_logits, targets):

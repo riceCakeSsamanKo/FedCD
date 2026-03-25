@@ -18,6 +18,7 @@ if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
 from flcore.servers.serverfedcd import FedCD # FedCD
+from flcore.servers.serverfedcd2 import FedCD2
 from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverpFedMe import pFedMe
 from flcore.servers.serverperavg import PerAvg
@@ -130,7 +131,8 @@ def run(args):
             return torchvision.models.vgg16(pretrained=False, num_classes=args.num_classes).to(args.device)
 
         if model_name == "VGG8":
-            return VGG8(num_classes=args.num_classes).to(args.device)
+            in_channels = 1 if "MNIST" in args.dataset else 3
+            return VGG8(num_classes=args.num_classes, in_channels=in_channels).to(args.device)
 
         if model_name.startswith("VGG8W"):
             match = re.fullmatch(r"VGG8W(\d+)", model_name)
@@ -142,7 +144,12 @@ def run(args):
             hidden_dim = int(match.group(1))
             if hidden_dim <= 0:
                 raise ValueError(f"Invalid VGG8 hidden width: {hidden_dim}")
-            return VGG8(num_classes=args.num_classes, classifier_hidden=hidden_dim).to(args.device)
+            in_channels = 1 if "MNIST" in args.dataset else 3
+            return VGG8(
+                num_classes=args.num_classes,
+                classifier_hidden=hidden_dim,
+                in_channels=in_channels,
+            ).to(args.device)
 
         if model_name == "AlexNet":
             return alexnet(pretrained=False, num_classes=args.num_classes).to(args.device)
@@ -193,7 +200,7 @@ def run(args):
 
         # Generate args.model
         args.model = build_model(model_str)
-        if args.algorithm == "FedCD":
+        if args.algorithm in {"FedCD", "FedCD2"}:
             pm_name = getattr(args, "pm_model_name", None)
             if pm_name:
                 args.pm_model = build_model(pm_name)
@@ -201,7 +208,7 @@ def run(args):
         print(args.model)
 
         # FedCD: keep base model on CPU to avoid GPU OOM
-        if args.algorithm == "FedCD" and args.device == "cuda" and args.avoid_oom == True:
+        if args.algorithm in {"FedCD", "FedCD2"} and args.device == "cuda" and args.avoid_oom == True:
             args.model = args.model.to("cpu")
             if getattr(args, "pm_model", None) is not None:
                 args.pm_model = args.pm_model.to("cpu")
@@ -209,7 +216,9 @@ def run(args):
         # select algorithm
         if args.algorithm == "FedCD":
             server = FedCD(args, i) # FedCD 추가
-        
+        elif args.algorithm == "FedCD2":
+            server = FedCD2(args, i)
+
         elif args.algorithm == "FedAvg":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
@@ -519,7 +528,23 @@ if __name__ == "__main__":
     parser.add_argument('--fedcd_gm_lr_scale', type=float, default=0.1,
                         help="Local GM learning-rate scale relative to base local lr.")
     parser.add_argument('--fedcd_gm_update_mode', type=str, default="local",
-                        help="GM update mode: local | server_pm_teacher | server_pm_fedavg | server_proto_teacher | hybrid_local_proto")
+                        help="GM update mode: local | server_pm_teacher | server_pm_fedavg | server_pm_subnet | server_proto_teacher | hybrid_local_proto")
+    parser.add_argument('--fedcd_task_fext_train_mode', type=str, default="full",
+                        help="Task encoder local train mode: frozen | fc_only | full.")
+    parser.add_argument('--fedcd_task_fext_lr_scale', type=float, default=1.0,
+                        help="Local task-encoder learning-rate scale relative to base local lr.")
+    parser.add_argument('--fedcd_cluster_fext_ema', type=float, default=0.99,
+                        help="EMA factor for clustering encoder shadow copy.")
+    parser.add_argument('--fedcd_residual_module_enable', type=str2bool, default=True,
+                        help="Enable client-private residual PM module.")
+    parser.add_argument('--fedcd_residual_hidden_dim', type=int, default=128,
+                        help="Hidden dim of client-private residual PM module.")
+    parser.add_argument('--fedcd_branch_consistency_weight', type=float, default=0.1,
+                        help="Symmetric KL consistency weight between GM and PM branches.")
+    parser.add_argument('--fedcd_branch_consistency_temp', type=float, default=2.0,
+                        help="Temperature for GM/PM branch consistency distillation.")
+    parser.add_argument('--fedcd_residual_logit_reg_weight', type=float, default=1e-4,
+                        help="L2 regularization weight on residual PM logits.")
     parser.add_argument('--fedcd_pm_to_gm_mask_enable', type=str2bool, default=False,
                         help="For server_pm_fedavg: build GM from averaged PM and project by parameter masking/slicing when PM is larger.")
     parser.add_argument('--fedcd_pm_to_gm_mask_unified', type=str2bool, default=True,
@@ -556,8 +581,8 @@ if __name__ == "__main__":
                         help="Use class-conditional local feature stats for OOD-aware PM routing.")
     parser.add_argument('--fedcd_entropy_ood_class_mix', type=float, default=0.6,
                         help="Mix ratio of class-conditional score in OOD gate (0=global only, 1=class-only).")
-    parser.add_argument('--fedcd_fusion_mode', type=str, default="soft",
-                        help="Inference fusion mode: soft | poe_soft | learned_blend | pm_defer_hard | router_hard | router_soft | safe_logit.")
+    parser.add_argument('--fedcd_fusion_mode', type=str, default="class_aware_hard",
+                        help="Inference fusion mode: class_aware_hard | pm_defer_hard | branch_select_hard | soft | poe_soft | learned_blend | router_hard | router_soft | safe_logit.")
     parser.add_argument('--fedcd_learned_blend_alpha', type=float, default=0.5,
                         help="Fixed PM mixing weight used by learned_blend mode (0~1).")
     parser.add_argument('--fedcd_learned_blend_auto_tune', type=str2bool, default=False,
@@ -592,12 +617,18 @@ if __name__ == "__main__":
                         help="Label floor for safe_logit route target to avoid hard 0/1 saturation.")
     parser.add_argument('--fedcd_safe_fusion_route_gap_power', type=float, default=1.0,
                         help="Exponent for CE-gap weighting in safe_logit route supervision.")
-    parser.add_argument('--fedcd_pm_defer_conf_threshold', type=float, default=0.55,
-                        help="For pm_defer_hard, minimum PM confidence (1-normalized entropy) to keep PM.")
-    parser.add_argument('--fedcd_pm_defer_gm_margin', type=float, default=0.02,
-                        help="For pm_defer_hard, switch to GM if GM confidence exceeds PM by this margin.")
-    parser.add_argument('--fedcd_pm_defer_ood_threshold', type=float, default=0.35,
-                        help="For pm_defer_hard, minimum in-distribution score to keep PM when OOD gate is enabled.")
+    parser.add_argument('--fedcd_pm_defer_conf_threshold', type=float, default=0.35,
+                        help="For branch_select_hard/pm_defer_hard, minimum PM confidence (1-normalized entropy) to keep PM.")
+    parser.add_argument('--fedcd_pm_defer_gm_margin', type=float, default=0.10,
+                        help="For branch_select_hard/pm_defer_hard, allowed PM-vs-GM confidence slack before deferring to GM.")
+    parser.add_argument('--fedcd_pm_defer_ood_threshold', type=float, default=0.00,
+                        help="For branch_select_hard/pm_defer_hard, minimum in-distribution score to keep PM when OOD gate is enabled.")
+    parser.add_argument('--fedcd_class_route_rel_threshold', type=float, default=0.55,
+                        help="For class_aware_hard, minimum predicted-class PM reliability to keep PM.")
+    parser.add_argument('--fedcd_class_route_margin', type=float, default=0.02,
+                        help="For class_aware_hard, allowed score slack before deferring from PM to GM.")
+    parser.add_argument('--fedcd_class_route_use_ood_gate', type=str2bool, default=False,
+                        help="For class_aware_hard, additionally modulate PM score by in-distribution feature score.")
     parser.add_argument('--fedcd_router_enable', type=str2bool, default=False,
                         help="Enable local per-client router trained on f_ext features (router is not aggregated).")
     parser.add_argument('--fedcd_router_type', type=str, default="mlp",
@@ -759,6 +790,52 @@ if __name__ == "__main__":
                         help="Relational KD weight (sample-similarity matching) for PM-teacher GM distillation.")
     parser.add_argument('--fedcd_pm_teacher_rel_batch', type=int, default=64,
                         help="Max batch size used for relational KD similarity matching.")
+    parser.add_argument('--fedcd_pm_teacher_competence_filter', type=str2bool, default=False,
+                        help="Enable competence-aware teacher filtering using class support, class accuracy, and prototype match.")
+    parser.add_argument('--fedcd_pm_teacher_competence_rel_weight', type=float, default=0.5,
+                        help="Weight for class-wise PM accuracy in competence score.")
+    parser.add_argument('--fedcd_pm_teacher_competence_support_weight', type=float, default=0.2,
+                        help="Weight for class sample support in competence score.")
+    parser.add_argument('--fedcd_pm_teacher_competence_proto_weight', type=float, default=0.3,
+                        help="Weight for prototype similarity in competence score.")
+    parser.add_argument('--fedcd_pm_teacher_competence_min', type=float, default=0.35,
+                        help="Minimum competence score required for a teacher to teach a proxy sample.")
+    parser.add_argument('--fedcd_pm_teacher_cluster_dist_weighting', type=str2bool, default=False,
+                        help="For cluster teacher source, weight PM-teacher ensemble by proxy-to-cluster feature distance.")
+    parser.add_argument('--fedcd_pm_teacher_cluster_dist_tau', type=float, default=1.0,
+                        help="Temperature for cluster-distance soft weighting over cluster PM teachers.")
+    parser.add_argument('--fedcd_pm_teacher_cluster_dist_metric', type=str, default="mahalanobis",
+                        help="Distance metric for cluster teacher weighting: mahalanobis | euclidean.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_enable', type=str2bool, default=False,
+                        help="Enable generator-free data-free KD in feature space instead of proxy-dataset KD.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_batches', type=int, default=32,
+                        help="Number of synthetic feature batches generated per PM-teacher distillation epoch.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_steps', type=int, default=20,
+                        help="Inner optimization steps for each synthetic feature batch.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_lr', type=float, default=0.05,
+                        help="Learning rate for synthetic feature optimization in data-free KD.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_noise_scale', type=float, default=0.25,
+                        help="Noise scale used to initialize synthetic features in data-free KD.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_entropy_weight', type=float, default=1.0,
+                        help="Weight for minimizing per-sample teacher entropy during feature synthesis.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_diversity_weight', type=float, default=0.5,
+                        help="Weight for maximizing batch-level class diversity during feature synthesis.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_l2_weight', type=float, default=1e-4,
+                        help="L2 regularization on synthetic features in data-free KD.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_init_from_proto', type=str2bool, default=True,
+                        help="Initialize synthetic features from uploaded PM prototypes when available.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_generator_enable', type=str2bool, default=False,
+                        help="Use a server-side feature generator for data-free KD instead of directly optimizing features.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_generator_noise_dim', type=int, default=128,
+                        help="Noise dimension for the server-side feature generator used in data-free KD.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_generator_hidden_dim', type=int, default=512,
+                        help="Hidden dimension of the server-side feature generator used in data-free KD.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_generator_lr', type=float, default=1e-3,
+                        help="Learning rate for the server-side feature generator in data-free KD.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_generator_steps', type=int, default=1,
+                        help="Generator optimization steps per synthetic batch in data-free KD.")
+    parser.add_argument('--fedcd_pm_teacher_datafree_generator_anchor_weight', type=float, default=0.1,
+                        help="Weight for keeping generated features close to sampled prototype anchors.")
     parser.add_argument('--fedcd_init_pretrain', type=str2bool, default=True,
                         help="Run server-side proxy initialization pretrain for f_ext/GM/PM before round 0.")
     parser.add_argument('--fedcd_init_epochs', type=int, default=1,
@@ -888,6 +965,24 @@ if __name__ == "__main__":
     parser.add_argument('-al', "--alpha", type=float, default=1.0)
     # Ditto / FedRep
     parser.add_argument('-pls', "--plocal_epochs", type=int, default=1)
+    parser.add_argument('--fedcd2_alpha', type=float, default=0.5,
+                        help='FedCD2 GM auxiliary loss scale placeholder.')
+    parser.add_argument('--fedcd2_beta', type=float, default=0.5,
+                        help='FedCD2 PM auxiliary loss scale.')
+    parser.add_argument('--fedcd2_fnc_weight', type=float, default=0.05,
+                        help='FedCD2 feature-wise negative correlation weight.')
+    parser.add_argument('--fedcd2_local_pm_weight', type=float, default=0.5,
+                        help='FedCD2 local PM retain weight during cluster PM sync.')
+    parser.add_argument('--fedcd2_cluster_pm_weight', type=float, default=0.5,
+                        help='FedCD2 cluster PM weight during cluster PM sync.')
+    parser.add_argument('--fedcd2_pm_feature_dim', type=int, default=128,
+                        help='FedCD2 PM branch feature dimension for non-VGG PM backbones.')
+    parser.add_argument('--fedcd2_fnc_dim', type=int, default=128,
+                        help='FedCD2 FNC projection dimension.')
+    parser.add_argument('--fedcd2_pm_vgg_width_ratio', type=float, default=0.25,
+                        help='FedCD2 PM width ratio relative to VGG8 GM channels.')
+    parser.add_argument('--fedcd2_cluster_warmup_rounds', type=int, default=5,
+                        help='FedCD2 rounds before enabling reclustering.')
     # MOON / FedCAC / FedLC
     parser.add_argument('-tau', "--tau", type=float, default=1.0)
     # FedBABU
@@ -923,7 +1018,7 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
-    if args.algorithm == "FedCD":
+    if args.algorithm in {"FedCD", "FedCD2"}:
         args.pm_model_name = args.pm_model
         args.model = args.gm_model
 

@@ -1,0 +1,9 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc
+LG-FedAvg,pat_nc20,Cifar10_pat_nc20,ok,0,2026-03-23T10:30:31Z,2026-03-23T10:59:40Z
+LG-FedAvg,dir0.1_nc20,Cifar10_dir0.1_nc20,ok,0,2026-03-23T10:59:40Z,2026-03-23T11:38:06Z
+LG-FedAvg,dir0.5_nc20,Cifar10_dir0.5_nc20,ok,0,2026-03-23T11:38:06Z,2026-03-23T12:16:35Z
+LG-FedAvg,dir1.0_nc20,Cifar10_dir1.0_nc20,ok,0,2026-03-23T12:16:35Z,2026-03-23T12:54:58Z
+LG-FedAvg,pat_nc50,Cifar10_pat_nc50,ok,0,2026-03-23T12:54:58Z,2026-03-23T13:48:17Z
+LG-FedAvg,dir0.1_nc50,Cifar10_dir0.1_nc50,ok,0,2026-03-23T13:48:17Z,2026-03-23T14:43:02Z
+LG-FedAvg,dir0.5_nc50,Cifar10_dir0.5_nc50,ok,0,2026-03-23T14:43:02Z,2026-03-23T15:36:49Z
+LG-FedAvg,dir1.0_nc50,Cifar10_dir1.0_nc50,ok,0,2026-03-23T15:36:49Z,2026-03-23T16:31:02Z

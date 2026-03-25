@@ -1,0 +1,5 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc
+LG-FedAvg,pat_nc20,Cifar10_pat_nc20,failed,1,2026-03-23T10:28:04Z,2026-03-23T10:28:25Z
+LG-FedAvg,dir0.1_nc20,Cifar10_dir0.1_nc20,failed,1,2026-03-23T10:28:25Z,2026-03-23T10:28:47Z
+LG-FedAvg,dir0.5_nc20,Cifar10_dir0.5_nc20,failed,1,2026-03-23T10:28:47Z,2026-03-23T10:29:08Z
+LG-FedAvg,dir1.0_nc20,Cifar10_dir1.0_nc20,failed,1,2026-03-23T10:29:08Z,2026-03-23T10:29:29Z

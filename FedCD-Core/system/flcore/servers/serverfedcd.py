@@ -13,6 +13,31 @@ from flcore.clients.clientfedcd import clientFedCD
 from flcore.servers.serverbase import Server
 from utils.data_utils import read_client_data 
 
+class FeatureSpaceGenerator(nn.Module):
+    def __init__(self, feature_dim, noise_dim=128, hidden_dim=512):
+        super().__init__()
+        self.feature_dim = int(feature_dim)
+        self.noise_dim = int(noise_dim)
+        self.hidden_dim = int(hidden_dim)
+        self.net = nn.Sequential(
+            nn.Linear(self.feature_dim + self.noise_dim, self.hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(self.hidden_dim, self.hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(self.hidden_dim, self.feature_dim),
+        )
+
+    def forward(self, noise, anchor=None):
+        if anchor is None:
+            anchor = torch.zeros(
+                noise.size(0),
+                self.feature_dim,
+                device=noise.device,
+                dtype=noise.dtype,
+            )
+        delta = self.net(torch.cat([noise, anchor], dim=1))
+        return anchor + delta
+
 class FedCD(Server):
     def __init__(self, args, times):
         super().__init__(args, times)
@@ -38,6 +63,8 @@ class FedCD(Server):
         self.global_period = max(1, int(getattr(args, "global_period", 1)))
         self.cluster_sample_size = int(getattr(args, "cluster_sample_size", 512))
         self.cluster_map = {c.id: (c.id % self.num_clusters) for c in self.clients}
+        self.client_distribution_stats = {}
+        self.cluster_distribution_stats = {}
         if not self.enable_clustering:
             self.cluster_map = {c.id: 0 for c in self.clients}
             self.max_dynamic_clusters = 0
@@ -99,6 +126,7 @@ class FedCD(Server):
             "local",
             "server_pm_teacher",
             "server_pm_fedavg",
+            "server_pm_subnet",
             "server_proto_teacher",
             "hybrid_local_proto",
         }:
@@ -166,10 +194,109 @@ class FedCD(Server):
                 "[FedCD] fedcd_pm_teacher_correct_only=True: "
                 "use a label-compatible proxy dataset (e.g., Cifar10 for Cifar10 task)."
             )
-        if self.gm_update_mode == "server_pm_teacher":
-            print(f"[FedCD] PM-teacher source for GM distillation: {self.pm_teacher_source}")
         self.pm_teacher_rel_weight = float(getattr(args, "fedcd_pm_teacher_rel_weight", 0.2))
         self.pm_teacher_rel_batch = int(getattr(args, "fedcd_pm_teacher_rel_batch", 64))
+        self.pm_teacher_competence_filter = bool(
+            getattr(args, "fedcd_pm_teacher_competence_filter", False)
+        )
+        self.pm_teacher_competence_rel_weight = max(
+            0.0, float(getattr(args, "fedcd_pm_teacher_competence_rel_weight", 0.5))
+        )
+        self.pm_teacher_competence_support_weight = max(
+            0.0, float(getattr(args, "fedcd_pm_teacher_competence_support_weight", 0.2))
+        )
+        self.pm_teacher_competence_proto_weight = max(
+            0.0, float(getattr(args, "fedcd_pm_teacher_competence_proto_weight", 0.3))
+        )
+        self.pm_teacher_competence_min = float(
+            getattr(args, "fedcd_pm_teacher_competence_min", 0.35)
+        )
+        self.pm_teacher_competence_min = min(max(self.pm_teacher_competence_min, 0.0), 1.0)
+        self.pm_teacher_cluster_dist_weighting = bool(
+            getattr(args, "fedcd_pm_teacher_cluster_dist_weighting", False)
+        )
+        self.pm_teacher_cluster_dist_tau = max(
+            1e-6, float(getattr(args, "fedcd_pm_teacher_cluster_dist_tau", 1.0))
+        )
+        self.pm_teacher_cluster_dist_metric = str(
+            getattr(args, "fedcd_pm_teacher_cluster_dist_metric", "mahalanobis")
+        ).strip().lower()
+        if self.pm_teacher_cluster_dist_metric not in {"mahalanobis", "euclidean"}:
+            self.pm_teacher_cluster_dist_metric = "mahalanobis"
+        self.pm_teacher_datafree_enable = bool(
+            getattr(args, "fedcd_pm_teacher_datafree_enable", False)
+        )
+        self.pm_teacher_datafree_batches = max(
+            1, int(getattr(args, "fedcd_pm_teacher_datafree_batches", 32))
+        )
+        self.pm_teacher_datafree_steps = max(
+            1, int(getattr(args, "fedcd_pm_teacher_datafree_steps", 20))
+        )
+        self.pm_teacher_datafree_lr = max(
+            1e-6, float(getattr(args, "fedcd_pm_teacher_datafree_lr", 0.05))
+        )
+        self.pm_teacher_datafree_noise_scale = max(
+            0.0, float(getattr(args, "fedcd_pm_teacher_datafree_noise_scale", 0.25))
+        )
+        self.pm_teacher_datafree_entropy_weight = max(
+            0.0, float(getattr(args, "fedcd_pm_teacher_datafree_entropy_weight", 1.0))
+        )
+        self.pm_teacher_datafree_diversity_weight = max(
+            0.0, float(getattr(args, "fedcd_pm_teacher_datafree_diversity_weight", 0.5))
+        )
+        self.pm_teacher_datafree_l2_weight = max(
+            0.0, float(getattr(args, "fedcd_pm_teacher_datafree_l2_weight", 1e-4))
+        )
+        self.pm_teacher_datafree_init_from_proto = bool(
+            getattr(args, "fedcd_pm_teacher_datafree_init_from_proto", True)
+        )
+        self.pm_teacher_datafree_generator_enable = bool(
+            getattr(args, "fedcd_pm_teacher_datafree_generator_enable", False)
+        )
+        self.pm_teacher_datafree_generator_noise_dim = max(
+            1, int(getattr(args, "fedcd_pm_teacher_datafree_generator_noise_dim", 128))
+        )
+        self.pm_teacher_datafree_generator_hidden_dim = max(
+            1, int(getattr(args, "fedcd_pm_teacher_datafree_generator_hidden_dim", 512))
+        )
+        self.pm_teacher_datafree_generator_lr = max(
+            1e-6, float(getattr(args, "fedcd_pm_teacher_datafree_generator_lr", 1e-3))
+        )
+        self.pm_teacher_datafree_generator_steps = max(
+            1, int(getattr(args, "fedcd_pm_teacher_datafree_generator_steps", 1))
+        )
+        self.pm_teacher_datafree_generator_anchor_weight = max(
+            0.0, float(getattr(args, "fedcd_pm_teacher_datafree_generator_anchor_weight", 0.1))
+        )
+        self.pm_teacher_feature_dim = int(target_fext_dim) if target_fext_dim is not None else None
+        self.pm_teacher_feature_generator = None
+        if self.gm_update_mode == "server_pm_teacher":
+            print(f"[FedCD] PM-teacher source for GM distillation: {self.pm_teacher_source}")
+            if self.pm_teacher_datafree_enable:
+                print(
+                    "[FedCD] PM-teacher data-free KD enabled: "
+                    f"batches={self.pm_teacher_datafree_batches}, "
+                    f"steps={self.pm_teacher_datafree_steps}, "
+                    f"lr={self.pm_teacher_datafree_lr:.4f}"
+                )
+                if self.pm_teacher_datafree_generator_enable:
+                    print(
+                        "[FedCD] PM-teacher feature generator enabled: "
+                        f"noise_dim={self.pm_teacher_datafree_generator_noise_dim}, "
+                        f"hidden_dim={self.pm_teacher_datafree_generator_hidden_dim}, "
+                        f"lr={self.pm_teacher_datafree_generator_lr:.4f}, "
+                        f"steps={self.pm_teacher_datafree_generator_steps}"
+                    )
+                if self.pm_teacher_ce_weight > 0:
+                    print(
+                        "[FedCD] PM-teacher data-free KD ignores label CE loss "
+                        "(no proxy labels are used)."
+                    )
+            if self.pm_teacher_source == "cluster" and self.pm_teacher_cluster_dist_weighting:
+                print(
+                    "[FedCD] PM-teacher cluster distance weighting enabled: "
+                    f"metric={self.pm_teacher_cluster_dist_metric}, tau={self.pm_teacher_cluster_dist_tau:.4f}"
+                )
         self.init_pretrain = bool(getattr(args, "fedcd_init_pretrain", True))
         self.init_epochs = max(0, int(getattr(args, "fedcd_init_epochs", 1)))
         self.init_lr = float(getattr(args, "fedcd_init_lr", 0.005))
@@ -194,7 +321,7 @@ class FedCD(Server):
         self.proto_teacher_confidence_power = float(getattr(args, "fedcd_proto_teacher_confidence_power", 1.0))
         self.proto_teacher_confidence_power = max(self.proto_teacher_confidence_power, 1e-6)
         self.pm_teacher_loader = None
-        if self.gm_update_mode == "server_pm_teacher":
+        if self.gm_update_mode == "server_pm_teacher" and not self.pm_teacher_datafree_enable:
             self.pm_teacher_loader = self._build_pm_teacher_loader()
         if self.init_pretrain and self.init_epochs > 0:
             self._pretrain_and_broadcast_initial_components()
@@ -354,11 +481,30 @@ class FedCD(Server):
             )
         return unique_dims[0]
 
+    def _ensure_pm_teacher_feature_generator(self, feature_dim):
+        feature_dim = int(feature_dim)
+        if (
+            self.pm_teacher_feature_generator is None
+            or getattr(self.pm_teacher_feature_generator, "feature_dim", None) != feature_dim
+            or getattr(self.pm_teacher_feature_generator, "noise_dim", None) != self.pm_teacher_datafree_generator_noise_dim
+            or getattr(self.pm_teacher_feature_generator, "hidden_dim", None) != self.pm_teacher_datafree_generator_hidden_dim
+        ):
+            self.pm_teacher_feature_generator = FeatureSpaceGenerator(
+                feature_dim=feature_dim,
+                noise_dim=self.pm_teacher_datafree_generator_noise_dim,
+                hidden_dim=self.pm_teacher_datafree_generator_hidden_dim,
+            )
+        return self.pm_teacher_feature_generator
+
     def _current_generalized_state(self):
         state = {
+            f"f_ext.{k}": v.detach().cpu()
+            for k, v in self.f_ext.state_dict().items()
+        }
+        state.update({
             f"generalized_module.{k}": v.detach().cpu()
             for k, v in self.generalized_module.state_dict().items()
-        }
+        })
         if self.generalized_adapter is not None:
             state.update({
                 f"generalized_adapter.{k}": v.detach().cpu()
@@ -384,6 +530,11 @@ class FedCD(Server):
                 }
 
     def _apply_generalized_state_to_server(self, generalized_state):
+        f_ext_state = {
+            k.replace("f_ext.", ""): v
+            for k, v in generalized_state.items()
+            if k.startswith("f_ext.")
+        }
         module_state = {
             k.replace("generalized_module.", ""): v
             for k, v in generalized_state.items()
@@ -394,14 +545,20 @@ class FedCD(Server):
             for k, v in generalized_state.items()
             if k.startswith("generalized_adapter.")
         }
+        if f_ext_state:
+            self.f_ext.load_state_dict(f_ext_state, strict=True)
         if module_state:
             self.generalized_module.load_state_dict(module_state, strict=True)
         if self.generalized_adapter is not None and adapter_state:
             self.generalized_adapter.load_state_dict(adapter_state, strict=True)
 
     def _build_gm_broadcast_parts(self):
-        # Broadcast GM components only.
+        # Broadcast shared task encoder + GM components.
         parts = {}
+        parts.update({
+            f"f_ext.{k}": v.detach().cpu()
+            for k, v in self.f_ext.state_dict().items()
+        })
         parts.update({
             f"generalized_module.{k}": v.detach().cpu()
             for k, v in self.generalized_module.state_dict().items()
@@ -707,6 +864,10 @@ class FedCD(Server):
         header = (
             "round,local_test_acc,pm_local_test_acc,gm_local_test_acc,"
             "global_test_acc,gm_only_global_test_acc,pm_global_test_acc,"
+            "local_pm_weight_mean,local_pm_weight_min,local_pm_weight_max,"
+            "local_agree_pm,local_agree_gm,"
+            "global_pm_weight_mean,global_pm_weight_min,global_pm_weight_max,"
+            "global_agree_pm,global_agree_gm,"
             "train_loss,uplink_mb,downlink_mb,total_mb\n"
         )
         
@@ -728,13 +889,39 @@ class FedCD(Server):
         global_acc = f"{global_test_acc:.4f}" if global_test_acc is not None else ""
         gm_only_acc = f"{gm_only_global_test_acc:.4f}" if gm_only_global_test_acc is not None else ""
         pm_only_acc = f"{pm_global_test_acc:.4f}" if pm_global_test_acc is not None else ""
+        local_pm_weight_mean = ""
+        local_pm_weight_min = ""
+        local_pm_weight_max = ""
+        local_agree_pm = ""
+        local_agree_gm = ""
+        if self.last_local_gate_stats is not None:
+            local_pm_weight_mean = f"{self.last_local_gate_stats['pm_weight_mean']:.4f}"
+            local_pm_weight_min = f"{self.last_local_gate_stats['pm_weight_min']:.4f}"
+            local_pm_weight_max = f"{self.last_local_gate_stats['pm_weight_max']:.4f}"
+            local_agree_pm = f"{self.last_local_gate_stats['agree_with_pm']:.4f}"
+            local_agree_gm = f"{self.last_local_gate_stats['agree_with_gm']:.4f}"
+        global_pm_weight_mean = ""
+        global_pm_weight_min = ""
+        global_pm_weight_max = ""
+        global_agree_pm = ""
+        global_agree_gm = ""
+        if self.last_global_gate_stats is not None:
+            global_pm_weight_mean = f"{self.last_global_gate_stats['pm_weight_mean']:.4f}"
+            global_pm_weight_min = f"{self.last_global_gate_stats['pm_weight_min']:.4f}"
+            global_pm_weight_max = f"{self.last_global_gate_stats['pm_weight_max']:.4f}"
+            global_agree_pm = f"{self.last_global_gate_stats['agree_with_pm']:.4f}"
+            global_agree_gm = f"{self.last_global_gate_stats['agree_with_gm']:.4f}"
         t_loss = f"{train_loss:.4f}" if train_loss is not None else ""
         uplink_mb = uplink / (1024**2)
         downlink_mb = downlink / (1024**2)
         total_mb = uplink_mb + downlink_mb
         line = (
             f"{round_idx},{local_acc},{pm_local_acc},{gm_local_acc},"
-            f"{global_acc},{gm_only_acc},{pm_only_acc},{t_loss},"
+            f"{global_acc},{gm_only_acc},{pm_only_acc},"
+            f"{local_pm_weight_mean},{local_pm_weight_min},{local_pm_weight_max},"
+            f"{local_agree_pm},{local_agree_gm},"
+            f"{global_pm_weight_mean},{global_pm_weight_min},{global_pm_weight_max},"
+            f"{global_agree_pm},{global_agree_gm},{t_loss},"
             f"{uplink_mb:.4f},{downlink_mb:.4f},{total_mb:.4f}\n"
         )
         
@@ -773,7 +960,7 @@ class FedCD(Server):
         
         # [Info] Calculate and print broadcast size
         total_bytes = sum(v.numel() * v.element_size() for v in gm_parts.values())
-        print(f"[FedCD] Broadcast GM Size: {total_bytes / (1024**2):.2f} MB per client")
+        print(f"[FedCD] Broadcast Shared FExt+GM Size: {total_bytes / (1024**2):.2f} MB per client")
         
         broadcast_bytes = total_bytes * len(self.clients)
 
@@ -818,7 +1005,10 @@ class FedCD(Server):
                     if gm_state:
                         received_gms.append((client.id, gm_state, float(getattr(client, "train_samples", 1))))
                         total_uplink_bytes += sum(v.numel() * v.element_size() for v in gm_state.values())
-                if self.gm_update_mode in {"server_proto_teacher", "hybrid_local_proto"}:
+                if self.gm_update_mode in {"server_proto_teacher", "hybrid_local_proto"} or (
+                    self.gm_update_mode == "server_pm_teacher"
+                    and (self.pm_teacher_competence_filter or self.pm_teacher_datafree_enable)
+                ):
                     proto_state = client.upload_pm_prototypes(max_samples=self.proto_teacher_client_samples)
                     if proto_state:
                         received_protos.append((client.id, proto_state))
@@ -843,6 +1033,7 @@ class FedCD(Server):
                 prev_cluster_map = dict(self.cluster_map)
                 raw_cluster_map = self.cluster_clients_by_distribution()
                 self.cluster_map = self._align_cluster_labels(prev_cluster_map, raw_cluster_map)
+                self._update_cluster_distribution_stats(self.cluster_map)
                 self._ensure_cluster_generalized_states()
                 
                 # 상세 클러스터링 현황 로깅
@@ -897,21 +1088,28 @@ class FedCD(Server):
                 if self.gm_update_mode == "local":
                     global_gm_state = self.aggregate_global_gms(received_gms) if received_gms else None
                 elif self.gm_update_mode == "server_pm_teacher":
+                    teacher_proto_states = None
                     if self.pm_teacher_source == "cluster":
                         teacher_states = [(int(cluster_id), state) for cluster_id, state in cluster_pms.items()]
                         teacher_weights = {
                             int(cluster_id): float(max(1.0, cluster_teacher_weights.get(cluster_id, 1.0)))
                             for cluster_id in cluster_pms.keys()
                         }
+                        if (self.pm_teacher_competence_filter or self.pm_teacher_datafree_enable) and received_protos:
+                            teacher_proto_states = self._aggregate_cluster_proto_states(received_protos)
                         global_gm_state = self.distill_global_gm_from_pm_teachers(
-                            teacher_states, teacher_weights
+                            teacher_states, teacher_weights, teacher_proto_states
                         )
                     else:
+                        if (self.pm_teacher_competence_filter or self.pm_teacher_datafree_enable) and received_protos:
+                            teacher_proto_states = {int(cid): state for cid, state in received_protos}
                         global_gm_state = self.distill_global_gm_from_pm_teachers(
-                            received_pms, pm_client_weights
+                            received_pms, pm_client_weights, teacher_proto_states
                         )
                 elif self.gm_update_mode == "server_pm_fedavg":
                     global_gm_state = self.update_gm_from_pm_fedavg(cluster_pms, cluster_counts)
+                elif self.gm_update_mode == "server_pm_subnet":
+                    global_gm_state = self.update_gm_from_pm_subnet(received_pms, pm_client_weights)
                 elif self.gm_update_mode == "server_proto_teacher":
                     global_gm_state = self.update_gm_from_pm_prototypes(received_protos)
                 else:
@@ -933,6 +1131,8 @@ class FedCD(Server):
                     print(f"[FedCD] Round {i}: Server-side PM-teacher GM distillation/update done")
                 elif self.gm_update_mode == "server_pm_fedavg":
                     print(f"[FedCD] Round {i}: Server-side PM->GM FedAvg update done")
+                elif self.gm_update_mode == "server_pm_subnet":
+                    print(f"[FedCD] Round {i}: Server-side PM FedAvg -> GM subnet update done")
                 elif self.gm_update_mode == "server_proto_teacher":
                     print(f"[FedCD] Round {i}: Server-side prototype-based GM update done")
                 else:
@@ -989,6 +1189,7 @@ class FedCD(Server):
             print(f"Server: PM-only Local Test Accuracy: {pm_local_test_acc:.4f}")
         if gm_local_test_acc is not None:
             print(f"Server: GM-only Local Test Accuracy: {gm_local_test_acc:.4f}")
+        print(f"Server: Fusion Mode: {getattr(self.args, 'fedcd_fusion_mode', 'unknown')}")
         if self.last_local_gate_stats is not None:
             local_gate = self.last_local_gate_stats
             print(
@@ -1707,6 +1908,75 @@ class FedCD(Server):
         self._apply_generalized_state_to_server(global_gm_state)
         return global_gm_state
 
+    def update_gm_from_pm_subnet(self, received_pms, client_weights=None):
+        """
+        Build GM from the FedAvg of uploaded PMs, then project the averaged large PM
+        into the smaller GM by structured slicing/masking.
+
+        This is the direct server-side feasibility version of:
+          PM(all clients) -> single averaged PM -> smaller GM subnet.
+        """
+        if not received_pms:
+            return None
+
+        if client_weights is None:
+            client_weights = {}
+
+        pm_module_states = {}
+        pm_adapter_states = {}
+        group_weights = {}
+
+        for client_id, state in received_pms:
+            pm_module_state, pm_adapter_state = self._extract_personalized_state(state)
+            if pm_module_state:
+                pm_module_states[int(client_id)] = pm_module_state
+                group_weights[int(client_id)] = float(max(1.0, client_weights.get(int(client_id), 1.0)))
+            if pm_adapter_state:
+                pm_adapter_states[int(client_id)] = pm_adapter_state
+
+        if not pm_module_states:
+            print("[FedCD] PM->GM subnet update skipped: empty PM module states.")
+            return None
+
+        avg_pm_module = self._weighted_average_state_dicts(pm_module_states, group_weights)
+        if not avg_pm_module:
+            print("[FedCD] PM->GM subnet update skipped: PM averaging failed.")
+            return None
+
+        projected_module = self._project_pm_state_to_gm_state(avg_pm_module)
+        if not projected_module:
+            print("[FedCD] PM->GM subnet update skipped: projection produced no GM params.")
+            return None
+
+        global_gm_state = {
+            f"generalized_module.{k}": v
+            for k, v in projected_module.items()
+        }
+
+        if self.generalized_adapter is not None and pm_adapter_states:
+            avg_pm_adapter = self._weighted_average_state_dicts(pm_adapter_states, group_weights)
+            gm_adapter_template = self.generalized_adapter.state_dict()
+            if avg_pm_adapter:
+                for key, tensor in gm_adapter_template.items():
+                    src = avg_pm_adapter.get(key, None)
+                    if src is None:
+                        continue
+                    matched = self._match_tensor_shape(src, tensor)
+                    if matched is not None:
+                        global_gm_state[f"generalized_adapter.{key}"] = matched
+
+        current_gm_state = self._current_generalized_state()
+        for key, value in current_gm_state.items():
+            if key not in global_gm_state:
+                global_gm_state[key] = value.clone()
+
+        for cluster_id in set(self.cluster_map.values()):
+            self.cluster_generalized_states[cluster_id] = {
+                k: v.clone() for k, v in global_gm_state.items()
+            }
+        self._apply_generalized_state_to_server(global_gm_state)
+        return global_gm_state
+
     def _collect_pm_prototype_components(self, received_protos):
         """
         Build multimodal prototype components from client PM uploads.
@@ -1770,6 +2040,162 @@ class FedCD(Server):
         if skipped > 0:
             print(f"[FedCD] Skipped {skipped} invalid PM prototype payload(s).")
         return components, expected_classes, expected_feat_dim
+
+    def _aggregate_proto_state_list(self, proto_states):
+        if not proto_states:
+            return None
+        merged = {}
+        for state in proto_states:
+            if not state:
+                continue
+            for key, value in state.items():
+                tensor = value.detach().cpu()
+                if key not in merged:
+                    merged[key] = tensor.clone()
+                else:
+                    if merged[key].shape != tensor.shape:
+                        return None
+                    merged[key] += tensor
+        return merged if merged else None
+
+    def _aggregate_cluster_proto_states(self, received_protos):
+        cluster_buckets = {}
+        for client_id, state in received_protos:
+            cluster_id = int(self.cluster_map.get(int(client_id), 0))
+            cluster_buckets.setdefault(cluster_id, []).append(state)
+        out = {}
+        for cluster_id, states in cluster_buckets.items():
+            merged = self._aggregate_proto_state_list(states)
+            if merged:
+                out[int(cluster_id)] = merged
+        return out
+
+    def _update_cluster_distribution_stats(self, cluster_map=None):
+        if cluster_map is None:
+            cluster_map = self.cluster_map
+        if not self.client_distribution_stats:
+            self.cluster_distribution_stats = {}
+            return
+
+        grouped = {}
+        for client_id, stats in self.client_distribution_stats.items():
+            if not stats:
+                continue
+            mean = stats.get("mean", None)
+            var = stats.get("var", None)
+            if mean is None or var is None:
+                continue
+            cluster_id = int(cluster_map.get(int(client_id), 0))
+            weight = float(stats.get("weight", max(1, getattr(self.clients[int(client_id)], "train_samples", 1))))
+            grouped.setdefault(cluster_id, []).append((mean.float(), var.float(), max(weight, 1e-12)))
+
+        cluster_stats = {}
+        for cluster_id, items in grouped.items():
+            total_w = sum(w for _, _, w in items)
+            if total_w <= 0:
+                continue
+            mean_acc = None
+            second_acc = None
+            for mean, var, w in items:
+                coeff = w / total_w
+                second = var + mean.pow(2)
+                mean_acc = mean * coeff if mean_acc is None else (mean_acc + mean * coeff)
+                second_acc = second * coeff if second_acc is None else (second_acc + second * coeff)
+            if mean_acc is None or second_acc is None:
+                continue
+            var_acc = (second_acc - mean_acc.pow(2)).clamp_min(1e-6)
+            cluster_stats[int(cluster_id)] = {
+                "mean": mean_acc.detach().cpu(),
+                "var": var_acc.detach().cpu(),
+                "weight": float(total_w),
+            }
+
+        self.cluster_distribution_stats = cluster_stats
+
+    def _prepare_cluster_dist_meta(self, state, device):
+        if not state:
+            return None
+        mean = state.get("mean", None)
+        var = state.get("var", None)
+        if mean is None or var is None:
+            return None
+        mean = mean.detach().to(device).float()
+        var = var.detach().to(device).float().clamp_min(1e-6)
+        if mean.dim() != 1 or var.dim() != 1 or mean.numel() != var.numel():
+            return None
+        return {"mean": mean, "var": var}
+
+    def _cluster_distance(self, z, cluster_meta):
+        if cluster_meta is None:
+            return None
+        mean = cluster_meta["mean"]
+        var = cluster_meta["var"]
+        if z.dim() != 2 or z.size(1) != mean.numel():
+            return None
+        diff = z - mean.unsqueeze(0)
+        if self.pm_teacher_cluster_dist_metric == "euclidean":
+            dist = diff.pow(2).mean(dim=1)
+        else:
+            dist = (diff.pow(2) / var.unsqueeze(0)).mean(dim=1)
+        return dist.clamp_min(0.0)
+
+    def _prepare_teacher_proto_meta(self, state, device):
+        if not state:
+            return None
+        required = {"counts", "feat_sum", "feat_sq_sum", "logit_sum"}
+        if not required.issubset(set(state.keys())):
+            return None
+        counts = state["counts"].detach().to(device).float()
+        feat_sum = state["feat_sum"].detach().to(device).float()
+        if counts.dim() != 1 or feat_sum.dim() != 2 or feat_sum.size(0) != counts.numel():
+            return None
+        denom = counts.clamp_min(1e-12).unsqueeze(1)
+        feat_mean = feat_sum / denom
+
+        correct_count = state.get("correct_count", None)
+        if correct_count is not None:
+            correct_count = correct_count.detach().to(device).float()
+            class_reliability = (correct_count / counts.clamp_min(1e-12)).clamp(0.0, 1.0)
+        else:
+            class_reliability = torch.ones_like(counts)
+
+        max_count = counts.max().clamp_min(1.0)
+        class_support = (torch.log1p(counts) / torch.log1p(max_count)).clamp(0.0, 1.0)
+        return {
+            "counts": counts,
+            "feat_mean": feat_mean,
+            "class_reliability": class_reliability,
+            "class_support": class_support,
+        }
+
+    def _teacher_competence_score(self, z, pm_prob, proto_meta):
+        if proto_meta is None:
+            return None
+        pred = torch.argmax(pm_prob, dim=1)
+        rel = proto_meta["class_reliability"].index_select(0, pred)
+        support = proto_meta["class_support"].index_select(0, pred)
+        proto_mean = proto_meta["feat_mean"].index_select(0, pred)
+        z_norm = F.normalize(z, dim=1)
+        proto_norm = F.normalize(proto_mean, dim=1)
+        proto_match = ((z_norm * proto_norm).sum(dim=1) + 1.0) * 0.5
+        proto_match = proto_match.clamp(0.0, 1.0)
+
+        weights = torch.tensor(
+            [
+                self.pm_teacher_competence_rel_weight,
+                self.pm_teacher_competence_support_weight,
+                self.pm_teacher_competence_proto_weight,
+            ],
+            device=z.device,
+            dtype=z.dtype,
+        )
+        total = weights.sum().clamp_min(1e-12)
+        competence = (
+            weights[0] * rel.to(z.dtype)
+            + weights[1] * support.to(z.dtype)
+            + weights[2] * proto_match.to(z.dtype)
+        ) / total
+        return competence.clamp(0.0, 1.0)
 
     def update_gm_from_pm_prototypes(self, received_protos):
         if not received_protos:
@@ -1991,14 +2417,16 @@ class FedCD(Server):
 
         return personalized_module_state, personalized_adapter_state
 
-    def distill_global_gm_from_pm_teachers(self, received_pms, client_weights=None):
+    def distill_global_gm_from_pm_teachers(self, received_pms, client_weights=None, teacher_proto_states=None):
         if not received_pms:
             return None
-        if self.pm_teacher_loader is None:
+        if not self.pm_teacher_datafree_enable and self.pm_teacher_loader is None:
             print("[FedCD] PM-teacher distillation loader is unavailable. Skip GM update.")
             return None
         if client_weights is None:
             client_weights = {}
+        if teacher_proto_states is None:
+            teacher_proto_states = {}
 
         def _distill_once(device):
             self.f_ext.to(device)
@@ -2029,10 +2457,24 @@ class FedCD(Server):
                         p.requires_grad = False
 
                 teacher_weight = float(client_weights.get(int(client_id), 1.0))
+                proto_meta = None
+                if self.pm_teacher_competence_filter or self.pm_teacher_datafree_enable:
+                    proto_meta = self._prepare_teacher_proto_meta(
+                        teacher_proto_states.get(int(client_id), None),
+                        device,
+                    )
+                cluster_dist_meta = None
+                if self.pm_teacher_cluster_dist_weighting and self.pm_teacher_source == "cluster":
+                    cluster_dist_meta = self._prepare_cluster_dist_meta(
+                        self.cluster_distribution_stats.get(int(client_id), None),
+                        device,
+                    )
                 teacher_components.append({
                     "weight": max(teacher_weight, 1e-12),
                     "pm_module": pm_module,
                     "pm_adapter": pm_adapter,
+                    "proto_meta": proto_meta,
+                    "cluster_dist_meta": cluster_dist_meta,
                 })
 
             if not teacher_components:
@@ -2043,6 +2485,325 @@ class FedCD(Server):
             total_teacher_weight = max(float(total_teacher_weight), 1e-12)
             for comp in teacher_components:
                 comp["norm_weight"] = float(comp["weight"]) / total_teacher_weight
+
+            feature_dim = self.pm_teacher_feature_dim
+            if feature_dim is None:
+                for comp in teacher_components:
+                    proto_meta = comp.get("proto_meta")
+                    if proto_meta is not None and "feat_mean" in proto_meta:
+                        feature_dim = int(proto_meta["feat_mean"].size(1))
+                        break
+                    cluster_meta = comp.get("cluster_dist_meta")
+                    if cluster_meta is not None and "mean" in cluster_meta:
+                        feature_dim = int(cluster_meta["mean"].numel())
+                        break
+            if feature_dim is None:
+                feature_dim = self._resolve_module_input_dim(
+                    self.generalized_module,
+                    self.personalized_module,
+                )
+            if feature_dim is None:
+                print("[FedCD] Failed to infer feature dimension for PM-teacher distillation. Skip GM update.")
+                self.f_ext.to("cpu")
+                return None
+
+            feature_generator = None
+            feature_generator_optimizer = None
+            if self.pm_teacher_datafree_enable and self.pm_teacher_datafree_generator_enable:
+                feature_generator = self._ensure_pm_teacher_feature_generator(feature_dim).to(device)
+                feature_generator.train()
+                feature_generator_optimizer = torch.optim.Adam(
+                    feature_generator.parameters(),
+                    lr=self.pm_teacher_datafree_generator_lr,
+                )
+
+            def _build_teacher_stacks(z):
+                teacher_prob_list = []
+                teacher_score_list = []
+                teacher_conf_list = []
+                teacher_competence_list = []
+                for comp in teacher_components:
+                    pm_adapter = comp["pm_adapter"]
+                    z_pm = pm_adapter(z) if pm_adapter is not None else z
+                    pm_logits = comp["pm_module"](z_pm)
+                    pm_prob = torch.softmax(pm_logits / temp, dim=1)
+
+                    if self.pm_teacher_ensemble_confidence:
+                        pm_conf = self._teacher_confidence(pm_prob)
+                        pm_conf = self.pm_teacher_confidence_min + (
+                            1.0 - self.pm_teacher_confidence_min
+                        ) * pm_conf.pow(self.pm_teacher_confidence_power)
+                    else:
+                        pm_conf = torch.ones(
+                            (pm_prob.size(0),),
+                            device=pm_prob.device,
+                            dtype=pm_prob.dtype,
+                        )
+
+                    competence = torch.ones_like(pm_conf)
+                    if self.pm_teacher_competence_filter or self.pm_teacher_datafree_enable:
+                        competence_score = self._teacher_competence_score(
+                            z, pm_prob, comp.get("proto_meta")
+                        )
+                        if competence_score is not None:
+                            competence = competence_score
+                            if self.pm_teacher_competence_filter:
+                                competence_mask = competence >= self.pm_teacher_competence_min
+                                competence = competence * competence_mask.to(competence.dtype)
+
+                    score = pm_conf * competence * float(comp["norm_weight"])
+                    teacher_prob_list.append(pm_prob)
+                    teacher_score_list.append(score)
+                    teacher_conf_list.append(pm_conf)
+                    teacher_competence_list.append(competence)
+
+                if not teacher_prob_list:
+                    return None
+
+                teacher_prob_stack = torch.stack(teacher_prob_list, dim=0)
+                teacher_score_stack = torch.stack(teacher_score_list, dim=0)
+                teacher_conf_stack = torch.stack(teacher_conf_list, dim=0)
+                teacher_competence_stack = torch.stack(teacher_competence_list, dim=0)
+                teacher_pred_stack = torch.argmax(teacher_prob_stack, dim=2)
+
+                use_cluster_dist_prior = (
+                    self.pm_teacher_cluster_dist_weighting
+                    and self.pm_teacher_source == "cluster"
+                    and len(teacher_components) > 1
+                    and all(comp.get("cluster_dist_meta") is not None for comp in teacher_components)
+                )
+                if use_cluster_dist_prior:
+                    dist_list = []
+                    for comp in teacher_components:
+                        dist = self._cluster_distance(z, comp["cluster_dist_meta"])
+                        if dist is None:
+                            dist_list = []
+                            break
+                        dist_list.append(dist)
+                    if dist_list:
+                        dist_stack = torch.stack(dist_list, dim=0)
+                        cluster_prior = torch.softmax(
+                            -dist_stack / self.pm_teacher_cluster_dist_tau,
+                            dim=0,
+                        )
+                        teacher_score_stack = teacher_score_stack * cluster_prior
+
+                return (
+                    teacher_prob_stack,
+                    teacher_score_stack,
+                    teacher_conf_stack,
+                    teacher_competence_stack,
+                    teacher_pred_stack,
+                )
+
+            def _aggregate_teacher_targets(stacks, y=None):
+                if stacks is None:
+                    return None
+                (
+                    teacher_prob_stack,
+                    teacher_score_stack,
+                    teacher_conf_stack,
+                    teacher_competence_stack,
+                    teacher_pred_stack,
+                ) = stacks
+
+                if self.pm_teacher_teacher_abstain_threshold > 0:
+                    teacher_active_mask = (
+                        teacher_conf_stack >= self.pm_teacher_teacher_abstain_threshold
+                    )
+                    teacher_score_stack = teacher_score_stack * teacher_active_mask.to(
+                        teacher_score_stack.dtype
+                    )
+
+                num_teachers = teacher_score_stack.size(0)
+                topk = num_teachers if self.pm_teacher_topk <= 0 else min(self.pm_teacher_topk, num_teachers)
+                if topk < num_teachers:
+                    topk_scores, topk_idx = torch.topk(
+                        teacher_score_stack,
+                        k=topk,
+                        dim=0,
+                        largest=True,
+                        sorted=False,
+                    )
+                    gather_idx = topk_idx.unsqueeze(-1).expand(-1, -1, teacher_prob_stack.size(-1))
+                    selected_prob = teacher_prob_stack.gather(0, gather_idx)
+                    selected_score = topk_scores
+                    selected_conf = teacher_conf_stack.gather(0, topk_idx)
+                    selected_comp = teacher_competence_stack.gather(0, topk_idx)
+                    selected_pred = teacher_pred_stack.gather(0, topk_idx)
+                else:
+                    selected_prob = teacher_prob_stack
+                    selected_score = teacher_score_stack
+                    selected_conf = teacher_conf_stack
+                    selected_comp = teacher_competence_stack
+                    selected_pred = teacher_pred_stack
+
+                score_sum = selected_score.sum(dim=0)
+                active_teacher_mask = selected_score > 1e-12
+                active_teacher_count = active_teacher_mask.sum(dim=0)
+                valid_teacher_mask = score_sum > 1e-12
+                valid_teacher_mask = valid_teacher_mask & (
+                    active_teacher_count >= self.pm_teacher_min_active_teachers
+                )
+                if self.pm_teacher_abstain_threshold > 0:
+                    selected_conf_active = torch.where(
+                        active_teacher_mask,
+                        selected_conf,
+                        torch.full_like(selected_conf, -1.0),
+                    )
+                    max_teacher_conf = selected_conf_active.max(dim=0).values
+                    valid_teacher_mask = valid_teacher_mask & (
+                        max_teacher_conf >= self.pm_teacher_abstain_threshold
+                    )
+                if self.pm_teacher_consensus_min_ratio > 0:
+                    vote_score = torch.zeros(
+                        (selected_score.size(1), selected_prob.size(2)),
+                        device=selected_score.device,
+                        dtype=selected_score.dtype,
+                    )
+                    vote_score.scatter_add_(
+                        1,
+                        selected_pred.transpose(0, 1),
+                        selected_score.transpose(0, 1),
+                    )
+                    consensus_ratio = vote_score.max(dim=1).values / score_sum.clamp_min(1e-12)
+                    valid_teacher_mask = valid_teacher_mask & (
+                        consensus_ratio >= self.pm_teacher_consensus_min_ratio
+                    )
+                if not bool(valid_teacher_mask.any()):
+                    return None
+
+                teacher_prob = (
+                    selected_prob * selected_score.unsqueeze(-1)
+                ).sum(dim=0) / score_sum.clamp_min(1e-12).unsqueeze(-1)
+                if self.pm_teacher_correct_only and y is not None:
+                    label_mask = (y >= 0) & (y < teacher_prob.size(1))
+                    teacher_pred = torch.argmax(teacher_prob, dim=1)
+                    valid_teacher_mask = valid_teacher_mask & label_mask & teacher_pred.eq(y)
+                    if not bool(valid_teacher_mask.any()):
+                        return None
+
+                competence_weight = None
+                if self.pm_teacher_competence_filter or self.pm_teacher_datafree_enable:
+                    competence_weight = (
+                        (selected_comp * active_teacher_mask.to(selected_comp.dtype)).sum(dim=0)
+                        / active_teacher_count.clamp_min(1).to(selected_comp.dtype)
+                    ).clamp(0.0, 1.0)
+
+                return teacher_prob, valid_teacher_mask, competence_weight
+
+            def _sample_proto_features(batch_size):
+                if not self.pm_teacher_datafree_init_from_proto:
+                    return None
+                proto_bank = []
+                for comp in teacher_components:
+                    proto_meta = comp.get("proto_meta")
+                    if proto_meta is None:
+                        continue
+                    feat_mean = proto_meta.get("feat_mean", None)
+                    counts = proto_meta.get("counts", None)
+                    if feat_mean is None or counts is None:
+                        continue
+                    valid = counts > 0
+                    if bool(valid.any()):
+                        proto_bank.append(feat_mean[valid])
+                if not proto_bank:
+                    return None
+                proto_bank = torch.cat(proto_bank, dim=0)
+                idx = torch.randint(proto_bank.size(0), (batch_size,), device=device)
+                z0 = proto_bank.index_select(0, idx).clone()
+                if self.pm_teacher_datafree_noise_scale > 0:
+                    z0 = z0 + self.pm_teacher_datafree_noise_scale * torch.randn_like(z0)
+                return z0
+
+            def _generate_datafree_features():
+                init_z = _sample_proto_features(self.pm_teacher_batch_size)
+                if feature_generator is not None:
+                    if init_z is None:
+                        anchor = torch.zeros(
+                            self.pm_teacher_batch_size,
+                            feature_dim,
+                            device=device,
+                        )
+                    else:
+                        anchor = init_z.detach().clone()
+                    noise = torch.randn(
+                        self.pm_teacher_batch_size,
+                        self.pm_teacher_datafree_generator_noise_dim,
+                        device=device,
+                    )
+                    for _ in range(self.pm_teacher_datafree_generator_steps):
+                        z_syn = feature_generator(noise, anchor)
+                        stacks = _build_teacher_stacks(z_syn)
+                        if stacks is None:
+                            break
+                        teacher_prob_stack, teacher_score_stack, _, _, _ = stacks
+                        score_sum = teacher_score_stack.sum(dim=0)
+                        if bool((score_sum > 1e-12).any()):
+                            teacher_prob = (
+                                teacher_prob_stack * teacher_score_stack.unsqueeze(-1)
+                            ).sum(dim=0) / score_sum.clamp_min(1e-12).unsqueeze(-1)
+                        else:
+                            teacher_prob = teacher_prob_stack.mean(dim=0)
+                        sample_entropy = -(
+                            teacher_prob * torch.log(teacher_prob.clamp_min(1e-12))
+                        ).sum(dim=1).mean()
+                        mean_prob = teacher_prob.mean(dim=0)
+                        diversity = -(
+                            mean_prob * torch.log(mean_prob.clamp_min(1e-12))
+                        ).sum()
+                        anchor_penalty = (z_syn - anchor).pow(2).mean()
+                        generator_loss = (
+                            self.pm_teacher_datafree_entropy_weight * sample_entropy
+                            - self.pm_teacher_datafree_diversity_weight * diversity
+                            + self.pm_teacher_datafree_l2_weight * z_syn.pow(2).mean()
+                            + self.pm_teacher_datafree_generator_anchor_weight * anchor_penalty
+                        )
+                        if not torch.isfinite(generator_loss):
+                            break
+                        feature_generator_optimizer.zero_grad()
+                        generator_loss.backward()
+                        feature_generator_optimizer.step()
+                    return feature_generator(noise, anchor).detach()
+                if init_z is None:
+                    scale = self.pm_teacher_datafree_noise_scale if self.pm_teacher_datafree_noise_scale > 0 else 1.0
+                    init_z = torch.randn(
+                        self.pm_teacher_batch_size,
+                        feature_dim,
+                        device=device,
+                    ) * scale
+                z_syn = init_z.detach().clone().requires_grad_(True)
+                synth_optimizer = torch.optim.Adam([z_syn], lr=self.pm_teacher_datafree_lr)
+                for _ in range(self.pm_teacher_datafree_steps):
+                    stacks = _build_teacher_stacks(z_syn)
+                    if stacks is None:
+                        break
+                    teacher_prob_stack, teacher_score_stack, _, _, _ = stacks
+                    score_sum = teacher_score_stack.sum(dim=0)
+                    if bool((score_sum > 1e-12).any()):
+                        teacher_prob = (
+                            teacher_prob_stack * teacher_score_stack.unsqueeze(-1)
+                        ).sum(dim=0) / score_sum.clamp_min(1e-12).unsqueeze(-1)
+                    else:
+                        teacher_prob = teacher_prob_stack.mean(dim=0)
+                    sample_entropy = -(
+                        teacher_prob * torch.log(teacher_prob.clamp_min(1e-12))
+                    ).sum(dim=1).mean()
+                    mean_prob = teacher_prob.mean(dim=0)
+                    diversity = -(
+                        mean_prob * torch.log(mean_prob.clamp_min(1e-12))
+                    ).sum()
+                    synth_loss = (
+                        self.pm_teacher_datafree_entropy_weight * sample_entropy
+                        - self.pm_teacher_datafree_diversity_weight * diversity
+                        + self.pm_teacher_datafree_l2_weight * z_syn.pow(2).mean()
+                    )
+                    if not torch.isfinite(synth_loss):
+                        break
+                    synth_optimizer.zero_grad()
+                    synth_loss.backward()
+                    synth_optimizer.step()
+                return z_syn.detach()
 
             gm_module = copy.deepcopy(self.generalized_module).to(device)
             gm_module.train()
@@ -2063,128 +2824,32 @@ class FedCD(Server):
                     if self.pm_teacher_epochs > 1
                     else "Distill GM from PM teachers"
                 )
-                for x, y in tqdm(self.pm_teacher_loader, desc=desc, leave=False):
-                    if type(x) == type([]):
-                        x = x[0]
-                    x = x.to(device, non_blocking=(device == "cuda"))
-                    if self.pm_teacher_ce_weight > 0 or self.pm_teacher_correct_only:
-                        y = y.to(device, non_blocking=(device == "cuda")).long()
+                if self.pm_teacher_datafree_enable:
+                    batch_iter = range(self.pm_teacher_datafree_batches)
+                else:
+                    batch_iter = self.pm_teacher_loader
+
+                for batch in tqdm(batch_iter, desc=desc, leave=False):
+                    y = None
+                    if self.pm_teacher_datafree_enable:
+                        z = _generate_datafree_features()
+                    else:
+                        x, y = batch
+                        if type(x) == type([]):
+                            x = x[0]
+                        x = x.to(device, non_blocking=(device == "cuda"))
+                        if self.pm_teacher_ce_weight > 0 or self.pm_teacher_correct_only:
+                            y = y.to(device, non_blocking=(device == "cuda")).long()
+                        with torch.no_grad():
+                            z = self.f_ext(x)
+                            if z.dim() > 2:
+                                z = torch.flatten(z, 1)
 
                     with torch.no_grad():
-                        z = self.f_ext(x)
-                        if z.dim() > 2:
-                            z = torch.flatten(z, 1)
-
-                        teacher_prob_list = []
-                        teacher_score_list = []
-                        teacher_conf_list = []
-                        for comp in teacher_components:
-                            pm_adapter = comp["pm_adapter"]
-                            z_pm = pm_adapter(z) if pm_adapter is not None else z
-                            pm_logits = comp["pm_module"](z_pm)
-                            pm_prob = torch.softmax(pm_logits / temp, dim=1)
-
-                            if self.pm_teacher_ensemble_confidence:
-                                pm_conf = self._teacher_confidence(pm_prob)
-                                pm_conf = self.pm_teacher_confidence_min + (
-                                    1.0 - self.pm_teacher_confidence_min
-                                ) * pm_conf.pow(self.pm_teacher_confidence_power)
-                            else:
-                                pm_conf = torch.ones(
-                                    (pm_prob.size(0),),
-                                    device=pm_prob.device,
-                                    dtype=pm_prob.dtype,
-                                )
-
-                            # Sample-wise teacher score for top-k routing:
-                            # normalized client-data prior x calibrated confidence.
-                            score = pm_conf * float(comp["norm_weight"])
-                            teacher_prob_list.append(pm_prob)
-                            teacher_score_list.append(score)
-                            teacher_conf_list.append(pm_conf)
-
-                        if not teacher_prob_list:
+                        targets = _aggregate_teacher_targets(_build_teacher_stacks(z), y=y)
+                        if targets is None:
                             continue
-
-                        teacher_prob_stack = torch.stack(teacher_prob_list, dim=0)   # [T, B, C]
-                        teacher_score_stack = torch.stack(teacher_score_list, dim=0) # [T, B]
-                        teacher_conf_stack = torch.stack(teacher_conf_list, dim=0)   # [T, B]
-                        teacher_pred_stack = torch.argmax(teacher_prob_stack, dim=2) # [T, B]
-
-                        if self.pm_teacher_teacher_abstain_threshold > 0:
-                            # Teacher-level abstain: drop low-confidence PM teacher votes per sample.
-                            teacher_active_mask = (
-                                teacher_conf_stack >= self.pm_teacher_teacher_abstain_threshold
-                            )
-                            teacher_score_stack = teacher_score_stack * teacher_active_mask.to(
-                                teacher_score_stack.dtype
-                            )
-
-                        num_teachers = teacher_score_stack.size(0)
-                        topk = num_teachers if self.pm_teacher_topk <= 0 else min(self.pm_teacher_topk, num_teachers)
-                        if topk < num_teachers:
-                            topk_scores, topk_idx = torch.topk(
-                                teacher_score_stack,
-                                k=topk,
-                                dim=0,
-                                largest=True,
-                                sorted=False,
-                            )
-                            gather_idx = topk_idx.unsqueeze(-1).expand(-1, -1, teacher_prob_stack.size(-1))
-                            selected_prob = teacher_prob_stack.gather(0, gather_idx)
-                            selected_score = topk_scores
-                            selected_conf = teacher_conf_stack.gather(0, topk_idx)
-                            selected_pred = teacher_pred_stack.gather(0, topk_idx)
-                        else:
-                            selected_prob = teacher_prob_stack
-                            selected_score = teacher_score_stack
-                            selected_conf = teacher_conf_stack
-                            selected_pred = teacher_pred_stack
-
-                        score_sum = selected_score.sum(dim=0)
-                        active_teacher_mask = selected_score > 1e-12
-                        active_teacher_count = active_teacher_mask.sum(dim=0)
-                        valid_teacher_mask = score_sum > 1e-12
-                        valid_teacher_mask = valid_teacher_mask & (
-                            active_teacher_count >= self.pm_teacher_min_active_teachers
-                        )
-                        if self.pm_teacher_abstain_threshold > 0:
-                            selected_conf_active = torch.where(
-                                active_teacher_mask,
-                                selected_conf,
-                                torch.full_like(selected_conf, -1.0),
-                            )
-                            max_teacher_conf = selected_conf_active.max(dim=0).values
-                            valid_teacher_mask = valid_teacher_mask & (
-                                max_teacher_conf >= self.pm_teacher_abstain_threshold
-                            )
-                        if self.pm_teacher_consensus_min_ratio > 0:
-                            vote_score = torch.zeros(
-                                (selected_score.size(1), selected_prob.size(2)),
-                                device=selected_score.device,
-                                dtype=selected_score.dtype,
-                            )
-                            vote_score.scatter_add_(
-                                1,
-                                selected_pred.transpose(0, 1),
-                                selected_score.transpose(0, 1),
-                            )
-                            consensus_ratio = vote_score.max(dim=1).values / score_sum.clamp_min(1e-12)
-                            valid_teacher_mask = valid_teacher_mask & (
-                                consensus_ratio >= self.pm_teacher_consensus_min_ratio
-                            )
-                        if not bool(valid_teacher_mask.any()):
-                            continue
-
-                        teacher_prob = (
-                            selected_prob * selected_score.unsqueeze(-1)
-                        ).sum(dim=0) / score_sum.clamp_min(1e-12).unsqueeze(-1)
-                        if self.pm_teacher_correct_only:
-                            label_mask = (y >= 0) & (y < teacher_prob.size(1))
-                            teacher_pred = torch.argmax(teacher_prob, dim=1)
-                            valid_teacher_mask = valid_teacher_mask & label_mask & teacher_pred.eq(y)
-                            if not bool(valid_teacher_mask.any()):
-                                continue
+                        teacher_prob, valid_teacher_mask, competence_weight = targets
 
                     with torch.cuda.amp.autocast(enabled=use_amp):
                         z_gm = gm_adapter(z) if gm_adapter is not None else z
@@ -2202,6 +2867,8 @@ class FedCD(Server):
                             kd_weight = self.pm_teacher_confidence_min + (
                                 1.0 - self.pm_teacher_confidence_min
                             ) * teacher_conf.pow(self.pm_teacher_confidence_power)
+                            if competence_weight is not None:
+                                kd_weight = kd_weight * competence_weight.clamp(0.0, 1.0)
                             kd_weight = kd_weight * valid_teacher_mask.to(kd_weight.dtype)
                             kd_loss = (kd_per_sample * kd_weight).sum() / kd_weight.sum().clamp_min(1e-12)
                         else:
@@ -2213,7 +2880,7 @@ class FedCD(Server):
                         ce_loss = gm_logits.new_tensor(0.0)
                         gm_logits_valid = gm_logits[valid_teacher_mask]
                         teacher_prob_valid = teacher_prob[valid_teacher_mask]
-                        if self.pm_teacher_ce_weight > 0:
+                        if self.pm_teacher_ce_weight > 0 and y is not None:
                             y_valid = y[valid_teacher_mask]
                             if y_valid.numel() > 0:
                                 ce_loss = ce_loss_fn(gm_logits_valid, y_valid)
@@ -2255,6 +2922,8 @@ class FedCD(Server):
                 comp["pm_module"].to("cpu")
                 if comp["pm_adapter"] is not None:
                     comp["pm_adapter"].to("cpu")
+            if feature_generator is not None:
+                feature_generator.to("cpu")
 
             self.f_ext.to("cpu")
             if device == "cuda" and self.args.avoid_oom:
@@ -2345,12 +3014,20 @@ class FedCD(Server):
 
         features = []
         client_ids = []
+        client_stats = {}
         for client in self.clients:
             mean, var = client.get_feature_stats(self.cluster_sample_size)
             # Flatten to ensure 1D vectors before concatenation
             feat = torch.cat([mean.flatten(), var.flatten()], dim=0).cpu().numpy()
             features.append(feat)
             client_ids.append(client.id)
+            client_stats[int(client.id)] = {
+                "mean": mean.detach().cpu(),
+                "var": var.detach().cpu(),
+                "weight": float(max(1, getattr(client, "train_samples", 1))),
+            }
+
+        self.client_distribution_stats = client_stats
 
         X = np.stack(features, axis=0)
         # L2 Normalization (Cosine-like distance)
@@ -2588,6 +3265,10 @@ class FedCD(Server):
     def _default_proxy_root(self, proxy_dataset):
         core_root = self._core_root()
         name = proxy_dataset.lower()
+        if name in {"mnist"}:
+            return os.path.join(core_root, "dataset", "MNIST", "rawdata")
+        if name in {"fashionmnist", "fashion-mnist", "fashion_mnist"}:
+            return os.path.join(core_root, "dataset", "FashionMNIST", "rawdata")
         if name in {"cifar100", "cifar-100"}:
             return os.path.join(core_root, "dataset", "Cifar100", "rawdata")
         if name in {"cifar10", "cifar-10"}:
@@ -2612,12 +3293,73 @@ class FedCD(Server):
         if not proxy_root:
             raise ValueError(f"Unknown proxy dataset: {proxy_name}")
 
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ])
-
         name = proxy_name.lower()
+        task_is_mnist = "MNIST" in str(getattr(self, "dataset", ""))
+        if name in {"mnist", "fashionmnist", "fashion-mnist", "fashion_mnist"}:
+            transform = torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.5,), (0.5,)),
+            ])
+        elif task_is_mnist:
+            transform = torchvision.transforms.Compose([
+                torchvision.transforms.Grayscale(num_output_channels=1),
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.5,), (0.5,)),
+            ])
+        else:
+            transform = torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ])
+
+        if name in {"mnist"}:
+            splits = []
+            if proxy_split in {"train", "all"}:
+                splits.append(
+                    torchvision.datasets.MNIST(
+                        root=proxy_root,
+                        train=True,
+                        download=self.pm_teacher_proxy_download,
+                        transform=transform,
+                    )
+                )
+            if proxy_split in {"test", "all"}:
+                splits.append(
+                    torchvision.datasets.MNIST(
+                        root=proxy_root,
+                        train=False,
+                        download=self.pm_teacher_proxy_download,
+                        transform=transform,
+                    )
+                )
+            if len(splits) == 1:
+                return splits[0], f"proxy:MNIST:{proxy_split}"
+            return torch.utils.data.ConcatDataset(splits), f"proxy:MNIST:{proxy_split}"
+
+        if name in {"fashionmnist", "fashion-mnist", "fashion_mnist"}:
+            splits = []
+            if proxy_split in {"train", "all"}:
+                splits.append(
+                    torchvision.datasets.FashionMNIST(
+                        root=proxy_root,
+                        train=True,
+                        download=self.pm_teacher_proxy_download,
+                        transform=transform,
+                    )
+                )
+            if proxy_split in {"test", "all"}:
+                splits.append(
+                    torchvision.datasets.FashionMNIST(
+                        root=proxy_root,
+                        train=False,
+                        download=self.pm_teacher_proxy_download,
+                        transform=transform,
+                    )
+                )
+            if len(splits) == 1:
+                return splits[0], f"proxy:FashionMNIST:{proxy_split}"
+            return torch.utils.data.ConcatDataset(splits), f"proxy:FashionMNIST:{proxy_split}"
+
         if name in {"cifar100", "cifar-100"}:
             splits = []
             if proxy_split in {"train", "all"}:
@@ -2897,13 +3639,8 @@ class FedCD(Server):
         valid_clients = 0
 
         for client in self.clients:
-            client.f_ext.to(device)
-            client.personalized_module.to(device)
-            client.f_ext.eval()
-            client.personalized_module.eval()
-            if client.personalized_adapter is not None:
-                client.personalized_adapter.to(device)
-                client.personalized_adapter.eval()
+            client.model.to(device)
+            client.model.eval()
 
             total = 0
             correct = 0
@@ -2914,19 +3651,12 @@ class FedCD(Server):
                     x = x.to(device, non_blocking=use_non_blocking)
                     y = y.to(device, non_blocking=use_non_blocking)
 
-                    z = client.f_ext(x)
-                    if z.dim() > 2:
-                        z = torch.flatten(z, 1)
-                    z_pm = client.personalized_adapter(z) if client.personalized_adapter is not None else z
-                    logits = client.personalized_module(z_pm)
+                    _, _, logits, _ = client.infer_fused_logits_with_gate(x)
 
                     correct += (torch.argmax(logits, dim=1) == y).sum().item()
                     total += y.size(0)
 
-            client.f_ext.to("cpu")
-            client.personalized_module.to("cpu")
-            if client.personalized_adapter is not None:
-                client.personalized_adapter.to("cpu")
+            client.model.to("cpu")
             if total > 0:
                 acc_sum += correct / total
                 valid_clients += 1

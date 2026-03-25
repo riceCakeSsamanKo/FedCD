@@ -520,10 +520,10 @@ class TextCNN(nn.Module):
 import torchvision.models as models
 
 class VGG8(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, in_channels=3):
         super(VGG8, self).__init__()
         cfg = [64, 'M', 128, 'M', 256, 256, 'M']
-        self.features = self._make_layers(cfg)
+        self.features = self._make_layers(cfg, in_channels)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.classifier = nn.Sequential(
             nn.Linear(256, 256),
@@ -539,9 +539,8 @@ class VGG8(nn.Module):
         return x
 
     @staticmethod
-    def _make_layers(cfg):
+    def _make_layers(cfg, in_channels):
         layers = []
-        in_channels = 3
         for v in cfg:
             if v == 'M':
                 layers.append(nn.MaxPool2d(kernel_size=2, stride=2))

@@ -146,9 +146,11 @@ class PMWrapper(nn.Module):
         generalized_module,
         personalized_module,
         num_classes,
+        residual_module=None,
         feature_dim=0,
         generalized_adapter=None,
         personalized_adapter=None,
+        residual_adapter=None,
         entropy_temp_pm=1.0,
         entropy_temp_gm=1.0,
         entropy_min_pm_weight=0.1,
@@ -162,10 +164,13 @@ class PMWrapper(nn.Module):
         entropy_hard_switch_margin=0.15,
         entropy_use_ood_gate=True,
         entropy_ood_scale=1.0,
-        fusion_mode="soft",
-        pm_defer_conf_threshold=0.55,
-        pm_defer_gm_margin=0.02,
-        pm_defer_ood_threshold=0.35,
+        fusion_mode="class_aware_hard",
+        pm_defer_conf_threshold=0.35,
+        pm_defer_gm_margin=0.10,
+        pm_defer_ood_threshold=0.00,
+        class_route_rel_threshold=0.55,
+        class_route_margin=0.02,
+        class_route_use_ood_gate=False,
         local_router=None,
         router_threshold=0.5,
         router_temperature=1.0,
@@ -194,8 +199,10 @@ class PMWrapper(nn.Module):
         self.f_ext = f_ext
         self.generalized_module = generalized_module
         self.personalized_module = personalized_module
+        self.residual_module = residual_module
         self.generalized_adapter = generalized_adapter
         self.personalized_adapter = personalized_adapter
+        self.residual_adapter = residual_adapter
         self.local_router = local_router
         self.entropy_temp_pm = max(float(entropy_temp_pm), 1e-6)
         self.entropy_temp_gm = max(float(entropy_temp_gm), 1e-6)
@@ -216,6 +223,7 @@ class PMWrapper(nn.Module):
             "poe_soft",
             "learned_blend",
             "pm_defer_hard",
+            "branch_select_hard",
             "router_hard",
             "router_soft",
             "safe_logit",
@@ -227,6 +235,9 @@ class PMWrapper(nn.Module):
         self.pm_defer_conf_threshold = min(max(float(pm_defer_conf_threshold), 0.0), 1.0)
         self.pm_defer_gm_margin = max(float(pm_defer_gm_margin), 0.0)
         self.pm_defer_ood_threshold = min(max(float(pm_defer_ood_threshold), 0.0), 1.0)
+        self.class_route_rel_threshold = min(max(float(class_route_rel_threshold), 0.0), 1.0)
+        self.class_route_margin = max(float(class_route_margin), 0.0)
+        self.class_route_use_ood_gate = bool(class_route_use_ood_gate)
         self.router_threshold = min(max(float(router_threshold), 0.0), 1.0)
         self.router_temperature = max(float(router_temperature), 1e-6)
         self.router_use_feature_norm = bool(router_use_feature_norm)
@@ -346,6 +357,14 @@ class PMWrapper(nn.Module):
         if self.safe_fusion_gate is None:
             return []
         return list(self.safe_fusion_gate.parameters())
+
+    def _forward_pm_logits(self, z):
+        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+        pm_logits = self.personalized_module(z_pm)
+        if self.residual_module is not None:
+            z_rm = self.residual_adapter(z) if self.residual_adapter is not None else z
+            pm_logits = pm_logits + self.residual_module(z_rm)
+        return pm_logits
 
     def set_class_reliability(self, pm_reliability, gm_reliability):
         with torch.no_grad():
@@ -585,6 +604,8 @@ class PMWrapper(nn.Module):
         gm_prob = torch.softmax(gm_logits / self.entropy_temp_gm, dim=1)
         pm_conf = 1.0 - self._normalized_entropy(pm_prob)
         gm_conf = 1.0 - self._normalized_entropy(gm_prob)
+        pm_conf_raw = pm_conf.clone()
+        gm_conf_raw = gm_conf.clone()
         pred_pm = torch.argmax(pm_prob, dim=1)
         pred_gm = torch.argmax(gm_prob, dim=1)
         in_dist_score = (
@@ -663,6 +684,8 @@ class PMWrapper(nn.Module):
             mixed_prob = gm_weight * gm_prob + pm_weight * pm_prob
             return mixed_prob, pm_weight
 
+        pm_rel = None
+        gm_rel = None
         if self.entropy_use_class_reliability and self.pm_class_reliability.numel() == pm_prob.size(1):
             pm_rel = self.pm_class_reliability.to(pm_prob.device).index_select(0, pred_pm).unsqueeze(1)
             gm_rel = self.gm_class_reliability.to(gm_prob.device).index_select(0, pred_gm).unsqueeze(1)
@@ -675,6 +698,26 @@ class PMWrapper(nn.Module):
 
         if self.fusion_mode == "learned_blend":
             pm_weight = torch.full_like(pm_conf, self.learned_blend_alpha)
+        elif self.fusion_mode == "class_aware_hard":
+            if pm_rel is None or gm_rel is None:
+                pm_rel = torch.full_like(pm_conf_raw, 0.5)
+                gm_rel = torch.full_like(gm_conf_raw, 0.5)
+            pm_score = pm_conf_raw * pm_rel
+            gm_score = gm_conf_raw * gm_rel
+            if in_dist_score is not None and self.class_route_use_ood_gate:
+                pm_score = pm_score * in_dist_score
+            use_pm = (pm_rel >= self.class_route_rel_threshold)
+            use_pm = use_pm & ((pm_score - gm_score) >= -self.class_route_margin)
+            pm_weight = use_pm.float()
+        elif self.fusion_mode == "branch_select_hard":
+            # GM-default hard selection:
+            # use PM only when the sample looks sufficiently in-distribution
+            # for the local client and PM is not weaker than GM.
+            use_pm = (pm_conf >= self.pm_defer_conf_threshold)
+            use_pm = use_pm & ((pm_conf - gm_conf) >= -self.pm_defer_gm_margin)
+            if in_dist_score is not None:
+                use_pm = use_pm & (in_dist_score >= self.pm_defer_ood_threshold)
+            pm_weight = use_pm.float()
         elif self.fusion_mode == "pm_defer_hard":
             # PM-default routing with explicit defer-to-GM on low-confidence/OOD samples.
             use_pm = (pm_conf >= self.pm_defer_conf_threshold)
@@ -744,8 +787,7 @@ class PMWrapper(nn.Module):
             z = torch.flatten(z, 1)
         z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
         gm_logits = self.generalized_module(z_gm)
-        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
-        pm_logits = self.personalized_module(z_pm)
+        pm_logits = self._forward_pm_logits(z)
         return self.fuse_logits(gm_logits, pm_logits, feat=z)
 
 class clientFedCD(Client):
@@ -781,11 +823,32 @@ class clientFedCD(Client):
             "local",
             "server_pm_teacher",
             "server_pm_fedavg",
+            "server_pm_subnet",
             "server_proto_teacher",
             "hybrid_local_proto",
         }:
             raise ValueError(f"Unknown fedcd_gm_update_mode: {self.gm_update_mode}")
         self.local_gm_trainable = self.gm_update_mode in {"local", "hybrid_local_proto"}
+        self.task_fext_train_mode = str(
+            getattr(args, "fedcd_task_fext_train_mode", "full")
+        ).strip().lower()
+        if self.task_fext_train_mode not in {"frozen", "fc_only", "full"}:
+            self.task_fext_train_mode = "full"
+        self.task_fext_lr_scale = float(getattr(args, "fedcd_task_fext_lr_scale", 1.0))
+        self.cluster_fext_ema = float(getattr(args, "fedcd_cluster_fext_ema", 0.99))
+        self.residual_module_enable = bool(
+            getattr(args, "fedcd_residual_module_enable", True)
+        )
+        self.residual_hidden_dim = int(getattr(args, "fedcd_residual_hidden_dim", 128))
+        self.branch_consistency_weight = float(
+            getattr(args, "fedcd_branch_consistency_weight", 0.1)
+        )
+        self.branch_consistency_temp = float(
+            getattr(args, "fedcd_branch_consistency_temp", 2.0)
+        )
+        self.residual_logit_reg_weight = float(
+            getattr(args, "fedcd_residual_logit_reg_weight", 1e-4)
+        )
         self.entropy_temp_pm = float(getattr(args, "fedcd_entropy_temp_pm", 1.0))
         self.entropy_temp_gm = float(getattr(args, "fedcd_entropy_temp_gm", 1.0))
         self.entropy_min_pm_weight = float(getattr(args, "fedcd_entropy_min_pm_weight", 0.1))
@@ -799,7 +862,7 @@ class clientFedCD(Client):
         self.entropy_hard_switch_margin = float(getattr(args, "fedcd_entropy_hard_switch_margin", 0.15))
         self.entropy_use_ood_gate = bool(getattr(args, "fedcd_entropy_use_ood_gate", True))
         self.entropy_ood_scale = float(getattr(args, "fedcd_entropy_ood_scale", 1.0))
-        self.fusion_mode = str(getattr(args, "fedcd_fusion_mode", "soft")).strip().lower()
+        self.fusion_mode = str(getattr(args, "fedcd_fusion_mode", "class_aware_hard")).strip().lower()
         self.learned_blend_alpha = float(getattr(args, "fedcd_learned_blend_alpha", 0.5))
         self.learned_blend_auto_tune = bool(getattr(args, "fedcd_learned_blend_auto_tune", False))
         self.learned_blend_period = max(1, int(getattr(args, "fedcd_learned_blend_period", 1)))
@@ -827,9 +890,12 @@ class clientFedCD(Client):
         self.safe_fusion_route_gap_power = float(
             getattr(args, "fedcd_safe_fusion_route_gap_power", 1.0)
         )
-        self.pm_defer_conf_threshold = float(getattr(args, "fedcd_pm_defer_conf_threshold", 0.55))
-        self.pm_defer_gm_margin = float(getattr(args, "fedcd_pm_defer_gm_margin", 0.02))
-        self.pm_defer_ood_threshold = float(getattr(args, "fedcd_pm_defer_ood_threshold", 0.35))
+        self.pm_defer_conf_threshold = float(getattr(args, "fedcd_pm_defer_conf_threshold", 0.35))
+        self.pm_defer_gm_margin = float(getattr(args, "fedcd_pm_defer_gm_margin", 0.10))
+        self.pm_defer_ood_threshold = float(getattr(args, "fedcd_pm_defer_ood_threshold", 0.00))
+        self.class_route_rel_threshold = float(getattr(args, "fedcd_class_route_rel_threshold", 0.55))
+        self.class_route_margin = float(getattr(args, "fedcd_class_route_margin", 0.02))
+        self.class_route_use_ood_gate = bool(getattr(args, "fedcd_class_route_use_ood_gate", False))
         self.branch_temp_calibration_enable = bool(
             getattr(args, "fedcd_branch_temp_calibration_enable", False)
         )
@@ -932,10 +998,13 @@ class clientFedCD(Client):
             self.personalized_module,
         )
         self.f_ext = self._build_f_ext(args, target_dim=target_fext_dim)
+        self.cluster_f_ext = copy.deepcopy(self.f_ext)
         self.f_ext_dim = getattr(self.f_ext, "out_dim", None)
+        self.residual_module = self._build_residual_module(self.personalized_module)
         # Adapter is intentionally disabled.
         self.generalized_adapter = None
         self.personalized_adapter = None
+        self.residual_adapter = None
         self.pm_class_reliability = torch.full((int(self.num_classes),), 0.5, dtype=torch.float32)
         self.gm_class_reliability = torch.full((int(self.num_classes),), 0.5, dtype=torch.float32)
         self.gate_feature_mean = (
@@ -989,9 +1058,11 @@ class clientFedCD(Client):
             self.generalized_module,
             self.personalized_module,
             self.num_classes,
+            residual_module=self.residual_module,
             feature_dim=(int(self.f_ext_dim) if self.f_ext_dim is not None else 0),
             generalized_adapter=self.generalized_adapter,
             personalized_adapter=self.personalized_adapter,
+            residual_adapter=self.residual_adapter,
             entropy_temp_pm=(self.entropy_temp_pm * self.pm_temp_calibrated),
             entropy_temp_gm=(self.entropy_temp_gm * self.gm_temp_calibrated),
             entropy_min_pm_weight=self.entropy_min_pm_weight,
@@ -1009,6 +1080,9 @@ class clientFedCD(Client):
             pm_defer_conf_threshold=self.pm_defer_conf_threshold,
             pm_defer_gm_margin=self.pm_defer_gm_margin,
             pm_defer_ood_threshold=self.pm_defer_ood_threshold,
+            class_route_rel_threshold=self.class_route_rel_threshold,
+            class_route_margin=self.class_route_margin,
+            class_route_use_ood_gate=self.class_route_use_ood_gate,
             local_router=self.router,
             router_threshold=self.router_threshold,
             router_temperature=self.router_temperature,
@@ -1042,6 +1116,8 @@ class clientFedCD(Client):
 
         # Local GM training can be toggled by fedcd_gm_update_mode.
         self._set_local_gm_trainable(self.local_gm_trainable)
+        self._set_task_fext_trainable(self.task_fext_train_mode)
+        self._set_cluster_fext_frozen()
 
         # Optimizer: PM uses base lr, GM uses scaled lr.
         self.optimizer = self._build_optimizer()
@@ -1091,9 +1167,13 @@ class clientFedCD(Client):
         self.f_ext.to(device)
         self.generalized_module.to(device)
         self.personalized_module.to(device)
+        if self.residual_module is not None:
+            self.residual_module.to(device)
         self.f_ext.eval()
         self.generalized_module.eval()
         self.personalized_module.eval()
+        if self.residual_module is not None:
+            self.residual_module.eval()
         if self.generalized_adapter is not None:
             self.generalized_adapter.to(device)
             self.generalized_adapter.eval()
@@ -1116,9 +1196,8 @@ class clientFedCD(Client):
                 if z.dim() > 2:
                     z = torch.flatten(z, 1)
                 z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
-                z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
                 logits_gm = self.generalized_module(z_gm)
-                logits_pm = self.personalized_module(z_pm)
+                _, logits_pm, _, _ = self._forward_personalized_branch(z)
 
                 pm_logits_all.append(logits_pm.detach().cpu())
                 gm_logits_all.append(logits_gm.detach().cpu())
@@ -1132,6 +1211,8 @@ class clientFedCD(Client):
             self.f_ext.to("cpu")
             self.generalized_module.to("cpu")
             self.personalized_module.to("cpu")
+            if self.residual_module is not None:
+                self.residual_module.to("cpu")
             if self.generalized_adapter is not None:
                 self.generalized_adapter.to("cpu")
             if self.personalized_adapter is not None:
@@ -1261,6 +1342,43 @@ class clientFedCD(Client):
         f_ext.eval()
         return f_ext
 
+    def _set_task_fext_trainable(self, train_mode):
+        mode = str(train_mode).strip().lower()
+        if mode not in {"frozen", "fc_only", "full"}:
+            mode = "full"
+        for p in self.f_ext.parameters():
+            p.requires_grad = False
+        if mode == "full":
+            for p in self.f_ext.parameters():
+                p.requires_grad = True
+        elif mode == "fc_only":
+            fc = getattr(self.f_ext, "fc", None)
+            if isinstance(fc, nn.Module):
+                for p in fc.parameters():
+                    p.requires_grad = True
+        self.task_fext_train_mode = mode
+
+    def _set_cluster_fext_frozen(self):
+        for p in self.cluster_f_ext.parameters():
+            p.requires_grad = False
+        self.cluster_f_ext.eval()
+
+    def _hard_sync_cluster_fext(self):
+        self.cluster_f_ext.load_state_dict(self.f_ext.state_dict(), strict=True)
+        self._set_cluster_fext_frozen()
+
+    def _ema_update_cluster_fext(self):
+        ema = min(max(float(self.cluster_fext_ema), 0.0), 1.0)
+        with torch.no_grad():
+            task_state = self.f_ext.state_dict()
+            cluster_state = self.cluster_f_ext.state_dict()
+            for key, value in cluster_state.items():
+                src = task_state.get(key, None)
+                if src is None:
+                    continue
+                value.copy_(ema * value + (1.0 - ema) * src.detach().to(value.device))
+        self._set_cluster_fext_frozen()
+
     def _extract_module(self, model):
         if hasattr(model, "classifier") and isinstance(model.classifier, nn.Module):
             return model.classifier
@@ -1274,6 +1392,41 @@ class clientFedCD(Client):
             if isinstance(layer, nn.Linear):
                 return layer.in_features
         return None
+
+    @staticmethod
+    def _last_linear_out_features(module):
+        out_dim = None
+        for layer in module.modules():
+            if isinstance(layer, nn.Linear):
+                out_dim = layer.out_features
+        return out_dim
+
+    @staticmethod
+    def _zero_init_module_last_linear(module):
+        last_linear = None
+        for layer in module.modules():
+            if isinstance(layer, nn.Linear):
+                last_linear = layer
+        if last_linear is not None:
+            nn.init.zeros_(last_linear.weight)
+            if last_linear.bias is not None:
+                nn.init.zeros_(last_linear.bias)
+
+    def _build_residual_module(self, base_module):
+        if not self.residual_module_enable:
+            return None
+        in_dim = self._first_linear_in_features(base_module)
+        out_dim = self._last_linear_out_features(base_module)
+        if in_dim is None or out_dim is None:
+            return None
+        hidden_dim = max(8, int(self.residual_hidden_dim))
+        residual_module = nn.Sequential(
+            nn.Linear(int(in_dim), hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, int(out_dim)),
+        )
+        self._zero_init_module_last_linear(residual_module)
+        return residual_module
 
     def _resolve_module_input_dim(self, *modules):
         dims = [self._first_linear_in_features(m) for m in modules]
@@ -1295,6 +1448,20 @@ class clientFedCD(Client):
             return feat, logits
         logits = module(z)
         return z, logits
+
+    def _forward_personalized_branch(self, z):
+        z_cm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
+        cm_feat, cm_logits = self._forward_module_with_feature(z_cm, self.personalized_module)
+        rm_feat = None
+        rm_logits = None
+        if self.residual_module is not None:
+            z_rm = self.residual_adapter(z) if self.residual_adapter is not None else z
+            rm_feat, rm_logits = self._forward_module_with_feature(z_rm, self.residual_module)
+        pm_feat = cm_feat
+        if rm_feat is not None and rm_feat.shape == cm_feat.shape:
+            pm_feat = cm_feat + rm_feat
+        pm_logits = cm_logits if rm_logits is None else (cm_logits + rm_logits)
+        return pm_feat, pm_logits, cm_logits, rm_logits
 
     def _feature_negative_correlation_loss(self, gm_feat, pm_feat):
         # FedEXT-inspired feature-wise negative correlation:
@@ -1647,8 +1814,8 @@ class clientFedCD(Client):
 
     def get_feature_stats(self, max_samples=512):
         # Estimate mean/variance of f_ext(z) on local data
-        self.f_ext.to("cpu")
-        self.f_ext.eval()
+        self.cluster_f_ext.to("cpu")
+        self.cluster_f_ext.eval()
         trainloader = self.load_train_data(batch_size=min(self.batch_size, 32))
 
         count = 0
@@ -1660,7 +1827,7 @@ class clientFedCD(Client):
                 if type(x) == type([]):
                     x = x[0]
                 x = x.to("cpu")
-                feat = self.f_ext(x)
+                feat = self.cluster_f_ext(x)
                 if feat.dim() > 2:
                     feat = torch.flatten(feat, 1)
 
@@ -1708,11 +1875,19 @@ class clientFedCD(Client):
             self.gm.to(device)
             self.generalized_module.to(device)
             self.personalized_module.to(device)
+            if self.residual_module is not None:
+                self.residual_module.to(device)
             if self.generalized_adapter is not None:
                 self.generalized_adapter.to(device)
             if self.personalized_adapter is not None:
                 self.personalized_adapter.to(device)
+            if any(p.requires_grad for p in self.f_ext.parameters()):
+                self.f_ext.train()
+            else:
+                self.f_ext.eval()
             self.personalized_module.train()
+            if self.residual_module is not None:
+                self.residual_module.train()
             if self.router is not None:
                 self.router.to(device)
                 self.router.train()
@@ -1753,8 +1928,7 @@ class clientFedCD(Client):
                                 gm_feat, logits_gm = self._forward_module_with_feature(z_gm, self.generalized_module)
 
                         # 2. PM의 예측
-                        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
-                        pm_feat, logits_pm = self._forward_module_with_feature(z_pm, self.personalized_module)
+                        pm_feat, logits_pm, logits_cm, logits_rm = self._forward_personalized_branch(z)
                         mixed_prob, pm_weight = self.model.mix_prob(logits_gm, logits_pm, feat=z)
                         fused_logits = torch.log(mixed_prob.clamp_min(1e-12))
 
@@ -1770,6 +1944,19 @@ class clientFedCD(Client):
                                 loss = loss + self.pm_logits_weight * self.loss_func(logits_pm, y)
                             if self.pm_only_weight > 0:
                                 loss = loss + self.pm_only_weight * self.loss_func(logits_pm, y)
+                            if self.branch_consistency_weight > 0:
+                                kd_temp = max(self.branch_consistency_temp, 1e-6)
+                                pm_log_prob = F.log_softmax(logits_pm / kd_temp, dim=1)
+                                gm_log_prob = F.log_softmax(logits_gm / kd_temp, dim=1)
+                                pm_prob = torch.softmax(logits_pm / kd_temp, dim=1)
+                                gm_prob = torch.softmax(logits_gm / kd_temp, dim=1)
+                                consistency = 0.5 * (
+                                    F.kl_div(pm_log_prob, gm_prob, reduction="batchmean")
+                                    + F.kl_div(gm_log_prob, pm_prob, reduction="batchmean")
+                                ) * (kd_temp * kd_temp)
+                                loss = loss + self.branch_consistency_weight * consistency
+                            if logits_rm is not None and self.residual_logit_reg_weight > 0:
+                                loss = loss + self.residual_logit_reg_weight * logits_rm.pow(2).mean()
                             if self.nc_weight > 0:
                                 nc_loss = self._feature_negative_correlation_loss(gm_feat, pm_feat)
                                 loss = loss + self.nc_weight * nc_loss
@@ -1831,13 +2018,8 @@ class clientFedCD(Client):
                                         if self.generalized_adapter is not None
                                         else z_router
                                     )
-                                    z_router_pm = (
-                                        self.personalized_adapter(z_router)
-                                        if self.personalized_adapter is not None
-                                        else z_router
-                                    )
                                     logits_gm_router = self.generalized_module(z_router_gm)
-                                    logits_pm_router = self.personalized_module(z_router_pm)
+                                    _, logits_pm_router, _, _ = self._forward_personalized_branch(z_router)
                                 router_feat = z_router
                                 router_logits_pm = logits_pm_router
                                 router_logits_gm = logits_gm_router
@@ -1862,6 +2044,8 @@ class clientFedCD(Client):
                 self.pm.to("cpu")
                 self.generalized_module.to("cpu")
                 self.personalized_module.to("cpu")
+                if self.residual_module is not None:
+                    self.residual_module.to("cpu")
                 if self.generalized_adapter is not None:
                     self.generalized_adapter.to("cpu")
                 if self.personalized_adapter is not None:
@@ -1893,6 +2077,8 @@ class clientFedCD(Client):
                 self.f_ext.to("cpu")
                 self.gm.to("cpu")
                 self.pm.to("cpu")
+                if self.residual_module is not None:
+                    self.residual_module.to("cpu")
                 self.model.to("cpu")
                 reduced = max(1, batch_size // 2)
                 if reduced < batch_size:
@@ -1910,6 +2096,7 @@ class clientFedCD(Client):
                 raise
 
         if trained:
+            self._ema_update_cluster_fext()
             self.round_counter += 1
             stat_samples = max(int(self.gate_reliability_samples), int(self.gate_feature_samples))
             self._update_gate_class_reliability(max_samples=stat_samples)
@@ -1943,9 +2130,13 @@ class clientFedCD(Client):
         self.f_ext.to(device)
         self.generalized_module.to(device)
         self.personalized_module.to(device)
+        if self.residual_module is not None:
+            self.residual_module.to(device)
         self.f_ext.eval()
         self.generalized_module.eval()
         self.personalized_module.eval()
+        if self.residual_module is not None:
+            self.residual_module.eval()
         if self.generalized_adapter is not None:
             self.generalized_adapter.to(device)
             self.generalized_adapter.eval()
@@ -1964,9 +2155,9 @@ class clientFedCD(Client):
                 if z.dim() > 2:
                     z = torch.flatten(z, 1)
                 z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
-                z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
                 gm_pred = torch.argmax(self.generalized_module(z_gm), dim=1)
-                pm_pred = torch.argmax(self.personalized_module(z_pm), dim=1)
+                _, logits_pm, _, _ = self._forward_personalized_branch(z)
+                pm_pred = torch.argmax(logits_pm, dim=1)
 
                 for cls in y.unique():
                     cls_id = int(cls.item())
@@ -2077,6 +2268,8 @@ class clientFedCD(Client):
             self.f_ext.to("cpu")
             self.generalized_module.to("cpu")
             self.personalized_module.to("cpu")
+            if self.residual_module is not None:
+                self.residual_module.to("cpu")
             if self.generalized_adapter is not None:
                 self.generalized_adapter.to("cpu")
             if self.personalized_adapter is not None:
@@ -2094,13 +2287,18 @@ class clientFedCD(Client):
             self.generalized_module.to(device)
             self.f_ext.eval()
             self.personalized_module.to(device)
+            if self.residual_module is not None:
+                self.residual_module.to(device)
             if self.generalized_adapter is not None:
                 self.generalized_adapter.to(device)
             if self.personalized_adapter is not None:
                 self.personalized_adapter.to(device)
             self.personalized_module.train()
+            if self.residual_module is not None:
+                self.residual_module.train()
             optimizer = torch.optim.SGD(
                 list(self.personalized_module.parameters()) +
+                (list(self.residual_module.parameters()) if self.residual_module is not None else []) +
                 (list(self.personalized_adapter.parameters()) if self.personalized_adapter is not None else []),
                 lr=self.learning_rate
             )
@@ -2119,8 +2317,7 @@ class clientFedCD(Client):
                         z = self.f_ext(x)
                         if z.dim() > 2:
                             z = torch.flatten(z, 1)
-                        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
-                        logits_pm = self.personalized_module(z_pm)
+                        _, logits_pm, _, _ = self._forward_personalized_branch(z)
                         z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
                         logits_gm = self.generalized_module(z_gm)
                         logits = self.model.fuse_logits(logits_gm, logits_pm, feat=z)
@@ -2135,6 +2332,8 @@ class clientFedCD(Client):
                 self.f_ext.to("cpu")
                 self.generalized_module.to("cpu")
                 self.personalized_module.to("cpu")
+                if self.residual_module is not None:
+                    self.residual_module.to("cpu")
                 if self.generalized_adapter is not None:
                     self.generalized_adapter.to("cpu")
                 if self.personalized_adapter is not None:
@@ -2159,6 +2358,8 @@ class clientFedCD(Client):
                 self.f_ext.to("cpu")
                 self.generalized_module.to("cpu")
                 self.personalized_module.to("cpu")
+                if self.residual_module is not None:
+                    self.residual_module.to("cpu")
                 self.model.to("cpu")
                 _warmup_once("cpu", max(1, batch_size // 2))
                 return
@@ -2184,6 +2385,11 @@ class clientFedCD(Client):
         if gm_parts is not None:
             if gm_parts and next(iter(gm_parts.values())).is_cuda:
                 gm_parts = {k: v.detach().cpu() for k, v in gm_parts.items()}
+            f_ext_state = {
+                k.replace("f_ext.", ""): v
+                for k, v in gm_parts.items()
+                if k.startswith("f_ext.")
+            }
             generalized_module_state = {
                 k.replace("generalized_module.", ""): v
                 for k, v in gm_parts.items()
@@ -2209,6 +2415,10 @@ class clientFedCD(Client):
                         k.replace("adapter.", ""): v for k, v in gm_parts.items() if k.startswith("adapter.")
                     }
 
+            if f_ext_state:
+                self.f_ext.load_state_dict(f_ext_state, strict=True)
+                self._hard_sync_cluster_fext()
+                gm_updated = True
             if generalized_module_state:
                 self.generalized_module.load_state_dict(generalized_module_state, strict=True)
                 gm_updated = True
@@ -2221,11 +2431,20 @@ class clientFedCD(Client):
                 gm_state = {k: v.detach().cpu() for k, v in gm_state.items()}
             if gm_state:
                 if any(k.startswith("generalized_module.") for k in gm_state.keys()):
+                    f_ext_state = {
+                        k.replace("f_ext.", ""): v
+                        for k, v in gm_state.items()
+                        if k.startswith("f_ext.")
+                    }
                     generalized_module_state = {
                         k.replace("generalized_module.", ""): v
                         for k, v in gm_state.items()
                         if k.startswith("generalized_module.")
                     }
+                    if f_ext_state:
+                        self.f_ext.load_state_dict(f_ext_state, strict=True)
+                        self._hard_sync_cluster_fext()
+                        gm_updated = True
                     if generalized_module_state:
                         self.generalized_module.load_state_dict(generalized_module_state, strict=True)
                         gm_updated = True
@@ -2236,6 +2455,7 @@ class clientFedCD(Client):
                 self.generalized_adapter.load_state_dict(gm_adapter_state, strict=True)
                 gm_updated = True
 
+        self.model.f_ext = self.f_ext
         self.model.generalized_module = self.generalized_module
         if self.generalized_adapter is not None:
             self.model.generalized_adapter = self.generalized_adapter
@@ -2281,6 +2501,7 @@ class clientFedCD(Client):
 
         if f_ext_state:
             self.f_ext.load_state_dict(f_ext_state, strict=True)
+            self._hard_sync_cluster_fext()
         if generalized_module_state:
             self.generalized_module.load_state_dict(generalized_module_state, strict=True)
         if self.generalized_adapter is not None and generalized_adapter_state:
@@ -2298,6 +2519,7 @@ class clientFedCD(Client):
         self.model.f_ext = self.f_ext
         self.model.generalized_module = self.generalized_module
         self.model.personalized_module = self.personalized_module
+        self.model.residual_module = self.residual_module
         if self.generalized_adapter is not None:
             self.model.generalized_adapter = self.generalized_adapter
         if self.personalized_adapter is not None:
@@ -2339,6 +2561,7 @@ class clientFedCD(Client):
             self.personalized_module.load_state_dict(personalized_module_state, strict=True)
         if self.personalized_adapter is not None and personalized_adapter_state:
             self.personalized_adapter.load_state_dict(personalized_adapter_state, strict=True)
+        self.model.personalized_module = self.personalized_module
             
         # [Fix] Reset optimizer state when model parameters are forcibly changed
         # This prevents momentum from previous (possibly incompatible) weights 
@@ -2356,11 +2579,14 @@ class clientFedCD(Client):
         pm_params = list(self.personalized_module.parameters())
         if self.personalized_adapter is not None:
             pm_params += list(self.personalized_adapter.parameters())
+        if self.residual_module is not None:
+            pm_params += list(self.residual_module.parameters())
 
         router_params = []
         if self.router is not None:
             router_params = list(self.router.parameters())
 
+        fext_params = [p for p in self.f_ext.parameters() if p.requires_grad]
         gm_params = []
         if self.local_gm_trainable:
             gm_params = list(self.generalized_module.parameters())
@@ -2368,6 +2594,7 @@ class clientFedCD(Client):
                 gm_params += list(self.generalized_adapter.parameters())
 
         gm_lr = max(self.learning_rate * self.gm_lr_scale, 0.0)
+        fext_lr = max(self.learning_rate * self.task_fext_lr_scale, 0.0)
         router_lr = max(self.learning_rate * self.router_lr_scale, 0.0)
         safe_fusion_lr = max(self.learning_rate * self.safe_fusion_lr_scale, 0.0)
         fusion_params = []
@@ -2376,6 +2603,8 @@ class clientFedCD(Client):
         param_groups = []
         if pm_params:
             param_groups.append({"params": pm_params, "lr": self.learning_rate})
+        if fext_params and fext_lr > 0:
+            param_groups.append({"params": fext_params, "lr": fext_lr})
         if fusion_params and safe_fusion_lr > 0:
             param_groups.append({"params": fusion_params, "lr": safe_fusion_lr})
         if router_params and router_lr > 0:
@@ -2390,8 +2619,7 @@ class clientFedCD(Client):
             z = torch.flatten(z, 1)
         z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
         gm_logits = self.generalized_module(z_gm)
-        z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
-        pm_logits = self.personalized_module(z_pm)
+        _, pm_logits, _, _ = self._forward_personalized_branch(z)
         mixed_prob, pm_weight = self.model.mix_prob(gm_logits, pm_logits, feat=z)
         fused_logits = torch.log(mixed_prob.clamp_min(1e-12))
         return fused_logits, gm_logits, pm_logits, pm_weight
@@ -2434,8 +2662,8 @@ class clientFedCD(Client):
         trainloader = DataLoader(train_data, **loader_kwargs)
 
         device = "cpu"
-        self.f_ext.to(device)
-        self.f_ext.eval()
+        self.cluster_f_ext.to(device)
+        self.cluster_f_ext.eval()
 
         C = int(self.num_classes)
         counts = torch.zeros(C, dtype=torch.float32)
@@ -2450,7 +2678,7 @@ class clientFedCD(Client):
                 x = x.to(device)
                 y = y.to(device).long()
 
-                z = self.f_ext(x)
+                z = self.cluster_f_ext(x)
                 if z.dim() > 2:
                     z = torch.flatten(z, 1)
 
@@ -2482,7 +2710,7 @@ class clientFedCD(Client):
                     break
 
         if feat_sum is None:
-            D = int(getattr(self.f_ext, "out_dim", 0))
+            D = int(getattr(self.cluster_f_ext, "out_dim", 0))
             feat_sum = torch.zeros(C, D, dtype=torch.float32)
             feat_sq_sum = torch.zeros(C, D, dtype=torch.float32)
 
@@ -2495,10 +2723,16 @@ class clientFedCD(Client):
     def upload_generalized_parameters(self):
         if not self.local_gm_trainable:
             return {}
-        state = {
+        state = {}
+        if self.task_fext_train_mode != "frozen":
+            state.update({
+                f"f_ext.{k}": v.detach().cpu()
+                for k, v in self.f_ext.state_dict().items()
+            })
+        state.update({
             f"generalized_module.{k}": v.detach().cpu()
             for k, v in self.generalized_module.state_dict().items()
-        }
+        })
         if self.generalized_adapter is not None:
             state.update({
                 f"generalized_adapter.{k}": v.detach().cpu()
@@ -2512,6 +2746,8 @@ class clientFedCD(Client):
         Returns:
             {
               "counts": [C],
+              "correct_count": [C],
+              "conf_sum": [C],
               "feat_sum": [C, D],
               "feat_sq_sum": [C, D],
               "logit_sum": [C, C],
@@ -2535,12 +2771,17 @@ class clientFedCD(Client):
         self.f_ext.eval()
         self.personalized_module.to(device)
         self.personalized_module.eval()
+        if self.residual_module is not None:
+            self.residual_module.to(device)
+            self.residual_module.eval()
         if self.personalized_adapter is not None:
             self.personalized_adapter.to(device)
             self.personalized_adapter.eval()
 
         C = int(self.num_classes)
         counts = torch.zeros(C, dtype=torch.float32)
+        correct_count = torch.zeros(C, dtype=torch.float32)
+        conf_sum = torch.zeros(C, dtype=torch.float32)
         feat_sum = None
         feat_sq_sum = None
         logit_sum = torch.zeros(C, C, dtype=torch.float32)
@@ -2562,8 +2803,10 @@ class clientFedCD(Client):
                     feat_sum = torch.zeros(C, D, dtype=torch.float32)
                     feat_sq_sum = torch.zeros(C, D, dtype=torch.float32)
 
-                z_pm = self.personalized_adapter(z) if self.personalized_adapter is not None else z
-                pm_logits = self.personalized_module(z_pm)
+                _, pm_logits, _, _ = self._forward_personalized_branch(z)
+                pm_prob = torch.softmax(pm_logits, dim=1)
+                pm_pred = torch.argmax(pm_prob, dim=1)
+                pm_conf = pm_prob.max(dim=1).values
 
                 if max_samples > 0 and seen + y.size(0) > max_samples:
                     keep = max_samples - seen
@@ -2572,6 +2815,8 @@ class clientFedCD(Client):
                     y = y[:keep]
                     z = z[:keep]
                     pm_logits = pm_logits[:keep]
+                    pm_pred = pm_pred[:keep]
+                    pm_conf = pm_conf[:keep]
 
                 for cls in y.unique():
                     cls_id = int(cls.item())
@@ -2581,6 +2826,8 @@ class clientFedCD(Client):
                         continue
                     z_cls = z[m]
                     counts[cls_id] += float(cnt)
+                    correct_count[cls_id] += float(pm_pred[m].eq(y[m]).sum().item())
+                    conf_sum[cls_id] += pm_conf[m].sum().float()
                     feat_sum[cls_id] += z_cls.sum(dim=0).float()
                     feat_sq_sum[cls_id] += (z_cls * z_cls).sum(dim=0).float()
                     logit_sum[cls_id] += pm_logits[m].sum(dim=0).float()
@@ -2597,6 +2844,8 @@ class clientFedCD(Client):
 
         return {
             "counts": counts.cpu(),
+            "correct_count": correct_count.cpu(),
+            "conf_sum": conf_sum.cpu(),
             "feat_sum": feat_sum.cpu(),
             "feat_sq_sum": feat_sq_sum.cpu(),
             "logit_sum": logit_sum.cpu(),

@@ -1,0 +1,2 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc
+Ditto,pat_nc20,Cifar10_pat_nc20,failed,1,2026-03-18T12:41:05Z,2026-03-18T12:43:35Z

@@ -1,4 +1,5 @@
 import time
+import torch
 import numpy as np
 from flcore.clients.clientproto import clientProto
 from flcore.servers.serverbase import Server
@@ -21,6 +22,20 @@ class FedProto(Server):
         self.Budget = []
         self.num_classes = args.num_classes
         self.global_protos = [None for _ in range(args.num_classes)]
+
+    def _proto_payload_mb(self, protos):
+        if protos is None:
+            return 0.0
+
+        items = protos.values() if hasattr(protos, "values") else protos
+        total_bytes = 0
+        for proto in items:
+            if proto is None or type(proto) == type([]):
+                continue
+            if torch.is_tensor(proto):
+                total_bytes += proto.numel() * proto.element_size()
+
+        return total_bytes / (1024 * 1024)
 
 
     def train(self):
@@ -71,6 +86,8 @@ class FedProto(Server):
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
 
+        self.downlink_MB += len(self.clients) * self._proto_payload_mb(self.global_protos)
+
     def receive_protos(self):
         assert (len(self.selected_clients) > 0)
 
@@ -79,19 +96,33 @@ class FedProto(Server):
         for client in self.selected_clients:
             self.uploaded_ids.append(client.id)
             self.uploaded_protos.append(client.protos)
+            self.uplink_MB += self._proto_payload_mb(client.protos)
 
     def evaluate(self, acc=None, loss=None):
         stats = self.test_metrics()
         stats_train = self.train_metrics()
 
-        test_acc = sum(stats[2])*1.0 / sum(stats[1])
-        train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
-        accs = [a / n for a, n in zip(stats[2], stats[1])]
+        total_test_samples = sum(stats[1])
+        total_train_samples = sum(stats_train[1])
+
+        if total_test_samples > 0:
+            local_test_acc = sum(stats[2]) * 1.0 / total_test_samples
+        else:
+            local_test_acc = 0.0
+
+        if total_train_samples > 0:
+            train_loss = sum(stats_train[2]) * 1.0 / total_train_samples
+        else:
+            train_loss = 0.0
+
+        global_test_acc = self.evaluate_global_test_acc()
+        accs = [a / n for a, n in zip(stats[2], stats[1]) if n > 0]
+        std_acc = float(np.std(accs)) if len(accs) > 0 else 0.0
         
         if acc == None:
-            self.rs_test_acc.append(test_acc)
+            self.rs_test_acc.append(local_test_acc)
         else:
-            acc.append(test_acc)
+            acc.append(local_test_acc)
         
         if loss == None:
             self.rs_train_loss.append(train_loss)
@@ -99,9 +130,15 @@ class FedProto(Server):
             loss.append(train_loss)
 
         print("Averaged Train Loss: {:.4f}".format(train_loss))
-        print("Averaged Test Accuracy: {:.4f}".format(test_acc))
-        # self.print_(test_acc, train_acc, train_loss)
-        print("Std Test Accuracy: {:.4f}".format(np.std(accs)))
+        print("Averaged Local Test Accuracy: {:.4f}".format(local_test_acc))
+        if global_test_acc is not None:
+            print("Averaged Global Test Accuracy: {:.4f}".format(global_test_acc))
+        print("Std Test Accuracy: {:.4f}".format(std_acc))
+
+        if acc == None and global_test_acc is not None:
+            self.rs_global_test_acc.append(global_test_acc)
+
+        self.log_usage(local_test_acc, train_loss, global_test_acc)
             
 
 def proto_aggregation(local_protos_list):

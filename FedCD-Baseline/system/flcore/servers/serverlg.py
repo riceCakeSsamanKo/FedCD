@@ -11,6 +11,8 @@ class LG_FedAvg(Server):
         super().__init__(args, times)
         
         self.global_model = copy.deepcopy(args.model.head)
+        # LG-FedAvg only broadcasts/aggregates the personalized head.
+        self.model_size_MB = sum(p.numel() for p in self.global_model.parameters()) * 4 / (1024 * 1024)
 
         # select slow clients
         self.set_slow_clients()
@@ -91,3 +93,5 @@ class LG_FedAvg(Server):
                 self.uploaded_models.append(client.model.head)
         for i, w in enumerate(self.uploaded_weights):
             self.uploaded_weights[i] = w / tot_samples
+
+        self.uplink_MB += len(self.uploaded_models) * self.model_size_MB
