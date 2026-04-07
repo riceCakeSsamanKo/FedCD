@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_fedala_vgg8_cifar10_nc20.sh

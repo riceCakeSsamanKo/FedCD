@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/queue_pfedme_after_cross_gpfl_cifar10.sh

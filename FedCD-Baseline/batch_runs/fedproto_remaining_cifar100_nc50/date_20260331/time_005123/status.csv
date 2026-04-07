@@ -1,0 +1,3 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc
+FedProto,dir0.5_nc50,Cifar100_dir0.5_nc50,ok,0,2026-03-31T00:51:23Z,2026-03-31T07:09:41Z
+FedProto,dir1.0_nc50,Cifar100_dir1.0_nc50,ok,0,2026-03-31T07:09:41Z,2026-03-31T14:05:54Z

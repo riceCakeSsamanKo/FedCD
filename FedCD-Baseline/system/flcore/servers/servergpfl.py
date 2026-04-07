@@ -27,6 +27,23 @@ class GPFL(Server):
         # self.load_model()
         self.Budget = []
 
+        self.base_model_size_MB = sum(p.numel() for p in self.global_model.base.parameters()) * 4 / (1024 * 1024)
+        self.gce_model_size_MB = sum(p.numel() for p in self.GCE.parameters()) * 4 / (1024 * 1024)
+        self.cov_model_size_MB = sum(p.numel() for p in self.CoV.parameters()) * 4 / (1024 * 1024)
+        self.model_size_MB = self.base_model_size_MB
+
+    def send_models(self):
+        assert (len(self.clients) > 0)
+
+        clients = self.selected_clients if len(self.selected_clients) > 0 else self.clients
+        global_base = self.global_model.base if hasattr(self.global_model, 'base') else self.global_model
+        for client in clients:
+            start_time = time.time()
+            client.set_parameters(global_base)
+            client.send_time_cost['num_rounds'] += 1
+            client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+
+        self.downlink_MB += len(clients) * self.base_model_size_MB
 
     def train(self):
         for i in range(self.global_rounds+1):
@@ -84,6 +101,8 @@ class GPFL(Server):
             self.uploaded_weights.append(client.train_samples / active_train_samples)
             self.uploaded_ids.append(client.id)
             self.uploaded_models.append(client.model.base)
+
+        self.uplink_MB += len(self.uploaded_models) * self.base_model_size_MB
             
     def global_GCE(self):
         active_train_samples = 0
@@ -96,6 +115,8 @@ class GPFL(Server):
             self.uploaded_weights.append(client.train_samples / active_train_samples)
             self.uploaded_model_gs.append(client.GCE)
 
+        self.uplink_MB += len(self.uploaded_model_gs) * self.gce_model_size_MB
+
         self.GCE = copy.deepcopy(self.uploaded_model_gs[0])
         for param in self.GCE.parameters():
             param.data = torch.zeros_like(param.data)
@@ -105,6 +126,8 @@ class GPFL(Server):
 
         for client in self.clients:
             client.set_GCE(self.GCE)
+
+        self.downlink_MB += len(self.clients) * self.gce_model_size_MB
 
     def add_GCE(self, w, GCE):
         for server_param, client_param in zip(self.GCE.parameters(), GCE.parameters()):
@@ -121,6 +144,8 @@ class GPFL(Server):
             self.uploaded_weights.append(client.train_samples / active_train_samples)
             self.uploaded_model_gs.append(client.CoV)
 
+        self.uplink_MB += len(self.uploaded_model_gs) * self.cov_model_size_MB
+
         self.CoV = copy.deepcopy(self.uploaded_model_gs[0])
         for param in self.CoV.parameters():
             param.data = torch.zeros_like(param.data)
@@ -130,6 +155,8 @@ class GPFL(Server):
 
         for client in self.clients:
             client.set_CoV(self.CoV)
+
+        self.downlink_MB += len(self.clients) * self.cov_model_size_MB
 
     def add_CoV(self, w, CoV):
         for server_param, client_param in zip(self.CoV.parameters(), CoV.parameters()):

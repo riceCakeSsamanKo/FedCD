@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_requested_baselines_vgg8_fashionmnist_dir_only_nc20_parallel.sh

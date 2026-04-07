@@ -1,0 +1,2 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc
+pFedMe,pat_nc20,Cifar100_pat_nc20,ok,0,2026-03-31T04:39:37Z,2026-03-31T10:09:10Z

@@ -1,0 +1,9 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc
+cwFedAvg,pat_nc20,Cifar10_pat_nc20,ok,0,2026-03-30T06:50:44Z,2026-03-30T07:30:31Z
+cwFedAvg,dir0.1_nc20,Cifar10_dir0.1_nc20,ok,0,2026-03-30T07:30:31Z,2026-03-30T08:19:30Z
+cwFedAvg,dir0.5_nc20,Cifar10_dir0.5_nc20,ok,0,2026-03-30T08:19:30Z,2026-03-30T09:17:20Z
+cwFedAvg,dir1.0_nc20,Cifar10_dir1.0_nc20,ok,0,2026-03-30T09:17:20Z,2026-03-30T10:15:16Z
+cwFedAvg,pat_nc50,Cifar10_pat_nc50,ok,0,2026-03-30T10:15:16Z,2026-03-30T11:32:56Z
+cwFedAvg,dir0.1_nc50,Cifar10_dir0.1_nc50,ok,0,2026-03-30T11:32:56Z,2026-03-30T13:13:20Z
+cwFedAvg,dir0.5_nc50,Cifar10_dir0.5_nc50,ok,0,2026-03-30T13:13:20Z,2026-03-30T15:37:34Z
+cwFedAvg,dir1.0_nc50,Cifar10_dir1.0_nc50,ok,0,2026-03-30T15:37:34Z,2026-03-30T16:44:08Z

@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_requested_baselines_vgg8_mnist_dir_only_nc20.sh

@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_heavy_baselines_vgg8_cifar100_cross_gpfl.sh

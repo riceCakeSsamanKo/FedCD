@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_cwfedavg_vgg8_cifar100.sh

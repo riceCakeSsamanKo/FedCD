@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_cifar100_dir05_nc20_ours_once.sh

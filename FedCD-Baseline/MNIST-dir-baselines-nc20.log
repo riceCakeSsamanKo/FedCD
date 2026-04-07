@@ -1,0 +1,176 @@
+[INFO] Queue root: /home/mulsoap0504/FedCD/FedCD-Baseline/batch_runs/baselines_vgg8_mnist_dir_only_nc20/date_20260405/time_114136
+[INFO] Using python: /data/miniconda3/envs/pfllib/bin/python
+[INFO] fl_data root: /home/mulsoap0504/FedCD/fl_data
+
+==========================================================
+[START] algo=FedAS scenario=dir0.1_nc20 dataset=MNIST_dir0.1_nc20
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0
+==========================================================
+
+[Info] Experiment logs will be saved to: /home/mulsoap0504/FedCD/FedCD-Baseline/logs/MNIST/FedAS/GM_VGG8/dir/0.1/NC_20/date_20260405/time_114148
+
+==================================================
+goal = FedAS_dir0.1_nc20_20260405_114136
+device = cuda
+device_id = 0
+dataset = MNIST_dir0.1_nc20
+num_classes = 10
+model = VGG8
+batch_size = 128
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 100
+top_cnt = 100
+local_epochs = 2
+algorithm = FedAS
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 20
+prev = 0
+times = 1
+seed = 0
+eval_gap = 1
+eval_common_global = True
+global_test_samples = 0
+common_eval_batch_size = 256
+save_folder_name = items
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+add_cw = False
+add_wdr = False
+decision_layer_only = False
+partial_layer_train = False
+split_train = False
+head_lr = 0.005
+head_bs = 10
+cw_layer_num = 1
+add_proto = False
+use_true_dist = False
+batch_eval = False
+clip_weight = False
+batch_eval_id = 0
+weight_decay = 10.0
+exp_dir = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/MNIST/FedAS/GM_VGG8/dir/0.1/NC_20/date_20260405/time_114148
+log_path = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/MNIST/FedAS/GM_VGG8/dir/0.1/NC_20/date_20260405/time_114148/acc.csv
+==================================================
+
+============= Running time: 0th =============
+Using seed: 0
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=10, bias=True)
+  )
+)
+[Baseline] Global Test Set Size: 17508
+
+Join ratio / total clients: 1.0 / 20
+Finished creating server and clients.
+
+-------------Round number: 0-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing clients:   5%|▌         | 1/20 [00:02<00:41,  2.18s/it]Testing clients:  15%|█▌        | 3/20 [00:02<00:10,  1.65it/s]Testing clients:  25%|██▌       | 5/20 [00:02<00:04,  3.06it/s]Testing clients:  35%|███▌      | 7/20 [00:02<00:03,  4.12it/s]Testing clients:  45%|████▌     | 9/20 [00:02<00:01,  5.55it/s]Testing clients:  55%|█████▌    | 11/20 [00:03<00:01,  6.57it/s]Testing clients:  65%|██████▌   | 13/20 [00:03<00:00,  7.37it/s]Testing clients:  75%|███████▌  | 15/20 [00:03<00:00,  7.56it/s]Testing clients:  80%|████████  | 16/20 [00:03<00:00,  6.89it/s]Testing clients:  90%|█████████ | 18/20 [00:03<00:00,  6.94it/s]Testing clients:  95%|█████████▌| 19/20 [00:04<00:00,  6.12it/s]Testing clients: 100%|██████████| 20/20 [00:04<00:00,  5.87it/s]                                                                Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s]Calculating train metrics:   5%|▌         | 1/20 [00:00<00:05,  3.67it/s]Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:02,  6.92it/s]Calculating train metrics:  20%|██        | 4/20 [00:00<00:02,  5.76it/s]Calculating train metrics:  25%|██▌       | 5/20 [00:00<00:02,  6.10it/s]Calculating train metrics:  30%|███       | 6/20 [00:01<00:04,  2.81it/s]Calculating train metrics:  40%|████      | 8/20 [00:01<00:02,  4.26it/s]Calculating train metrics:  45%|████▌     | 9/20 [00:02<00:02,  4.10it/s]Calculating train metrics:  50%|█████     | 10/20 [00:02<00:03,  3.03it/s]Calculating train metrics:  55%|█████▌    | 11/20 [00:02<00:02,  3.40it/s]Calculating train metrics:  60%|██████    | 12/20 [00:03<00:02,  3.59it/s]Calculating train metrics:  65%|██████▌   | 13/20 [00:03<00:01,  3.86it/s]Calculating train metrics:  70%|███████   | 14/20 [00:03<00:01,  4.36it/s]Calculating train metrics:  75%|███████▌  | 15/20 [00:03<00:01,  3.50it/s]Calculating train metrics:  80%|████████  | 16/20 [00:04<00:01,  2.44it/s]Calculating train metrics:  85%|████████▌ | 17/20 [00:04<00:01,  2.82it/s]Calculating train metrics:  90%|█████████ | 18/20 [00:05<00:00,  2.81it/s]Calculating train metrics:  95%|█████████▌| 19/20 [00:05<00:00,  2.79it/s]Calculating train metrics: 100%|██████████| 20/20 [00:05<00:00,  2.62it/s]                                                                          Averaged Train Loss: 2.3025
+Averaged Local Test Accuracy: 0.1138
+Averaged Global Test Accuracy: 0.1138
+Averaged Test AUC: 0.5085
+Std Test Accuracy: 0.2758
+Std Test AUC: 0.2501
+Client0 : ['611.2']
+Client1 : ['4.0']
+Client2 : ['653.1']
+Client3 : ['1018.8']
+Client4 : ['286.6']
+Client5 : ['33.0']
+Client6 : ['96.1']
+Client7 : ['101.3']
+Client8 : ['299.8']
+Client9 : ['433.4']
+Client10 : ['476.4']
+Client11 : ['369.3']
+Client12 : ['244.8']
+Client13 : ['266.4']
+Client14 : ['420.2']
+Client15 : ['299.4']
+Client16 : ['240.5']
+Client17 : ['406.9']
+Client18 : ['278.7']
+Client19 : ['82.4']
+Avg Sum_T_FIM : ['331.1']
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s]                                                         ------------------------- time cost ------------------------- 119.54041457176208
+
+-------------Round number: 1-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing clients:   5%|▌         | 1/20 [00:00<00:01,  9.60it/s]Testing clients:  15%|█▌        | 3/20 [00:00<00:01, 14.27it/s]Testing clients:  25%|██▌       | 5/20 [00:00<00:01, 13.54it/s]Testing clients:  35%|███▌      | 7/20 [00:00<00:01,  9.86it/s]Testing clients:  45%|████▌     | 9/20 [00:00<00:01, 10.26it/s]Testing clients:  55%|█████▌    | 11/20 [00:01<00:00,  9.64it/s]Testing clients:  65%|██████▌   | 13/20 [00:01<00:00,  9.13it/s]Testing clients:  75%|███████▌  | 15/20 [00:01<00:00,  8.74it/s]Testing clients:  80%|████████  | 16/20 [00:01<00:00,  7.82it/s]Testing clients:  85%|████████▌ | 17/20 [00:01<00:00,  7.95it/s]Testing clients:  90%|█████████ | 18/20 [00:02<00:00,  7.42it/s]Testing clients:  95%|█████████▌| 19/20 [00:02<00:00,  7.11it/s]Testing clients: 100%|██████████| 20/20 [00:02<00:00,  6.61it/s]                                                                Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s]Calculating train metrics:   5%|▌         | 1/20 [00:00<00:03,  5.06it/s]Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:02,  8.11it/s]Calculating train metrics:  20%|██        | 4/20 [00:00<00:02,  6.64it/s]Calculating train metrics:  25%|██▌       | 5/20 [00:00<00:02,  6.81it/s]Calculating train metrics:  30%|███       | 6/20 [00:01<00:03,  3.96it/s]Calculating train metrics:  35%|███▌      | 7/20 [00:01<00:02,  4.72it/s]Calculating train metrics:  40%|████      | 8/20 [00:01<00:02,  5.59it/s]Calculating train metrics:  45%|████▌     | 9/20 [00:01<00:02,  4.74it/s]Calculating train metrics:  50%|█████     | 10/20 [00:01<00:02,  4.34it/s]Calculating train metrics:  55%|█████▌    | 11/20 [00:02<00:02,  4.44it/s]Calculating train metrics:  60%|██████    | 12/20 [00:02<00:01,  4.15it/s]Calculating train metrics:  65%|██████▌   | 13/20 [00:02<00:01,  4.05it/s]Calculating train metrics:  70%|███████   | 14/20 [00:02<00:01,  4.50it/s]Calculating train metrics:  75%|███████▌  | 15/20 [00:03<00:01,  3.63it/s]Calculating train metrics:  80%|████████  | 16/20 [00:04<00:01,  2.15it/s]Calculating train metrics:  85%|████████▌ | 17/20 [00:04<00:01,  2.37it/s]Calculating train metrics:  90%|█████████ | 18/20 [00:04<00:00,  2.39it/s]Calculating train metrics:  95%|█████████▌| 19/20 [00:05<00:00,  2.35it/s]Calculating train metrics: 100%|██████████| 20/20 [00:05<00:00,  2.26it/s]                                                                          Averaged Train Loss: 0.7515
+Averaged Local Test Accuracy: 0.8028
+Averaged Global Test Accuracy: 0.1196
+Averaged Test AUC: 0.9760
+Std Test Accuracy: 0.1713
+Std Test AUC: 0.0345

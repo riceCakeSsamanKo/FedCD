@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_cifar100_dir05_nc50_fair_compare_5seeds.sh

@@ -1,0 +1,358 @@
+[START] ours(t5) seed=0 dataset=Cifar100_dir0.5_nc50
+==================================================
+goal = once_FedCCMV12_t5_cifar100_dir05_nc50_seed0_20260402_094431
+device = cuda
+device_id = 0
+dataset = Cifar100_dir0.5_nc50
+num_classes = 100
+model = VGG8
+batch_size = 128
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 100
+top_cnt = 100
+local_epochs = 2
+algorithm = FedCCMV12
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 50
+prev = 0
+times = 1
+seed = 0
+eval_gap = 1
+save_folder_name = items
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+fedccm_num_clusters = 0
+fedccm_gm_period = 2
+fedccm_cluster_period = 1
+fedccm_pm_feature_dim = 128
+fedccm_fuse_hidden_dim = 256
+fedccm_fnc_dim = 128
+fedccm_alpha = 0.5
+fedccm_beta = 0.5
+fedccm_fnc_weight = 0.05
+fedccm_cluster_weight = 0.0
+fedccm_distill_temp = 1.0
+fedccm_signature_momentum = 0.9
+fedccm_pm_vgg_width_ratio = 0.25
+fedccm_local_pm_weight = 0.4
+fedccm_cluster_pm_weight = 0.6
+fedccm_prior_pm_weight = 0.0
+fedccm_cluster_threshold = 0.05
+fedccm_adaptive_threshold = True
+fedccm_threshold_step = 0.01
+fedccm_threshold_step_max = 0.1
+fedccm_threshold_decay = 0.9
+fedccm_threshold_max = 0.95
+fedccm_act_window_size = 5
+fedccm_act_min_slope = 0.0002
+fedccm_max_dynamic_clusters = 5
+fedccm_cluster_warmup_rounds = 5
+fedccmg_conf_threshold = 0.75
+fedccmg_margin_threshold = 0.15
+fedccmg_gate_weight = 0.2
+fedccmg_quiet_weight = 0.1
+fedccmg_cluster_mode = label_hist
+fedccmg_cluster_hist_weight = 1.0
+fedccmg_cluster_pm_weight = 0.0
+fedccmg_use_cluster_teacher = False
+fedccmg_refresh_pm_from_cluster_gm = False
+fedccmv3_gate_refine_steps = 20
+fedccmv3_gen_steps = 20
+fedccmv3_gen_batch_size = 64
+fedccmv3_gen_margin = 0.5
+fedccmv3_gate_refine_lr = 0.001
+fedccmv3_gen_lr = 0.001
+fedccmv3_gen_tv_weight = 0.0001
+fedccmv3_refine_period = 2
+fedccmv4_benefit_temp = 0.5
+fedccmv5_benefit_temp = 0.5
+fedccmv5_conf_cutoff = 0.7
+fedccmv5_highconf_quiet_weight = 0.5
+fedccmv6_fext_model = SmallFExt
+fedccmv6_fext_dim = 512
+fedccmv6_freeze_fext = True
+fedccmv6_pretrained_fext_path = 
+fedccmv6_gm_hidden_dim = 256
+fedccmv6_pm_hidden_dim = 128
+fedccmv6_offload_conf_threshold = 0.75
+fedccmv6_cluster_mode = hybrid
+fedccmv6_proto_weight = 1.0
+fedccmv6_hist_weight = 0.25
+fedccmv6_proto_momentum = 0.9
+fedccmv6_route_mode = hybrid_score
+fedccmv6_route_proto_score_weight = 0.5
+fedccmv6_route_conf_score_weight = 0.35
+fedccmv6_route_margin_score_weight = 0.15
+fedccmv6_route_entropy_score_weight = 0.1
+fedccmv7_proto_batches = 2
+fedccmv7_cluster_hg_weight = 0.0
+fedccmv7_cluster_hp_weight = 0.0
+fedccmv7_offload_metric = entropy
+fedccmv7_offload_entropy_threshold = 0.6
+fedccmv7_offload_conf_threshold = 0.75
+fedccmv7_offload_margin_threshold = 0.15
+fedccmv7_offload_hpdist_threshold = 0.1
+fedccmv8_pm_only_weight = 1.0
+fedccmv8_pm_fusion_weight = 1.0
+fedccmv8_gm_local_weight = 1.0
+fedccmv8_gm_fusion_weight = 1.0
+fedccmv8_gm_learning_rate = 0.0
+fedccmv8_pm_learning_rate = 0.0
+fedccmv8_gm_train_sync_only = False
+fedccmv8_offload_gm_pm_margin = 0.0
+fedccmv8_offload_proto_sim_threshold = 0.75
+fedccmv8_offload_maha_percentile = 0.95
+fedccmv8_offload_maha_var_epsilon = 0.0001
+fedccmv8_offload_maha_ema = 0.9
+fedccmv8_gm_temperature = 1.0
+fedccmv8_pm_temperature = 1.0
+fedccmv8_server_ood_reg = False
+fedccmv8_ood_proxy_dataset = tinyimagenet
+fedccmv8_ood_proxy_root = 
+fedccmv8_ood_proxy_split = train
+fedccmv8_ood_batch_size = 128
+fedccmv8_ood_steps = 1
+fedccmv8_ood_learning_rate = 0.0005
+fedccmv8_ood_temperature = 2.0
+fedccmv8_ood_weight = 1.0
+fedccmv8_ood_prox_weight = 0.0001
+fedccmv8_ood_head_only = True
+fedccmv8_ood_period = 1
+fedccmv8_ood_start_round = 5
+fedccmv8_ood_image_size = 32
+fedccmv9_server_pm_infer = True
+fedccmv9_server_pm_selection = weighted_hybrid
+fedccmv9_server_pm_score_mode = fused
+fedccmv9_server_pm_prune_by_class = True
+fedccmv9_server_pm_topk_classes = 2
+fedccmv9_server_pm_hybrid_conf_weight = 0.65
+fedccmv9_server_pm_hybrid_margin_weight = 0.95
+fedccmv9_server_pm_hybrid_entropy_weight = 0.4
+fedccmv9_server_pm_hybrid_proto_weight = 1.35
+fedccmv9_server_pm_hybrid_self_cluster_weight = 0.0
+fedccmv9_server_pm_hybrid_class_overlap_weight = 0.0
+fedccmv9_server_pm_hybrid_home_proto_weight = 0.0
+fedccmv9_server_pm_weight_temperature = 1.0
+fedccmv9_server_pm_score_threshold = -1000000000.0
+fedccmv9_server_pm_offload_metric = maxprob
+fedccmv9_server_pm_exclude_self = True
+fedccmv9_log_oracle = True
+fedccmv9_log_pm_selection_diag = False
+fedccmv10_pm_pool_source = cluster_pm
+fedccmv9_entropy_threshold_quantile = 0.9
+fedccmv9_maxprob_threshold_quantile = 0.1
+fedccmv9_gm_gate_enable = False
+fedccmv9_gm_gate_metric = both
+fedccmv9_gm_entropy_threshold_quantile = 0.9
+fedccmv9_gm_maxprob_threshold_quantile = 0.1
+fedccmv9_threshold_search = True
+fedccmv9_threshold_objective = seen_budget
+fedccmv9_entropy_search_grid = 0.82,0.84,0.86,0.88,0.90
+fedccmv9_maxprob_search_grid = 0.08,0.10,0.12,0.15,0.18
+fedccmv9_route_order = local_gm_then_server_pm
+fedccmv9_hard_keep_enable = False
+fedccmv9_hard_offload_enable = False
+fedccmv9_gm_veto_enable = False
+fedccmv9_pm_margin_offload_quantile = 0.1
+fedccmv9_pm_margin_search_grid = 0.12,0.15,0.18,0.22,0.26
+fedccmv9_pm_margin_keep_quantile = 0.7
+fedccmv9_gm_margin_keep_quantile = 0.7
+fedccmv9_detector_mode = legacy
+fedccmv9_detector_temperature = 2.0
+fedccmv9_detector_use_maha = True
+fedccmv9_detector_use_pm_gm_js = True
+fedccmv9_detector_use_server_gm_conf = True
+fedccmv9_detector_energy_weight = 1.0
+fedccmv9_detector_margin_weight = 0.5
+fedccmv9_detector_maha_weight = 0.75
+fedccmv9_detector_js_weight = 0.75
+fedccmv9_detector_server_gm_weight = 0.5
+fedccmv9_odin_input_noise = 0.0014
+fedccmv9_odin_score_quantile = 0.05
+fedccmv9_detector_score_quantile = 0.95
+fedccmv9_detector_hard_score_quantile = 0.995
+fedccmv9_detector_score_search = True
+fedccmv9_detector_score_search_grid = 0.88,0.90,0.92,0.94,0.96,0.98
+fedccmv9_detector_seen_budget = 0.08
+fedccmv9_detector_maha_keep_quantile = 0.8
+fedccmv9_detector_server_gm_conf_keep_quantile = 0.3
+fedccmv12_gm_server_prox_weight = 0.0001
+fedccm_version_tag = v12-t5
+exp_dir = logs/FedCCMV12/GM_VGG8_PM_DualGM_v12-t5/dir/0.5/NC_50/date_20260402/time_094436
+log_usage_path = logs/FedCCMV12/GM_VGG8_PM_DualGM_v12-t5/dir/0.5/NC_50/date_20260402/time_094436/acc.csv
+log_cluster_path = logs/FedCCMV12/GM_VGG8_PM_DualGM_v12-t5/dir/0.5/NC_50/date_20260402/time_094436/cluster_acc.csv
+==================================================
+
+[Info] Experiment logs will be saved to: logs/FedCCMV12/GM_VGG8_PM_DualGM_v12-t5/dir/0.5/NC_50/date_20260402/time_094436
+
+
+============= Running time: 0th =============
+Using seed: 0
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=100, bias=True)
+  )
+)
+[FedCCMV12] Global Test Set Size: 15018
+[FedCCMV12] OOD proxy loader: dataset=tinyimagenet, root=/home/mulsoap0504/FedCD/ood_data/cifar10_proxy_tinyimagenet_coco_nonoverlap_v2/train, size=131432
+
+Join ratio / total clients: 1.0 / 50
+FedCCMV12 clusters(init): 50, target: 0, GM period: 2, cluster period: 5, threshold: 0.1000, warmup: 5, cluster_mode: hp_proto, offload_metric: none, gm_train_sync_only: False, server_ood_reg: True, ood_proxy: tinyimagenet, server_pm_pool_source: cluster_pm, use_cluster_teacher: False, refresh_pm_from_cluster_gm: False
+Finished creating server and clients.
+
+-------------Round number: 0-------------
+[Local Test ACC]
+PM: 0.0102, GM: 0.0117, PM+GM(Base): 0.0095, Result: 0.0095
+
+[Global ACC]
+PM: 0.0102, GM: 0.0117, PM+GM(Base): 0.0095, Global GM: 0.0117, Result: 0.0095
+
+[Seen/UnSeen Result ACC]
+Seen(Result): 0.0051, UnSeen(Result): 0.0241
+
+[Cluster-wise Detail]
+Current Cluster Threshold: 0.1000, Next Threshold Delta: +0.0100
+  Cluster 0: 0.0673 (samples: 312) [0]
+  Cluster 1: 0.0101 (samples: 297) [1]
+  Cluster 2: 0.0000 (samples: 305) [2]
+  Cluster 3: 0.0000 (samples: 302) [3]
+  Cluster 4: 0.0000 (samples: 311) [4]
+  Cluster 5: 0.0000 (samples: 302) [5]
+  Cluster 6: 0.0133 (samples: 301) [6]
+  Cluster 7: 0.0000 (samples: 327) [7]
+  Cluster 8: 0.0000 (samples: 309) [8]
+  Cluster 9: 0.0195 (samples: 307) [9]
+  Cluster 10: 0.0037 (samples: 271) [10]
+  Cluster 11: 0.0000 (samples: 302) [11]
+  Cluster 12: 0.0000 (samples: 303) [12]
+  Cluster 13: 0.0000 (samples: 301) [13]
+  Cluster 14: 0.0000 (samples: 313) [14]
+  Cluster 15: 0.0000 (samples: 309) [15]
+  Cluster 16: 0.0366 (samples: 273) [16]
+  Cluster 17: 0.0094 (samples: 318) [17]
+  Cluster 18: 0.0000 (samples: 305) [18]
+  Cluster 19: 0.0681 (samples: 279) [19]
+  Cluster 20: 0.0000 (samples: 302) [20]
+  Cluster 21: 0.0000 (samples: 306) [21]
+  Cluster 22: 0.0000 (samples: 319) [22]
+  Cluster 23: 0.0449 (samples: 312) [23]
+  Cluster 24: 0.0000 (samples: 301) [24]
+  Cluster 25: 0.0000 (samples: 313) [25]
+  Cluster 26: 0.0000 (samples: 316) [26]
+  Cluster 27: 0.0000 (samples: 302) [27]
+  Cluster 28: 0.0000 (samples: 273) [28]
+  Cluster 29: 0.0000 (samples: 306) [29]
+  Cluster 30: 0.0269 (samples: 260) [30]
+  Cluster 31: 0.0459 (samples: 305) [31]
+  Cluster 32: 0.0000 (samples: 311) [32]
+  Cluster 33: 0.0000 (samples: 270) [33]
+  Cluster 34: 0.0000 (samples: 305) [34]
+  Cluster 35: 0.0000 (samples: 301) [35]
+  Cluster 36: 0.0000 (samples: 321) [36]
+  Cluster 37: 0.0034 (samples: 295) [37]
+  Cluster 38: 0.0584 (samples: 308) [38]
+  Cluster 39: 0.0042 (samples: 236) [39]
+  Cluster 40: 0.0000 (samples: 302) [40]
+  Cluster 41: 0.0164 (samples: 304) [41]
+  Cluster 42: 0.0000 (samples: 301) [42]
+  Cluster 43: 0.0000 (samples: 302) [43]
+  Cluster 44: 0.0161 (samples: 248) [44]
+  Cluster 45: 0.0000 (samples: 302) [45]
+  Cluster 46: 0.0000 (samples: 298) [46]
+  Cluster 47: 0.0358 (samples: 307) [47]
+  Cluster 48: 0.0000 (samples: 341) [48]
+  Cluster 49: 0.0000 (samples: 304) [49]
+
+[BroadCast]
+PM: 15.05 MB, GM: 0.00 MB, Total: 15.05 MB
+
+[PM Seen/UnSeen Check]
+Entropy Local/Global: 4.6034/4.6034 | Seen/Unseen Global: 4.6034/4.6034 | AUROC: 0.5070
+MaxProb Local/Global: 0.0113/0.0113 | Seen/Unseen Global: 0.0113/0.0113 | AUROC: 0.4960
+UnSeen Rate @ Local Threshold - Entropy Seen/UnSeen: 0.0616/0.0647 | MaxProb Seen/Unseen: 0.0762/0.0694
+Active Thresholds - Entropy q-thr: 4.6034 | MaxProb q-thr: 0.0113
+Best Threshold Search - q(ent/max/margin): 0.830/0.147/0.222 | Local/Seen/Unseen: 0.0030/0.0046/0.0061 | Score: 0.0058
+
+PM Candidate Local/Global: 0.0000/0.0007 | Soft Offload Local/Global: 0.0000/0.0007
+PM Margin Thresholds - Offload/Keep: 0.0000/0.0000
+
+[Offload]
+Seen: 0.0007, Unseen: 0.0008, Total: 0.0007
+
+[Server PM Routing]
+Offloaded Acc Local/Global - Local PM: 0.0000/0.0000 | Server PM: 0.0000/0.0000 | Oracle: 0.0000/0.0000
+Candidates Full/Pruned Local/Global: 0.00/50.00 -> 0.00/48.00
+Selected ProtoSim Local/Global: 0.0000/0.0000
+[FedCCMV12] Updated best base-fused local snapshot at round 0: local=0.0095, global=0.0095
+[FedCCMV12] Updated best base-fused global snapshot at round 0: local=0.0095, global=0.0095
+
+-------------Round number: 1-------------

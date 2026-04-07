@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_dir05_nc20_compare_once.sh

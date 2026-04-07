@@ -42,8 +42,13 @@ class clientGPFL(Client):
 
     def train(self):
         trainloader = self.load_train_data()
-        # self.model.to(self.device)
+        self.model.to(self.device)
+        self.GCE.to(self.device)
+        self.GCE_frozen.to(self.device)
+        self.CoV.to(self.device)
         self.model.train()
+        self.GCE.train()
+        self.CoV.train()
 
         start_time = time.time()
 
@@ -84,7 +89,10 @@ class clientGPFL(Client):
                 self.GCE_opt.step()
                 self.CoV_opt.step()
 
-        # self.model.cpu()
+        self.model.cpu()
+        self.GCE.cpu()
+        self.GCE_frozen.cpu()
+        self.CoV.cpu()
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
@@ -120,6 +128,10 @@ class clientGPFL(Client):
         testloader = self.load_test_data()
         if model == None:
             model = self.model
+        self.model.to(self.device)
+        self.GCE.to(self.device)
+        self.GCE_frozen.to(self.device)
+        self.CoV.to(self.device)
         model.eval()
 
         test_acc = 0
@@ -157,12 +169,21 @@ class clientGPFL(Client):
 
         auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
 
+        self.model.cpu()
+        self.GCE.cpu()
+        self.GCE_frozen.cpu()
+        self.CoV.cpu()
+
         return test_acc, test_num, auc
 
     def train_metrics(self, model=None):
         trainloader = self.load_train_data()
         if model == None:
             model = self.model
+        self.model.to(self.device)
+        self.GCE.to(self.device)
+        self.GCE_frozen.to(self.device)
+        self.CoV.to(self.device)
         model.eval()
 
         train_num = 0
@@ -194,4 +215,9 @@ class clientGPFL(Client):
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
                 
+        self.model.cpu()
+        self.GCE.cpu()
+        self.GCE_frozen.cpu()
+        self.CoV.cpu()
+
         return losses, train_num

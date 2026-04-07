@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_fedproto_remaining_vgg8_cifar10_nc50.sh

@@ -7,6 +7,7 @@ import os
 import time
 import warnings
 import numpy as np
+import random
 import torchvision
 import logging
 
@@ -50,6 +51,7 @@ from flcore.servers.serverda import PFL_DA
 from flcore.servers.serverlc import FedLC
 from flcore.servers.serveras import FedAS
 from flcore.servers.servercross import FedCross
+from flcore.servers.servercwavg import cwFedAvg
 
 from flcore.trainmodel.models import *
 
@@ -61,12 +63,20 @@ from flcore.trainmodel.transformer import *
 
 from utils.result_utils import average_data
 from utils.mem_utils import MemReporter
+from utils.data_utils import read_client_data
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
 warnings.simplefilter("ignore")
-torch.manual_seed(0)
+
+
+def set_global_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def str2bool(v):
@@ -102,6 +112,17 @@ def split_model(model):
         raise NotImplementedError("Model structure not supported for splitting.")
     return BaseHeadSplit(model, head)
 
+
+def build_client_class_distribution(dataset, num_clients, num_classes, few_shot=0):
+    data_dist = np.zeros((num_clients, num_classes), dtype=np.float32)
+    for client_id in range(num_clients):
+        train_data = read_client_data(dataset, client_id, is_train=True, few_shot=few_shot)
+        for _, label in train_data:
+            label_idx = int(label.item()) if torch.is_tensor(label) else int(label)
+            if 0 <= label_idx < num_classes:
+                data_dist[client_id, label_idx] += 1
+    return data_dist
+
 def run(args):
 
     time_list = []
@@ -109,7 +130,10 @@ def run(args):
     model_str = args.model
 
     for i in range(args.prev, args.times):
+        run_seed = args.seed + i
+        set_global_seed(run_seed)
         print(f"\n============= Running time: {i}th =============")
+        print(f"Using seed: {run_seed}")
         print("Creating server and clients ...")
         start = time.time()
 
@@ -370,6 +394,21 @@ def run(args):
         elif args.algorithm == "FedCross":
             server = FedCross(args, i)
 
+        elif args.algorithm == "cwFedAvg":
+            args.add_cw = True
+            args.model = split_model(args.model)
+            if args.partial_layer_train:
+                layer_names = [name for name, _ in args.model.named_children()]
+                args.layer_groups = {
+                    "common": layer_names[:-args.cw_layer_num],
+                    "cw": layer_names[-args.cw_layer_num:],
+                }
+            if not hasattr(args, "data_dist"):
+                args.data_dist = build_client_class_distribution(
+                    args.dataset, args.num_clients, args.num_classes, args.few_shot
+                ).tolist()
+            server = cwFedAvg(args, i)
+
         else:
             raise NotImplementedError
 
@@ -422,6 +461,8 @@ if __name__ == "__main__":
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,
                         help="Running times")
+    parser.add_argument('--seed', type=int, default=0,
+                        help="Base random seed. Run i uses seed+i.")
     parser.add_argument('-eg', "--eval_gap", type=int, default=1,
                         help="Rounds gap for evaluation")
     parser.add_argument('--eval_common_global', type=str2bool, default=True,
@@ -508,6 +549,22 @@ if __name__ == "__main__":
     parser.add_argument('-fsb', "--first_stage_bound", type=int, default=0)
     parser.add_argument('-ca', "--fedcross_alpha", type=float, default=0.99)
     parser.add_argument('-cmss', "--collaberative_model_select_strategy", type=int, default=1)
+
+    # cwFedAvg
+    parser.add_argument('-cw', "--add_cw", action='store_true')
+    parser.add_argument('-wdr', "--add_wdr", action='store_true')
+    parser.add_argument('-dlo', "--decision_layer_only", action='store_true')
+    parser.add_argument('-plt', "--partial_layer_train", action='store_true')
+    parser.add_argument('-spl', "--split_train", action='store_true')
+    parser.add_argument('-hlr', "--head_lr", type=float, default=0.005)
+    parser.add_argument('-hbs', "--head_bs", type=int, default=10)
+    parser.add_argument('-ncw', "--cw_layer_num", type=int, default=1)
+    parser.add_argument('-apr', "--add_proto", action='store_true')
+    parser.add_argument('-gt', "--use_true_dist", action='store_true')
+    parser.add_argument('-be', "--batch_eval", action='store_true')
+    parser.add_argument('-clw', "--clip_weight", action='store_true')
+    parser.add_argument('-beid', "--batch_eval_id", type=int, default=0)
+    parser.add_argument('-wd', "--weight_decay", type=float, default=10.0)
 
 
     args = parser.parse_args()

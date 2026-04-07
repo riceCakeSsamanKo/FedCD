@@ -1,0 +1,148 @@
+[INFO] Queue root: /home/mulsoap0504/FedCD/FedCD-Baseline/batch_runs/baselines_vgg8_mnist_dir_only_nc20_parallel/worker3/date_20260405/time_114516
+[INFO] Using python: /data/miniconda3/envs/pfllib/bin/python
+[INFO] GPU: 3
+[INFO] Worker: worker3
+[INFO] Algorithms: FedCross cwFedAvg
+[INFO] fl_data root: /home/mulsoap0504/FedCD/fl_data
+
+==========================================================
+[START] algo=FedCross scenario=dir0.1_nc20 dataset=MNIST_dir0.1_nc20 gpu=3 worker=worker3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0
+==========================================================
+
+[Info] Experiment logs will be saved to: /home/mulsoap0504/FedCD/FedCD-Baseline/logs/MNIST/FedCross/GM_VGG8/dir/0.1/NC_20/date_20260405/time_114548
+
+==================================================
+goal = FedCross_dir0.1_nc20_20260405_114516_worker3
+device = cuda
+device_id = 0
+dataset = MNIST_dir0.1_nc20
+num_classes = 10
+model = VGG8
+batch_size = 128
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 100
+top_cnt = 100
+local_epochs = 2
+algorithm = FedCross
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 20
+prev = 0
+times = 1
+seed = 0
+eval_gap = 1
+eval_common_global = True
+global_test_samples = 0
+common_eval_batch_size = 256
+save_folder_name = items
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+add_cw = False
+add_wdr = False
+decision_layer_only = False
+partial_layer_train = False
+split_train = False
+head_lr = 0.005
+head_bs = 10
+cw_layer_num = 1
+add_proto = False
+use_true_dist = False
+batch_eval = False
+clip_weight = False
+batch_eval_id = 0
+weight_decay = 10.0
+exp_dir = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/MNIST/FedCross/GM_VGG8/dir/0.1/NC_20/date_20260405/time_114548
+log_path = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/MNIST/FedCross/GM_VGG8/dir/0.1/NC_20/date_20260405/time_114548/acc.csv
+==================================================
+
+============= Running time: 0th =============
+Using seed: 0
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=10, bias=True)
+  )
+)
+[Baseline] Global Test Set Size: 17508
+
+Join ratio / total clients: 1.0 / 20
+Finished creating server and clients.
+
+-------------Round number: 0-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing clients:   5%|▌         | 1/20 [00:08<02:39,  8.37s/it]Testing clients:  15%|█▌        | 3/20 [00:08<00:38,  2.29s/it]Testing clients:  20%|██        | 4/20 [00:08<00:25,  1.59s/it]Testing clients:  25%|██▌       | 5/20 [00:09<00:17,  1.16s/it]Testing clients:  30%|███       | 6/20 [00:09<00:14,  1.02s/it]Testing clients:  35%|███▌      | 7/20 [00:10<00:09,  1.33it/s]Testing clients:  40%|████      | 8/20 [00:10<00:06,  1.78it/s]Testing clients:  45%|████▌     | 9/20 [00:10<00:05,  2.00it/s]Testing clients:  50%|█████     | 10/20 [00:11<00:05,  1.88it/s]Testing clients:  55%|█████▌    | 11/20 [00:11<00:04,  1.98it/s]Testing clients:  60%|██████    | 12/20 [00:12<00:03,  2.19it/s]Testing clients:  65%|██████▌   | 13/20 [00:12<00:02,  2.48it/s]Testing clients:  70%|███████   | 14/20 [00:12<00:02,  2.70it/s]Testing clients:  75%|███████▌  | 15/20 [00:13<00:02,  2.42it/s]Testing clients:  80%|████████  | 16/20 [00:13<00:01,  2.40it/s]Testing clients:  85%|████████▌ | 17/20 [00:13<00:01,  2.52it/s]Testing clients:  90%|█████████ | 18/20 [00:14<00:00,  2.32it/s]Testing clients:  95%|█████████▌| 19/20 [01:09<00:16, 16.76s/it]Testing clients: 100%|██████████| 20/20 [01:10<00:00, 12.03s/it]                                                                Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s]Calculating train metrics:   5%|▌         | 1/20 [00:01<00:22,  1.19s/it]Calculating train metrics:  10%|█         | 2/20 [00:01<00:11,  1.59it/s]Calculating train metrics:  15%|█▌        | 3/20 [00:01<00:09,  1.73it/s]Calculating train metrics:  20%|██        | 4/20 [00:02<00:09,  1.61it/s]Calculating train metrics:  25%|██▌       | 5/20 [00:03<00:08,  1.75it/s]Calculating train metrics:  30%|███       | 6/20 [00:04<00:12,  1.13it/s]Calculating train metrics:  35%|███▌      | 7/20 [00:04<00:09,  1.39it/s]Calculating train metrics:  40%|████      | 8/20 [00:05<00:07,  1.69it/s]Calculating train metrics:  45%|████▌     | 9/20 [00:06<00:07,  1.52it/s]Calculating train metrics:  50%|█████     | 10/20 [00:06<00:07,  1.38it/s]Calculating train metrics:  55%|█████▌    | 11/20 [00:07<00:06,  1.43it/s]Calculating train metrics:  60%|██████    | 12/20 [00:08<00:06,  1.27it/s]Calculating train metrics:  65%|██████▌   | 13/20 [00:09<00:05,  1.25it/s]Calculating train metrics:  70%|███████   | 14/20 [00:10<00:04,  1.37it/s]Calculating train metrics:  75%|███████▌  | 15/20 [00:11<00:04,  1.10it/s]Calculating train metrics:  80%|████████  | 16/20 [00:12<00:04,  1.04s/it]Calculating train metrics:  85%|████████▌ | 17/20 [00:13<00:02,  1.01it/s]Calculating train metrics:  90%|█████████ | 18/20 [00:14<00:02,  1.11s/it]Calculating train metrics:  95%|█████████▌| 19/20 [00:15<00:01,  1.06s/it]Calculating train metrics: 100%|██████████| 20/20 [00:16<00:00,  1.05s/it]                                                                          Averaged Train Loss: 2.3025
+Averaged Local Test Accuracy: 0.1138
+Averaged Global Test Accuracy: 0.1138
+Averaged Test AUC: 0.5085
+Std Test Accuracy: 0.2758
+Std Test AUC: 0.2501
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s]                                                         Aggregating models:   0%|          | 0/20 [00:00<?, ?it/s]Aggregating models:  30%|███       | 6/20 [00:00<00:00, 57.27it/s]Aggregating models:  65%|██████▌   | 13/20 [00:00<00:00, 43.93it/s]Aggregating models:  90%|█████████ | 18/20 [00:00<00:00, 43.64it/s]                                                                   

@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_probe_lgfedavg_cifar10.sh

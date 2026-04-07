@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/prepare_fashionmnist_fl_data_nc50_dir.sh

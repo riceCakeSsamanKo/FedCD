@@ -42,9 +42,14 @@ class FedCross(Server):
             self.selected_clients = self.select_clients()
 
             for i, client in enumerate(self.selected_clients):
+                start_time = time.time()
                 client.set_parameters(self.w_locals[i])
+                client.send_time_cost['num_rounds'] += 1
+                client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
                 client.train()
                 client.clone_model(client.model, self.w_locals[i])
+
+            self.downlink_MB += len(self.selected_clients) * self.model_size_MB
 
             # Receive models from clients
             self.receive_models()

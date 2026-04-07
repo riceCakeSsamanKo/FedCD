@@ -1,0 +1,7 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc,gpu,worker
+FedAS,dir0.1_nc20,FashionMNIST_dir0.1_nc20,ok,0,2026-04-05T12:00:54Z,2026-04-05T19:42:58Z,0,worker0
+FedAS,dir0.5_nc20,FashionMNIST_dir0.5_nc20,ok,0,2026-04-05T19:42:59Z,2026-04-06T04:13:55Z,0,worker0
+FedAS,dir1.0_nc20,FashionMNIST_dir1.0_nc20,ok,0,2026-04-06T04:13:55Z,2026-04-06T10:11:58Z,0,worker0
+FedAvg,dir0.1_nc20,FashionMNIST_dir0.1_nc20,ok,0,2026-04-06T10:11:58Z,2026-04-06T13:07:37Z,0,worker0
+FedAvg,dir0.5_nc20,FashionMNIST_dir0.5_nc20,ok,0,2026-04-06T13:07:37Z,2026-04-06T15:11:41Z,0,worker0
+FedAvg,dir1.0_nc20,FashionMNIST_dir1.0_nc20,ok,0,2026-04-06T15:11:41Z,2026-04-06T17:14:52Z,0,worker0

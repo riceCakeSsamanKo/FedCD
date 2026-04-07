@@ -1,0 +1,3 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc,gpu,worker
+FedAS,dir0.1_nc50,FashionMNIST_dir0.1_nc50,ok,0,2026-04-06T06:57:35Z,2026-04-06T15:45:54Z,2,worker2
+FedAS,dir0.5_nc50,FashionMNIST_dir0.5_nc50,ok,0,2026-04-06T15:45:54Z,2026-04-06T22:07:51Z,2,worker2

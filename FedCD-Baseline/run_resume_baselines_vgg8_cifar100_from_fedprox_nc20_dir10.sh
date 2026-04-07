@@ -1,0 +1,1 @@
+../shell/FedCD-Baseline/run_resume_baselines_vgg8_cifar100_from_fedprox_nc20_dir10.sh

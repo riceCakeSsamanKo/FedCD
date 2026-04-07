@@ -1,0 +1,9 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc
+pFedMe,pat_nc20,Cifar10_pat_nc20,failed,1,2026-03-28T04:46:51Z,2026-03-28T04:49:37Z
+pFedMe,dir0.1_nc20,Cifar10_dir0.1_nc20,failed,1,2026-03-28T04:49:37Z,2026-03-28T04:52:32Z
+pFedMe,dir0.5_nc20,Cifar10_dir0.5_nc20,failed,1,2026-03-28T04:52:32Z,2026-03-28T04:55:15Z
+pFedMe,dir1.0_nc20,Cifar10_dir1.0_nc20,failed,1,2026-03-28T04:55:15Z,2026-03-28T04:58:08Z
+pFedMe,pat_nc50,Cifar10_pat_nc50,failed,1,2026-03-28T04:58:08Z,2026-03-28T05:00:45Z
+pFedMe,dir0.1_nc50,Cifar10_dir0.1_nc50,failed,1,2026-03-28T05:00:45Z,2026-03-28T05:03:52Z
+pFedMe,dir0.5_nc50,Cifar10_dir0.5_nc50,failed,1,2026-03-28T05:03:52Z,2026-03-28T05:07:10Z
+pFedMe,dir1.0_nc50,Cifar10_dir1.0_nc50,failed,1,2026-03-28T05:07:10Z,2026-03-28T05:10:41Z

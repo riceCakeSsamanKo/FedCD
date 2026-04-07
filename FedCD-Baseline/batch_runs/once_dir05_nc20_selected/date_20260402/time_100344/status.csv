@@ -1,0 +1,5 @@
+group,algorithm,seed,status,exit_code,start_utc,end_utc
+baseline,FedProx,0,ok,0,2026-04-02T10:03:44Z,2026-04-02T11:19:45Z
+baseline,FedBN,0,ok,0,2026-04-02T11:19:45Z,2026-04-02T11:55:40Z
+baseline,cwFedAvg,0,ok,0,2026-04-02T11:55:40Z,2026-04-02T12:32:41Z
+ours,FedCCMV12_t5,0,ok,0,2026-04-02T12:32:41Z,2026-04-02T18:10:10Z

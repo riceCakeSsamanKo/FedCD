@@ -19,7 +19,7 @@ class clientALA(Client):
 
     def train(self):
         trainloader = self.load_train_data()
-        # self.model.to(self.device)
+        self.model.to(self.device)
         self.model.train()
         
         start_time = time.time()
@@ -43,7 +43,7 @@ class clientALA(Client):
                 loss.backward()
                 self.optimizer.step()
 
-        # self.model.cpu()
+        self.model.cpu()
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
@@ -53,4 +53,8 @@ class clientALA(Client):
         
 
     def local_initialization(self, received_global_model):
+        self.model.to(self.device)
+        received_global_model.to(self.device)
         self.ALA.adaptive_local_aggregation(received_global_model, self.model)
+        received_global_model.to("cpu")
+        self.model.cpu()
