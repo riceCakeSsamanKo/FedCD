@@ -1,0 +1,5 @@
+algorithm,scenario,dataset,status,exit_code,start_utc,end_utc,gpu,worker
+FedAS,pat_nc20,FashionMNIST_pat_nc20,ok,0,2026-04-08T12:07:08Z,2026-04-08T20:02:11Z,0,worker0
+FedAS,pat_nc50,FashionMNIST_pat_nc50,ok,0,2026-04-08T20:02:11Z,2026-04-09T05:14:19Z,0,worker0
+FedAvg,pat_nc20,FashionMNIST_pat_nc20,ok,0,2026-04-09T05:14:19Z,2026-04-09T07:21:06Z,0,worker0
+FedAvg,pat_nc50,FashionMNIST_pat_nc50,ok,0,2026-04-09T07:21:07Z,2026-04-09T09:31:52Z,0,worker0
