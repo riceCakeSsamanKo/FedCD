@@ -1,0 +1,149 @@
+
+[Info] Experiment logs will be saved to: /home/mulsoap0504/FedCD/FedCD-Baseline/logs/Cifar100/FedAS/GM_VGG8/dir/0.1/NC_50/date_20260428/time_013144
+
+==================================================
+goal = FedAS_dir0.1_nc50_extra2_20260424_162110_seed1
+device = cuda
+device_id = 0
+dataset = Cifar100_dir0.1_nc50
+num_classes = 100
+model = VGG8
+batch_size = 128
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 100
+top_cnt = 100
+local_epochs = 2
+algorithm = FedAS
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 50
+prev = 0
+times = 1
+seed = 1
+eval_gap = 1
+eval_common_global = True
+global_test_samples = 0
+common_eval_batch_size = 256
+save_folder_name = items
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+add_cw = False
+add_wdr = False
+decision_layer_only = False
+partial_layer_train = False
+split_train = False
+head_lr = 0.005
+head_bs = 10
+cw_layer_num = 1
+add_proto = False
+use_true_dist = False
+batch_eval = False
+clip_weight = False
+batch_eval_id = 0
+weight_decay = 10.0
+exp_dir = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/Cifar100/FedAS/GM_VGG8/dir/0.1/NC_50/date_20260428/time_013144
+log_path = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/Cifar100/FedAS/GM_VGG8/dir/0.1/NC_50/date_20260428/time_013144/acc.csv
+==================================================
+
+============= Running time: 0th =============
+Using seed: 1
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=100, bias=True)
+  )
+)
+[Baseline] Global Test Set Size: 15017
+
+Join ratio / total clients: 1.0 / 50
+Finished creating server and clients.
+
+-------------Round number: 0-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/50 [00:00<?, ?it/s]Testing clients:   2%|▏         | 1/50 [00:00<00:30,  1.62it/s]Testing clients:   6%|▌         | 3/50 [00:00<00:10,  4.58it/s]Testing clients:  10%|█         | 5/50 [00:00<00:06,  6.89it/s]Testing clients:  14%|█▍        | 7/50 [00:01<00:04,  8.69it/s]Testing clients:  18%|█▊        | 9/50 [00:01<00:04, 10.22it/s]Testing clients:  22%|██▏       | 11/50 [00:01<00:03, 11.98it/s]Testing clients:  26%|██▌       | 13/50 [00:01<00:03, 11.99it/s]Testing clients:  30%|███       | 15/50 [00:01<00:02, 13.48it/s]Testing clients:  34%|███▍      | 17/50 [00:01<00:02, 14.05it/s]Testing clients:  38%|███▊      | 19/50 [00:01<00:02, 13.40it/s]Testing clients:  42%|████▏     | 21/50 [00:02<00:02, 13.29it/s]Testing clients:  46%|████▌     | 23/50 [00:02<00:02, 13.37it/s]Testing clients:  50%|█████     | 25/50 [00:02<00:01, 13.47it/s]Testing clients:  54%|█████▍    | 27/50 [00:02<00:01, 13.40it/s]Testing clients:  58%|█████▊    | 29/50 [00:02<00:01, 13.08it/s]Testing clients:  62%|██████▏   | 31/50 [00:02<00:01, 12.71it/s]Testing clients:  66%|██████▌   | 33/50 [00:02<00:01, 13.29it/s]Testing clients:  70%|███████   | 35/50 [00:03<00:01, 12.70it/s]Testing clients:  74%|███████▍  | 37/50 [00:03<00:00, 13.51it/s]Testing clients:  78%|███████▊  | 39/50 [00:03<00:00, 13.41it/s]Testing clients:  82%|████████▏ | 41/50 [00:03<00:00, 14.24it/s]Testing clients:  86%|████████▌ | 43/50 [00:03<00:00, 15.04it/s]Testing clients:  90%|█████████ | 45/50 [00:03<00:00, 16.02it/s]Testing clients:  94%|█████████▍| 47/50 [00:03<00:00, 15.49it/s]Testing clients:  98%|█████████▊| 49/50 [00:03<00:00, 16.41it/s]                                                                Calculating train metrics:   0%|          | 0/50 [00:00<?, ?it/s]Calculating train metrics:   2%|▏         | 1/50 [00:00<00:07,  6.76it/s]Calculating train metrics:   4%|▍         | 2/50 [00:00<00:06,  7.24it/s]Calculating train metrics:   8%|▊         | 4/50 [00:00<00:05,  8.66it/s]Calculating train metrics:  10%|█         | 5/50 [00:00<00:05,  7.61it/s]Calculating train metrics:  12%|█▏        | 6/50 [00:00<00:05,  7.86it/s]Calculating train metrics:  14%|█▍        | 7/50 [00:00<00:05,  8.13it/s]Calculating train metrics:  16%|█▌        | 8/50 [00:01<00:05,  8.10it/s]Calculating train metrics:  18%|█▊        | 9/50 [00:01<00:04,  8.55it/s]Calculating train metrics:  20%|██        | 10/50 [00:01<00:04,  8.69it/s]Calculating train metrics:  24%|██▍       | 12/50 [00:01<00:04,  9.34it/s]Calculating train metrics:  26%|██▌       | 13/50 [00:01<00:04,  9.06it/s]Calculating train metrics:  28%|██▊       | 14/50 [00:01<00:04,  8.93it/s]Calculating train metrics:  30%|███       | 15/50 [00:01<00:04,  8.71it/s]Calculating train metrics:  32%|███▏      | 16/50 [00:01<00:03,  8.57it/s]Calculating train metrics:  34%|███▍      | 17/50 [00:02<00:04,  7.94it/s]Calculating train metrics:  38%|███▊      | 19/50 [00:02<00:03,  8.74it/s]Calculating train metrics:  40%|████      | 20/50 [00:02<00:03,  8.48it/s]Calculating train metrics:  42%|████▏     | 21/50 [00:02<00:03,  8.56it/s]Calculating train metrics:  44%|████▍     | 22/50 [00:02<00:03,  8.06it/s]Calculating train metrics:  46%|████▌     | 23/50 [00:02<00:03,  8.42it/s]Calculating train metrics:  50%|█████     | 25/50 [00:02<00:02,  8.74it/s]Calculating train metrics:  52%|█████▏    | 26/50 [00:03<00:02,  8.98it/s]Calculating train metrics:  54%|█████▍    | 27/50 [00:03<00:02,  8.94it/s]Calculating train metrics:  58%|█████▊    | 29/50 [00:03<00:02,  8.77it/s]Calculating train metrics:  60%|██████    | 30/50 [00:03<00:02,  8.53it/s]Calculating train metrics:  62%|██████▏   | 31/50 [00:03<00:02,  8.08it/s]Calculating train metrics:  64%|██████▍   | 32/50 [00:03<00:02,  8.00it/s]Calculating train metrics:  66%|██████▌   | 33/50 [00:03<00:02,  8.25it/s]Calculating train metrics:  68%|██████▊   | 34/50 [00:04<00:02,  7.91it/s]Calculating train metrics:  70%|███████   | 35/50 [00:04<00:01,  7.80it/s]Calculating train metrics:  72%|███████▏  | 36/50 [00:04<00:01,  7.35it/s]Calculating train metrics:  74%|███████▍  | 37/50 [00:04<00:01,  7.51it/s]Calculating train metrics:  76%|███████▌  | 38/50 [00:04<00:01,  7.80it/s]Calculating train metrics:  78%|███████▊  | 39/50 [00:04<00:01,  8.13it/s]Calculating train metrics:  80%|████████  | 40/50 [00:04<00:01,  8.24it/s]Calculating train metrics:  82%|████████▏ | 41/50 [00:04<00:01,  8.06it/s]Calculating train metrics:  84%|████████▍ | 42/50 [00:05<00:00,  8.51it/s]Calculating train metrics:  86%|████████▌ | 43/50 [00:05<00:00,  8.66it/s]Calculating train metrics:  88%|████████▊ | 44/50 [00:05<00:00,  8.55it/s]Calculating train metrics:  90%|█████████ | 45/50 [00:05<00:00,  8.65it/s]Calculating train metrics:  92%|█████████▏| 46/50 [00:05<00:00,  8.51it/s]Calculating train metrics:  94%|█████████▍| 47/50 [00:05<00:00,  8.25it/s]Calculating train metrics:  96%|█████████▌| 48/50 [00:05<00:00,  8.03it/s]Calculating train metrics: 100%|██████████| 50/50 [00:05<00:00,  9.62it/s]                                                                          Averaged Train Loss: 4.6058
+Averaged Local Test Accuracy: 0.0097
+Averaged Global Test Accuracy: 0.0097
+Averaged Test AUC: 0.4993
+Std Test Accuracy: 0.0300
+Std Test AUC: 0.0713
+Traceback (most recent call last):
+  File "/home/mulsoap0504/FedCD/FedCD-Baseline/system/main.py", line 661, in <module>
+    run(args)
+  File "/home/mulsoap0504/FedCD/FedCD-Baseline/system/main.py", line 416, in run
+    server.train()
+  File "/home/mulsoap0504/FedCD/FedCD-Baseline/system/flcore/servers/serveras.py", line 78, in train
+    self.send_selected_models(selected_ids, i)
+  File "/home/mulsoap0504/FedCD/FedCD-Baseline/system/flcore/servers/serveras.py", line 35, in send_selected_models
+    client.set_parameters(copy.deepcopy(self.global_model), progress)
+  File "/home/mulsoap0504/FedCD/FedCD-Baseline/system/flcore/clients/clientas.py", line 209, in set_parameters
+    class_loss = alignment_loss_fn(global_proto_batch[y_batch == label], mean_prototypes[label.item()])
+                                                                                         ^^^^^^^^^^^^
+KeyboardInterrupt
