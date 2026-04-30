@@ -10,6 +10,7 @@ import numpy as np
 import random
 import torchvision
 import logging
+import re
 
 from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverpFedMe import pFedMe
@@ -578,7 +579,6 @@ if __name__ == "__main__":
     elif "dir" in args.dataset:
         partition_info = "dir"
         # Extract alpha (e.g., dir0.1 -> 0.1)
-        import re
         match = re.search(r"dir([0-9.]+)", args.dataset)
         if match:
             alpha_info = match.group(1)
@@ -601,11 +601,40 @@ if __name__ == "__main__":
     path_parts = [repo_root, "logs", dataset_name, args.algorithm, f"GM_{model_name}", partition_info]
     if partition_info == "dir" and alpha_info:
         path_parts.append(alpha_info)
-    path_parts.extend([f"NC_{args.num_clients}", f"date_{date_str}", f"time_{timestamp}"])
-    
-    args.exp_dir = os.path.join(*path_parts)
-    if not os.path.exists(args.exp_dir):
-        os.makedirs(args.exp_dir)
+    path_parts.extend([f"NC_{args.num_clients}", f"date_{date_str}"])
+
+    base_exp_dir = os.path.join(*path_parts, f"time_{timestamp}")
+    goal_token = re.sub(r"[^A-Za-z0-9_.=-]+", "-", str(args.goal)).strip("-")[:80]
+    seed_token = f"seed{getattr(args, 'seed', 'unknown')}"
+    suffix_candidates = [
+        "",
+        f"_{seed_token}",
+        f"_{goal_token}" if goal_token else f"_{seed_token}_{os.getpid()}",
+        f"_{seed_token}_pid{os.getpid()}",
+    ]
+
+    args.exp_dir = None
+    for suffix in suffix_candidates:
+        exp_dir = base_exp_dir + suffix
+        try:
+            os.makedirs(exp_dir, exist_ok=False)
+            args.exp_dir = exp_dir
+            break
+        except FileExistsError:
+            continue
+
+    if args.exp_dir is None:
+        # Last-resort uniqueness for heavily parallel launches in the same second.
+        for idx in range(2, 10000):
+            exp_dir = f"{base_exp_dir}_{seed_token}_pid{os.getpid()}_{idx}"
+            try:
+                os.makedirs(exp_dir, exist_ok=False)
+                args.exp_dir = exp_dir
+                break
+            except FileExistsError:
+                continue
+        if args.exp_dir is None:
+            raise RuntimeError(f"Could not create a unique log directory under {base_exp_dir}")
     
     args.log_path = os.path.join(args.exp_dir, "acc.csv")
     print(f"\n[Info] Experiment logs will be saved to: {args.exp_dir}\n")

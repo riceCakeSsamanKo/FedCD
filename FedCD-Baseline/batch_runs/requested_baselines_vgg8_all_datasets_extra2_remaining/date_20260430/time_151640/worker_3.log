@@ -1,0 +1,242 @@
+[WRAPPER] worker=3 start 2026-04-30T15:16:40Z
+[INFO] Queue root: /home/mulsoap0504/FedCD/FedCD-Baseline/batch_runs/requested_baselines_vgg8_all_datasets_extra2_resume_parallel4_from21/date_20260430/time_151640/worker_3
+[INFO] Status CSV: /home/mulsoap0504/FedCD/FedCD-Baseline/batch_runs/requested_baselines_vgg8_all_datasets_extra2_resume_parallel4_from21/date_20260430/time_151640/worker_3/status.csv
+[INFO] Run logs: /home/mulsoap0504/FedCD/FedCD-Baseline/batch_runs/requested_baselines_vgg8_all_datasets_extra2_resume_parallel4_from21/date_20260430/time_151640/worker_3/run_logs
+[INFO] Python: /data/miniconda3/envs/pfllib/bin/python
+[INFO] Device: cuda:0
+[INFO] Worker: 3/4
+[INFO] Resume start idx: 215
+[INFO] Skip idxs: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,217,218,221,222,225,226,229,230,233,234,237,238,241,242,245,246,249,250,253,254,257,258,261,262,
+[INFO] Streaming each run log to worker stdout
+[INFO] Goal RUN_TAG: extra2_20260424_162110
+[INFO] Original total runs: 384
+
+[SKIP 217/384][worker 3/4] already completed
+[SKIP 218/384][worker 3/4] already completed
+[SKIP 221/384][worker 3/4] already completed
+[SKIP 222/384][worker 3/4] already completed
+[SKIP 225/384][worker 3/4] already completed
+[SKIP 226/384][worker 3/4] already completed
+[SKIP 229/384][worker 3/4] already completed
+[SKIP 230/384][worker 3/4] already completed
+[SKIP 233/384][worker 3/4] already completed
+[SKIP 234/384][worker 3/4] already completed
+[SKIP 237/384][worker 3/4] already completed
+[SKIP 238/384][worker 3/4] already completed
+[SKIP 241/384][worker 3/4] already completed
+[SKIP 242/384][worker 3/4] already completed
+[SKIP 245/384][worker 3/4] already completed
+[SKIP 246/384][worker 3/4] already completed
+[SKIP 249/384][worker 3/4] already completed
+[SKIP 250/384][worker 3/4] already completed
+[SKIP 253/384][worker 3/4] already completed
+[SKIP 254/384][worker 3/4] already completed
+[SKIP 257/384][worker 3/4] already completed
+[SKIP 258/384][worker 3/4] already completed
+[SKIP 261/384][worker 3/4] already completed
+[SKIP 262/384][worker 3/4] already completed
+==========================================================
+[START 266/384][worker 3/4] dataset=FashionMNIST_dir0.5_nc20 algo=FedAS seed=2
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=20 ncl=10
+[LOG] /home/mulsoap0504/FedCD/FedCD-Baseline/batch_runs/requested_baselines_vgg8_all_datasets_extra2_resume_parallel4_from21/date_20260430/time_151640/worker_3/run_logs/266_FashionMNIST_FedAS_dir05_nc20_seed2.log
+==========================================================
+
+[Info] Experiment logs will be saved to: /home/mulsoap0504/FedCD/FedCD-Baseline/logs/FashionMNIST/FedAS/GM_VGG8/dir/0.5/NC_20/date_20260430/time_151645
+
+==================================================
+goal = FedAS_dir0.5_nc20_extra2_20260424_162110_seed2
+device = cuda
+device_id = 0
+dataset = FashionMNIST_dir0.5_nc20
+num_classes = 10
+model = VGG8
+batch_size = 128
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 100
+top_cnt = 100
+local_epochs = 2
+algorithm = FedAS
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 20
+prev = 0
+times = 1
+seed = 2
+eval_gap = 1
+eval_common_global = True
+global_test_samples = 0
+common_eval_batch_size = 256
+save_folder_name = items
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+add_cw = False
+add_wdr = False
+decision_layer_only = False
+partial_layer_train = False
+split_train = False
+head_lr = 0.005
+head_bs = 10
+cw_layer_num = 1
+add_proto = False
+use_true_dist = False
+batch_eval = False
+clip_weight = False
+batch_eval_id = 0
+weight_decay = 10.0
+exp_dir = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/FashionMNIST/FedAS/GM_VGG8/dir/0.5/NC_20/date_20260430/time_151645
+log_path = /home/mulsoap0504/FedCD/FedCD-Baseline/logs/FashionMNIST/FedAS/GM_VGG8/dir/0.5/NC_20/date_20260430/time_151645/acc.csv
+==================================================
+
+============= Running time: 0th =============
+Using seed: 2
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=10, bias=True)
+  )
+)
+[Baseline] Global Test Set Size: 17509
+
+Join ratio / total clients: 1.0 / 20
+Finished creating server and clients.
+
+-------------Round number: 0-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing clients:   5%|▌         | 1/20 [00:00<00:12,  1.58it/s]Testing clients:  15%|█▌        | 3/20 [00:00<00:03,  4.85it/s]Testing clients:  25%|██▌       | 5/20 [00:00<00:01,  7.92it/s]Testing clients:  35%|███▌      | 7/20 [00:00<00:01, 10.25it/s]Testing clients:  45%|████▌     | 9/20 [00:01<00:00, 12.46it/s]Testing clients:  55%|█████▌    | 11/20 [00:01<00:00, 14.26it/s]Testing clients:  65%|██████▌   | 13/20 [00:01<00:00, 15.26it/s]Testing clients:  75%|███████▌  | 15/20 [00:01<00:00, 16.49it/s]Testing clients:  90%|█████████ | 18/20 [00:01<00:00, 17.84it/s]                                                                Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s]Calculating train metrics:  10%|█         | 2/20 [00:00<00:01, 11.82it/s]Calculating train metrics:  20%|██        | 4/20 [00:00<00:01, 11.09it/s]Calculating train metrics:  30%|███       | 6/20 [00:00<00:01,  7.19it/s]Calculating train metrics:  40%|████      | 8/20 [00:00<00:01,  8.30it/s]Calculating train metrics:  50%|█████     | 10/20 [00:01<00:01,  8.57it/s]Calculating train metrics:  60%|██████    | 12/20 [00:01<00:00,  9.19it/s]Calculating train metrics:  65%|██████▌   | 13/20 [00:01<00:00,  9.07it/s]Calculating train metrics:  70%|███████   | 14/20 [00:01<00:00,  9.18it/s]Calculating train metrics:  75%|███████▌  | 15/20 [00:01<00:00,  9.30it/s]Calculating train metrics:  85%|████████▌ | 17/20 [00:01<00:00, 10.30it/s]Calculating train metrics:  95%|█████████▌| 19/20 [00:02<00:00,  9.51it/s]                                                                          Averaged Train Loss: 2.3043
+Averaged Local Test Accuracy: 0.1015
+Averaged Global Test Accuracy: 0.1015
+Averaged Test AUC: 0.4880
+Std Test Accuracy: 0.1411
+Std Test AUC: 0.1240
+Client0 : ['31.5']
+Client1 : ['409.3']
+Client2 : ['346.4']
+Client3 : ['492.2']
+Client4 : ['394.1']
+Client5 : ['341.1']
+Client6 : ['205.1']
+Client7 : ['498.2']
+Client8 : ['151.4']
+Client9 : ['494.9']
+Client10 : ['189.5']
+Client11 : ['269.4']
+Client12 : ['356.8']
+Client13 : ['219.8']
+Client14 : ['321.6']
+Client15 : ['47.4']
+Client16 : ['284.2']
+Client17 : ['509.8']
+Client18 : ['394.9']
+Client19 : ['446.0']
+Avg Sum_T_FIM : ['320.2']
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s]                                                         ------------------------- time cost ------------------------- 142.3183238506317
+
+-------------Round number: 1-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing clients:  10%|█         | 2/20 [00:00<00:01, 15.92it/s]Testing clients:  20%|██        | 4/20 [00:00<00:01, 14.01it/s]Testing clients:  30%|███       | 6/20 [00:00<00:00, 14.10it/s]Testing clients:  40%|████      | 8/20 [00:00<00:00, 15.81it/s]Testing clients:  50%|█████     | 10/20 [00:00<00:00, 15.63it/s]Testing clients:  60%|██████    | 12/20 [00:00<00:00, 16.13it/s]Testing clients:  70%|███████   | 14/20 [00:00<00:00, 15.29it/s]Testing clients:  80%|████████  | 16/20 [00:01<00:00, 15.59it/s]Testing clients:  90%|█████████ | 18/20 [00:01<00:00, 15.15it/s]Testing clients: 100%|██████████| 20/20 [00:01<00:00, 14.90it/s]                                                                Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s]Calculating train metrics:  10%|█         | 2/20 [00:00<00:01, 10.40it/s]Calculating train metrics:  20%|██        | 4/20 [00:00<00:01,  9.10it/s]Calculating train metrics:  25%|██▌       | 5/20 [00:00<00:01,  8.91it/s]Calculating train metrics:  30%|███       | 6/20 [00:00<00:01,  8.20it/s]Calculating train metrics:  40%|████      | 8/20 [00:00<00:01,  8.82it/s]Calculating train metrics:  45%|████▌     | 9/20 [00:01<00:01,  8.96it/s]Calculating train metrics:  50%|█████     | 10/20 [00:01<00:01,  8.16it/s]Calculating train metrics:  55%|█████▌    | 11/20 [00:01<00:01,  8.43it/s]Calculating train metrics:  60%|██████    | 12/20 [00:01<00:00,  8.19it/s]Calculating train metrics:  65%|██████▌   | 13/20 [00:01<00:00,  7.96it/s]Calculating train metrics:  70%|███████   | 14/20 [00:01<00:00,  7.91it/s]Calculating train metrics:  75%|███████▌  | 15/20 [00:01<00:00,  7.89it/s]Calculating train metrics:  85%|████████▌ | 17/20 [00:02<00:00,  8.37it/s]Calculating train metrics:  90%|█████████ | 18/20 [00:02<00:00,  7.90it/s]Calculating train metrics:  95%|█████████▌| 19/20 [00:02<00:00,  7.76it/s]Calculating train metrics: 100%|██████████| 20/20 [00:02<00:00,  7.95it/s]                                                                          Averaged Train Loss: 1.5702
+Averaged Local Test Accuracy: 0.5419
+Averaged Global Test Accuracy: 0.1868
+Averaged Test AUC: 0.9030
+Std Test Accuracy: 0.1007
+Std Test AUC: 0.0574
+Client0 : ['31.5', '194.9']
+Client1 : ['409.3', '245.4']
+Client2 : ['346.4', '373.0']
+Client3 : ['492.2', '194.7']
+Client4 : ['394.1', '351.5']
+Client5 : ['341.1', '397.8']
+Client6 : ['205.1', '275.0']
+Client7 : ['498.2', '301.3']
+Client8 : ['151.4', '223.0']
+Client9 : ['494.9', '325.1']
+Client10 : ['189.5', '358.1']
+Client11 : ['269.4', '187.9']
+Client12 : ['356.8', '167.5']
+Client13 : ['219.8', '265.7']
+Client14 : ['321.6', '249.4']
+Client15 : ['47.4', '165.2']
+Client16 : ['284.2', '312.2']
+Client17 : ['509.8', '333.0']
+Client18 : ['394.9', '284.3']
+Client19 : ['446.0', '180.6']
+Avg Sum_T_FIM : ['320.2', '269.3']
+Collecting models:   0%|          | 0/20 [00:00<?, ?it/s]                                                         ------------------------- time cost ------------------------- 148.40216279029846
+
+-------------Round number: 2-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/20 [00:00<?, ?it/s]Testing clients:  10%|█         | 2/20 [00:00<00:01,  9.31it/s]Testing clients:  15%|█▌        | 3/20 [00:00<00:01,  8.70it/s]Testing clients:  20%|██        | 4/20 [00:00<00:01,  8.79it/s]Testing clients:  25%|██▌       | 5/20 [00:00<00:01,  8.65it/s]Testing clients:  30%|███       | 6/20 [00:00<00:01,  8.67it/s]Testing clients:  35%|███▌      | 7/20 [00:00<00:01,  7.81it/s]Testing clients:  40%|████      | 8/20 [00:00<00:01,  8.32it/s]Testing clients:  50%|█████     | 10/20 [00:01<00:01,  9.79it/s]Testing clients:  60%|██████    | 12/20 [00:01<00:00,  9.32it/s]Testing clients:  65%|██████▌   | 13/20 [00:01<00:00,  9.13it/s]Testing clients:  75%|███████▌  | 15/20 [00:01<00:00,  9.51it/s]Testing clients:  85%|████████▌ | 17/20 [00:01<00:00, 10.11it/s]Testing clients:  95%|█████████▌| 19/20 [00:02<00:00,  9.23it/s]Testing clients: 100%|██████████| 20/20 [00:02<00:00,  9.24it/s]                                                                Calculating train metrics:   0%|          | 0/20 [00:00<?, ?it/s]Calculating train metrics:  10%|█         | 2/20 [00:00<00:04,  4.35it/s]Calculating train metrics:  15%|█▌        | 3/20 [00:00<00:03,  4.65it/s]Calculating train metrics:  20%|██        | 4/20 [00:00<00:03,  5.08it/s]Calculating train metrics:  25%|██▌       | 5/20 [00:00<00:02,  5.27it/s]Calculating train metrics:  30%|███       | 6/20 [00:01<00:02,  4.99it/s]Calculating train metrics:  35%|███▌      | 7/20 [00:01<00:02,  5.23it/s]Calculating train metrics:  40%|████      | 8/20 [00:01<00:02,  5.31it/s]Calculating train metrics:  45%|████▌     | 9/20 [00:01<00:01,  5.73it/s]Calculating train metrics:  50%|█████     | 10/20 [00:01<00:01,  5.67it/s]Calculating train metrics:  55%|█████▌    | 11/20 [00:02<00:01,  6.14it/s]Calculating train metrics:  60%|██████    | 12/20 [00:02<00:01,  6.34it/s]Calculating train metrics:  65%|██████▌   | 13/20 [00:02<00:01,  5.99it/s]Calculating train metrics:  70%|███████   | 14/20 [00:02<00:00,  6.15it/s]Calculating train metrics:  75%|███████▌  | 15/20 [00:02<00:00,  6.07it/s]Calculating train metrics:  85%|████████▌ | 17/20 [00:02<00:00,  6.80it/s]Calculating train metrics:  90%|█████████ | 18/20 [00:03<00:00,  6.22it/s]Calculating train metrics:  95%|█████████▌| 19/20 [00:03<00:00,  5.93it/s]Calculating train metrics: 100%|██████████| 20/20 [00:03<00:00,  6.15it/s]                                                                          Averaged Train Loss: 1.1191
+Averaged Local Test Accuracy: 0.6711
+Averaged Global Test Accuracy: 0.2711
+Averaged Test AUC: 0.9467
+Std Test Accuracy: 0.0810
+Std Test AUC: 0.0277
