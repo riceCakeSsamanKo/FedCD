@@ -1,0 +1,9 @@
+  - /C:/Users/mulso/Documents/GitHub/FedCD/tools/regenerate_fedcd_fl_data.py:4: CIFAR-10/100은 FedCD 방식, FashionMNIST는 FedCCM 방식으로 생성
+  - /C:/Users/mulso/Documents/GitHub/FedCD/tools/prepare_ood_proxy.py:2: FedCCM의 OOD proxy 생성 함수만 재사용, FL split은 덮어쓰지 않음
+  - /C:/Users/mulso/Documents/GitHub/FedCD/tools/verify_fl_data_setup.py:2: CIFAR/FashionMNIST split과 OOD proxy 구조 검증
+  - /C:/Users/mulso/Documents/GitHub/FedCD/docs/data_generation.md:7: 새 컴퓨터에서 실행할 명령과 세팅 문서화
+
+
+  python tools\regenerate_fedcd_fl_data.py --fl-data-root ..\fl_data --delete-existing
+  python tools\prepare_ood_proxy.py --fl-data-root ..\fl_data --fedccm-root ..\FedCCM --proxy-source current
+  python tools\verify_fl_data_setup.py --fl-data-root ..\fl_data --check-ood-proxy
