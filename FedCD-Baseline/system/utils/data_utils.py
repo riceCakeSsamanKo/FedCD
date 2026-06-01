@@ -4,22 +4,34 @@ import torch
 from collections import defaultdict
 
 
-def _get_fl_data_root():
+def _get_fl_data_root(dataset=None):
     repo_root = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "..", "..")
     )
+    env_root = os.environ.get("FL_DATA_ROOT", "").strip()
     candidates = [
+        os.path.abspath(os.path.expanduser(env_root)) if env_root else "",
         os.path.join(repo_root, "fl_data"),
         os.path.abspath(os.path.join(repo_root, "..", "fl_data")),
     ]
+    seen = set()
     for path in candidates:
-        if os.path.isdir(path):
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        if os.path.isdir(path) and (dataset is None or os.path.isdir(os.path.join(path, dataset))):
             return path
-    return candidates[0]
+    fallback = next(path for path in candidates if path)
+    if dataset is not None:
+        searched = ", ".join(path for path in candidates if path)
+        raise FileNotFoundError(
+            f"Dataset '{dataset}' was not found under FL data roots: {searched}"
+        )
+    return fallback
 
 
 def read_data(dataset, idx, is_train=True):
-    fl_data_root = _get_fl_data_root()
+    fl_data_root = _get_fl_data_root(dataset)
     if is_train:
         data_dir = os.path.join(fl_data_root, dataset, "train")
     else:

@@ -1,0 +1,6 @@
+﻿algorithm,scenario,dataset,seed,status,exit_code,start_utc,end_utc,fl_data_root,goal
+FedALA,dir0.5_nc20,FashionMNIST_dir0.5_nc20,0,ok,0,2026-05-21T04:30:37Z,2026-05-21T05:22:24Z,C:\Users\mulso\Documents\GitHub\fl_data,FedALA_dir0.5_nc20_seed0_20260521_043037
+FedALA,dir0.5_nc20,FashionMNIST_dir0.5_nc20,1,ok,0,2026-05-21T05:22:24Z,2026-05-21T06:16:23Z,C:\Users\mulso\Documents\GitHub\fl_data,FedALA_dir0.5_nc20_seed1_20260521_043037
+FedALA,dir0.5_nc20,FashionMNIST_dir0.5_nc20,2,ok,0,2026-05-21T06:16:23Z,2026-05-21T07:10:15Z,C:\Users\mulso\Documents\GitHub\fl_data,FedALA_dir0.5_nc20_seed2_20260521_043037
+FedALA,dir0.5_nc20,FashionMNIST_dir0.5_nc20,3,ok,0,2026-05-21T07:10:15Z,2026-05-21T08:04:03Z,C:\Users\mulso\Documents\GitHub\fl_data,FedALA_dir0.5_nc20_seed3_20260521_043037
+FedALA,dir0.5_nc20,FashionMNIST_dir0.5_nc20,4,ok,0,2026-05-21T08:04:03Z,2026-05-21T08:58:00Z,C:\Users\mulso\Documents\GitHub\fl_data,FedALA_dir0.5_nc20_seed4_20260521_043037
