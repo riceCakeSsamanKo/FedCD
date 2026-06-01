@@ -178,8 +178,12 @@ class pFedMe(Server):
         tot_correct = []
         for c in self.clients:
             ct, ns = c.test_metrics_personalized()
-            tot_correct.append(ct*1.0)
-            num_samples.append(ns)
+            if not bool(getattr(self, "eval_common_global", True)) and ns > 0:
+                tot_correct.append(ct * 1.0 / ns)
+                num_samples.append(1)
+            else:
+                tot_correct.append(ct*1.0)
+                num_samples.append(ns)
         ids = [c.id for c in self.clients]
 
         return ids, num_samples, tot_correct

@@ -1028,12 +1028,14 @@ if __name__ == "__main__":
     # Prefer <repo>/fl_data, fallback to <repo_parent>/fl_data.
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     fl_data_candidates = [
+        os.environ.get("FL_DATA_ROOT", ""),
         os.path.join(repo_root, "fl_data"),
         os.path.abspath(os.path.join(repo_root, "..", "fl_data")),
     ]
+    fl_data_candidates = [path for path in fl_data_candidates if path]
     fl_data_root = next(
-        (path for path in fl_data_candidates if os.path.isdir(path)),
-        fl_data_candidates[0],
+        (path for path in fl_data_candidates if os.path.isdir(os.path.join(path, args.dataset))),
+        next((path for path in fl_data_candidates if os.path.isdir(path)), fl_data_candidates[0]),
     )
     config_path = os.path.join(fl_data_root, args.dataset, "config.json")
     if os.path.exists(config_path):
@@ -1041,7 +1043,10 @@ if __name__ == "__main__":
             with open(config_path, "r") as f:
                 cfg = json.load(f)
                 partition_info = cfg.get("partition", "unknown")
-                if partition_info == "dir":
+                if cfg.get("splitgp_rho", None) is not None:
+                    partition_info = f"splitgp_rho{float(cfg.get('splitgp_rho')):.1f}"
+                    args.eval_common_global = False
+                elif partition_info == "dir":
                     alpha_info = str(cfg.get("alpha", "unknown"))
         except Exception:
             pass

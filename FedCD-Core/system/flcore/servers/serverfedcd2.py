@@ -46,10 +46,13 @@ class FedCD2(Server):
         self.gm_period = max(1, int(getattr(args, "global_period", 1)))
         self.cluster_warmup_rounds = max(0, int(getattr(args, "fedcd2_cluster_warmup_rounds", 5)))
         self.cluster_assignments = {c.id: (c.id % self.num_clusters) for c in self.clients}
+        self.eval_common_global = bool(getattr(args, "eval_common_global", True))
+        self.global_test_samples = int(getattr(args, "global_test_samples", getattr(args, "common_test_samples", 0)))
+        self.common_eval_batch_size = int(getattr(args, "common_eval_batch_size", 256))
         self.global_gm_state = extract_gm_state(self.global_model)
         default_pm_state = extract_pm_state(self.global_model)
         self.cluster_pm_states = {cluster_id: copy.deepcopy(default_pm_state) for cluster_id in range(self.num_clusters)}
-        self.global_test_loader = self._build_global_test_loader()
+        self.global_test_loader = self._build_global_test_loader() if self.eval_common_global else None
 
         self.uploaded_client_payloads = []
         self.last_round_comm = {
@@ -62,6 +65,9 @@ class FedCD2(Server):
         self.rs_global_test_acc = []
 
     def _build_global_test_loader(self):
+        if not self.eval_common_global:
+            return None
+
         datasets = []
         for cid in range(self.num_clients):
             data = read_client_data(self.dataset, cid, is_train=False, few_shot=self.few_shot)
@@ -69,7 +75,7 @@ class FedCD2(Server):
                 datasets.append(data)
         if not datasets:
             return None
-        return DataLoader(ConcatDataset(datasets), batch_size=256, shuffle=False, drop_last=False)
+        return DataLoader(ConcatDataset(datasets), batch_size=self.common_eval_batch_size, shuffle=False, drop_last=False)
 
     @staticmethod
     def _state_bytes(nested_state):
@@ -192,6 +198,13 @@ class FedCD2(Server):
         auc_weighted = 0.0
         agree_pm = 0
         agree_gm = 0
+        client_fused_accs = []
+        client_gm_accs = []
+        client_pm_accs = []
+        client_losses = []
+        client_aucs = []
+        client_agree_pm = []
+        client_agree_gm = []
 
         for client in self.clients:
             if use_global_loader and self.global_test_loader is not None:
@@ -206,6 +219,27 @@ class FedCD2(Server):
             auc_weighted += metric["auc_weighted"]
             agree_pm += metric["agree_pm"]
             agree_gm += metric["agree_gm"]
+            if metric["num_samples"] > 0:
+                denom = float(metric["num_samples"])
+                client_fused_accs.append(metric["fused_correct"] / denom)
+                client_gm_accs.append(metric["gm_correct"] / denom)
+                client_pm_accs.append(metric["pm_correct"] / denom)
+                client_losses.append(metric["loss"] / denom)
+                client_aucs.append(metric["auc_weighted"] / denom)
+                client_agree_pm.append(metric["agree_pm"] / denom)
+                client_agree_gm.append(metric["agree_gm"] / denom)
+
+        if not use_global_loader and not self.eval_common_global:
+            return {
+                "fused_acc": float(np.mean(client_fused_accs)) if client_fused_accs else 0.0,
+                "gm_acc": float(np.mean(client_gm_accs)) if client_gm_accs else 0.0,
+                "pm_acc": float(np.mean(client_pm_accs)) if client_pm_accs else 0.0,
+                "train_loss": float(np.mean(client_losses)) if client_losses else 0.0,
+                "auc": float(np.mean(client_aucs)) if client_aucs else 0.0,
+                "agree_pm": float(np.mean(client_agree_pm)) if client_agree_pm else 0.0,
+                "agree_gm": float(np.mean(client_agree_gm)) if client_agree_gm else 0.0,
+                "num_samples": len(client_fused_accs),
+            }
 
         return {
             "fused_acc": fused_correct / max(num_samples, 1),
@@ -220,10 +254,15 @@ class FedCD2(Server):
 
     def evaluate(self, round_idx=0):
         local_stats = self._collect_eval_stats(use_global_loader=False)
-        global_stats = self._collect_eval_stats(use_global_loader=True) if self.global_test_loader is not None else local_stats
+        global_stats = (
+            self._collect_eval_stats(use_global_loader=True)
+            if self.eval_common_global and self.global_test_loader is not None
+            else None
+        )
 
         self.rs_test_acc.append(local_stats["fused_acc"])
-        self.rs_global_test_acc.append(global_stats["fused_acc"])
+        if global_stats is not None:
+            self.rs_global_test_acc.append(global_stats["fused_acc"])
         self.rs_test_auc.append(local_stats["auc"])
         self.rs_train_loss.append(local_stats["train_loss"])
 
@@ -231,10 +270,13 @@ class FedCD2(Server):
         print(f"Server: PM-only Local Test Accuracy: {local_stats['pm_acc']:.4f}")
         print(f"Server: GM-only Local Test Accuracy: {local_stats['gm_acc']:.4f}")
         print(f"Server: Local Fused Argmax Agreement (with PM/GM): {local_stats['agree_pm']:.4f}/{local_stats['agree_gm']:.4f}")
-        print(f"Server: Overall Averaged Global Test Accuracy: {global_stats['fused_acc']:.4f}")
-        print(f"Server: Fused Argmax Agreement (with PM/GM): {global_stats['agree_pm']:.4f}/{global_stats['agree_gm']:.4f}")
-        print(f"Server: GM-only Global Test Accuracy: {global_stats['gm_acc']:.4f}")
-        print(f"Server: PM-only Global Test Accuracy: {global_stats['pm_acc']:.4f}")
+        if global_stats is not None:
+            print(f"Server: Overall Averaged Global Test Accuracy: {global_stats['fused_acc']:.4f}")
+            print(f"Server: Fused Argmax Agreement (with PM/GM): {global_stats['agree_pm']:.4f}/{global_stats['agree_gm']:.4f}")
+            print(f"Server: GM-only Global Test Accuracy: {global_stats['gm_acc']:.4f}")
+            print(f"Server: PM-only Global Test Accuracy: {global_stats['pm_acc']:.4f}")
+        else:
+            print("Server: Global Test Accuracy skipped; SplitGP rho uses local-test average only.")
         print(f"Server: Overall Averaged Test AUC: {local_stats['auc']:.4f}")
         print(f"Server: Overall Averaged Train Loss: {local_stats['train_loss']:.4f}")
         self._print_cluster_detail()

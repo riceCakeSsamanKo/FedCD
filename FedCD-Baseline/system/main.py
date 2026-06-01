@@ -5,6 +5,7 @@ import torch.nn as nn
 import argparse
 import os
 import time
+import json
 import warnings
 import numpy as np
 import random
@@ -590,6 +591,35 @@ if __name__ == "__main__":
     # Always write logs to the repository-root logs directory,
     # even when launched from system/ (e.g., `cd system && python main.py`).
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+    fl_data_candidates = [
+        os.environ.get("FL_DATA_ROOT", ""),
+        os.path.abspath(os.path.join(repo_root, "..", "fl_data")),
+        os.path.abspath(os.path.join(repo_root, "..", "..", "fl_data")),
+        os.path.join(repo_root, "fl_data"),
+    ]
+    for fl_data_root in fl_data_candidates:
+        if not fl_data_root:
+            continue
+        config_path = os.path.join(fl_data_root, args.dataset, "config.json")
+        if not os.path.exists(config_path):
+            continue
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+            cfg_partition = cfg.get("partition", partition_info)
+            if cfg.get("splitgp_rho", None) is not None:
+                partition_info = f"splitgp_rho{float(cfg.get('splitgp_rho')):.1f}"
+                alpha_info = ""
+                args.eval_common_global = False
+            elif cfg_partition == "dir":
+                partition_info = "dir"
+                alpha_info = str(cfg.get("alpha", alpha_info or "unknown"))
+            elif cfg_partition:
+                partition_info = cfg_partition
+            break
+        except Exception:
+            pass
 
     dataset_name = args.dataset.split("_")[0] if isinstance(args.dataset, str) and len(args.dataset) > 0 else "UnknownDataset"
     dataset_name = dataset_name.replace("/", "-")

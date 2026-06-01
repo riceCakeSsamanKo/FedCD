@@ -170,9 +170,14 @@ class Ditto(Server):
         tot_auc = []
         for c in self.clients:
             ct, ns, auc = c.test_metrics_personalized()
-            tot_correct.append(ct*1.0)
-            tot_auc.append(auc*ns)
-            num_samples.append(ns)
+            if not bool(getattr(self, "eval_common_global", True)) and ns > 0:
+                tot_correct.append(ct * 1.0 / ns)
+                tot_auc.append(auc)
+                num_samples.append(1)
+            else:
+                tot_correct.append(ct*1.0)
+                tot_auc.append(auc*ns)
+                num_samples.append(ns)
 
         ids = [c.id for c in self.clients]
 

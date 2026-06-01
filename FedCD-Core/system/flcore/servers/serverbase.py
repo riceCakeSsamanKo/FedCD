@@ -209,9 +209,14 @@ class Server(object):
         tot_auc = []
         for c in tqdm(self.clients, desc="Testing Clients", leave=False):
             ct, ns, auc = c.test_metrics()
-            tot_correct.append(ct*1.0)
-            tot_auc.append(auc*ns)
-            num_samples.append(ns)
+            if not bool(getattr(self, "eval_common_global", True)) and ns > 0:
+                tot_correct.append(ct * 1.0 / ns)
+                tot_auc.append(auc)
+                num_samples.append(1)
+            else:
+                tot_correct.append(ct*1.0)
+                tot_auc.append(auc*ns)
+                num_samples.append(ns)
 
         ids = [c.id for c in self.clients]
 
@@ -369,9 +374,14 @@ class Server(object):
         tot_auc = []
         for c in tqdm(self.new_clients, desc="Testing New Clients", leave=False):
             ct, ns, auc = c.test_metrics()
-            tot_correct.append(ct*1.0)
-            tot_auc.append(auc*ns)
-            num_samples.append(ns)
+            if not bool(getattr(self, "eval_common_global", True)) and ns > 0:
+                tot_correct.append(ct * 1.0 / ns)
+                tot_auc.append(auc)
+                num_samples.append(1)
+            else:
+                tot_correct.append(ct*1.0)
+                tot_auc.append(auc*ns)
+                num_samples.append(ns)
 
         ids = [c.id for c in self.new_clients]
 
