@@ -26,7 +26,9 @@ import torchvision.transforms as transforms
 
 
 DEFAULT_RHOS = (0.0, 0.2, 0.4, 0.6, 0.8)
-DETERMINISTIC_SPLIT_VERSION = 2
+DETERMINISTIC_SPLIT_VERSION = 3
+DEFAULT_TEST_SAMPLES_PER_CLIENT = 1000
+CONTIGUOUS_CLASS_PAIRS = ((0, 1), (2, 3), (4, 5), (6, 7), (8, 9))
 
 
 DATASET_SPECS = {
@@ -89,6 +91,46 @@ def deterministic_order(values, seed: int, context: str) -> np.ndarray:
 
 def deterministic_permutation(size: int, seed: int, context: str) -> np.ndarray:
     return deterministic_order(range(size), seed, context)
+
+
+def split_count_by_labels(total_count: int, labels: list[int], *, seed: int, context: str) -> dict[int, int]:
+    if total_count <= 0 or not labels:
+        return {int(label): 0 for label in labels}
+
+    ordered_labels = deterministic_order(labels, seed, context).tolist()
+    base = int(total_count) // len(ordered_labels)
+    remainder = int(total_count) % len(ordered_labels)
+    counts = {int(label): base for label in ordered_labels}
+    for label in ordered_labels[:remainder]:
+        counts[int(label)] += 1
+    return counts
+
+
+def select_label_indices(
+    labels: np.ndarray,
+    label_count_map: dict[int, int],
+    *,
+    seed: int,
+    context: str,
+) -> np.ndarray:
+    selected = []
+    for label, count in sorted(label_count_map.items()):
+        count = int(count)
+        if count <= 0:
+            continue
+        pool = np.where(labels == int(label))[0]
+        if len(pool) == 0:
+            raise ValueError(f"No test samples available for label {label}")
+        ordered = deterministic_order(pool, seed, f"{context}:class:{label}")
+        if count <= len(ordered):
+            selected.append(ordered[:count])
+        else:
+            repeats = int(np.ceil(count / len(ordered)))
+            selected.append(np.tile(ordered, repeats)[:count])
+
+    if not selected:
+        return np.empty((0,), dtype=np.int64)
+    return np.concatenate(selected).astype(np.int64, copy=False)
 
 
 def load_torchvision_split(spec: dict, raw_root: Path, train: bool, download: bool):
@@ -157,6 +199,49 @@ def make_splitgp_train_partition(
     return client_indices, client_shard_labels
 
 
+def make_splitgp_class_pair_train_partition(
+    train_y: np.ndarray,
+    *,
+    dataset_key: str,
+    num_clients: int,
+    seed: int,
+) -> tuple[list[np.ndarray], list[list[int]]]:
+    class_pairs = [tuple(pair) for pair in CONTIGUOUS_CLASS_PAIRS]
+    if num_clients % len(class_pairs) != 0:
+        raise ValueError(
+            "Class-pair SplitGP setup requires num_clients to be divisible by "
+            f"{len(class_pairs)}; got {num_clients}"
+        )
+
+    clients_per_pair = num_clients // len(class_pairs)
+    client_indices = []
+    client_class_pairs = []
+
+    for pair_id, class_pair in enumerate(class_pairs):
+        class_chunks = {}
+        for label in class_pair:
+            label_idx = np.where(train_y == int(label))[0]
+            label_idx = label_idx[
+                deterministic_permutation(
+                    len(label_idx), seed, f"{dataset_key}:train:pair:{pair_id}:class:{label}"
+                )
+            ]
+            class_chunks[int(label)] = np.array_split(label_idx, clients_per_pair)
+
+        for offset in range(clients_per_pair):
+            chunks = [class_chunks[int(label)][offset] for label in class_pair]
+            idx = np.concatenate(chunks)
+            idx = idx[
+                deterministic_permutation(
+                    len(idx), seed, f"{dataset_key}:train:pair:{pair_id}:client:{offset}"
+                )
+            ]
+            client_indices.append(idx)
+            client_class_pairs.append([int(label) for label in class_pair])
+
+    return client_indices, client_class_pairs
+
+
 def label_statistics(labels: np.ndarray) -> list[list[int]]:
     counts = Counter(int(label) for label in labels.tolist())
     return [[label, counts[label]] for label in sorted(counts)]
@@ -170,34 +255,51 @@ def make_client_test_indices(
     dataset_key: str,
     client_id: int,
     seed: int,
+    test_samples_per_client: int,
 ) -> tuple[np.ndarray, int, int]:
-    main_classes_arr = np.array(main_classes, dtype=np.int64)
-    main_mask = np.isin(test_y, main_classes_arr)
-    main_idx = np.where(main_mask)[0]
-    ood_pool = np.where(~main_mask)[0]
-    ood_count = int(round(float(rho) * len(main_idx)))
+    total_count = int(test_samples_per_client)
+    if total_count <= 0:
+        raise ValueError(f"test_samples_per_client must be positive, got {total_count}")
 
-    if ood_count <= 0:
-        selected_ood = np.empty((0,), dtype=np.int64)
-    else:
-        if len(ood_pool) == 0:
-            raise ValueError(f"Client {client_id} has no OOD test pool")
-        ordered_ood = deterministic_order(
-            ood_pool, seed, f"{dataset_key}:rho:{rho_tag(rho)}:client:{client_id}:ood"
-        )
-        if ood_count <= len(ordered_ood):
-            selected_ood = ordered_ood[:ood_count]
-        else:
-            repeats = int(np.ceil(ood_count / len(ordered_ood)))
-            selected_ood = np.tile(ordered_ood, repeats)[:ood_count]
+    main_classes = sorted(int(label) for label in main_classes)
+    all_classes = sorted(int(label) for label in np.unique(test_y).tolist())
+    ood_classes = [label for label in all_classes if label not in set(main_classes)]
+    ood_count = int(round(total_count * float(rho) / (1.0 + float(rho)))) if rho > 0 else 0
+    ood_count = min(max(ood_count, 0), total_count)
+    main_count = total_count - ood_count
 
-    test_idx = np.concatenate([main_idx, selected_ood])
+    main_label_counts = split_count_by_labels(
+        main_count,
+        main_classes,
+        seed=seed,
+        context=f"{dataset_key}:rho:{rho_tag(rho)}:client:{client_id}:main:quota",
+    )
+    ood_label_counts = split_count_by_labels(
+        ood_count,
+        ood_classes,
+        seed=seed,
+        context=f"{dataset_key}:rho:{rho_tag(rho)}:client:{client_id}:ood:quota",
+    )
+    selected_main = select_label_indices(
+        test_y,
+        main_label_counts,
+        seed=seed,
+        context=f"{dataset_key}:rho:{rho_tag(rho)}:client:{client_id}:main",
+    )
+    selected_ood = select_label_indices(
+        test_y,
+        ood_label_counts,
+        seed=seed,
+        context=f"{dataset_key}:rho:{rho_tag(rho)}:client:{client_id}:ood",
+    )
+
+    test_idx = np.concatenate([selected_main, selected_ood])
     test_idx = test_idx[
         deterministic_permutation(
             len(test_idx), seed, f"{dataset_key}:rho:{rho_tag(rho)}:client:{client_id}:test"
         )
     ]
-    return test_idx, int(len(main_idx)), int(ood_count)
+    return test_idx, int(main_count), int(ood_count)
 
 
 def update_array_hash(hasher, array: np.ndarray) -> None:
@@ -241,13 +343,22 @@ def config_matches(config_path: Path, expected: dict) -> bool:
         "partition",
         "partition_detail",
         "splitgp_rho",
+        "splitgp_partition_mode",
         "splitgp_num_shards",
         "splitgp_shards_per_client",
+        "splitgp_test_samples_per_client",
         "seed",
         "deterministic_split_version",
         "content_sha256",
     ]
-    return all(found.get(key) == expected.get(key) for key in keys)
+    for key in keys:
+        found_value = found.get(key)
+        expected_value = expected.get(key)
+        if key == "splitgp_partition_mode" and found_value is None:
+            found_value = "shard_random"
+        if found_value != expected_value:
+            return False
+    return True
 
 
 def validate_dataset(root: Path, num_clients: int) -> None:
@@ -271,6 +382,8 @@ def generate_one_dataset(
     num_clients: int,
     num_shards: int,
     shards_per_client: int,
+    partition_mode: str,
+    test_samples_per_client: int,
     seed: int,
     download: bool,
     force: bool,
@@ -290,14 +403,29 @@ def generate_one_dataset(
     )
     num_classes = int(len(np.unique(train_y)))
 
-    client_train_indices, client_shard_labels = make_splitgp_train_partition(
-        train_y,
-        dataset_key=dataset_key,
-        num_clients=num_clients,
-        num_shards=num_shards,
-        shards_per_client=shards_per_client,
-        seed=seed,
-    )
+    partition_mode = str(partition_mode).strip().lower()
+    if partition_mode in {"class_pair", "class-pair", "pairs", "pair"}:
+        client_train_indices, client_shard_labels = make_splitgp_class_pair_train_partition(
+            train_y,
+            dataset_key=dataset_key,
+            num_clients=num_clients,
+            seed=seed,
+        )
+        partition_detail = "splitgp_class_pair"
+        splitgp_class_pairs = [list(pair) for pair in CONTIGUOUS_CLASS_PAIRS]
+    elif partition_mode in {"shard_random", "random_shards", "paper_shards"}:
+        client_train_indices, client_shard_labels = make_splitgp_train_partition(
+            train_y,
+            dataset_key=dataset_key,
+            num_clients=num_clients,
+            num_shards=num_shards,
+            shards_per_client=shards_per_client,
+            seed=seed,
+        )
+        partition_detail = "splitgp_shard"
+        splitgp_class_pairs = []
+    else:
+        raise ValueError(f"Unknown partition mode: {partition_mode}")
 
     train_stats = []
     client_train_classes = []
@@ -316,6 +444,7 @@ def generate_one_dataset(
             dataset_key=dataset_key,
             client_id=client_id,
             seed=seed,
+            test_samples_per_client=test_samples_per_client,
         )
 
         train_stats.append(label_statistics(client_train_y))
@@ -338,7 +467,7 @@ def generate_one_dataset(
         "non_iid": True,
         "balance": True,
         "partition": "pat",
-        "partition_detail": "splitgp_shard",
+        "partition_detail": partition_detail,
         "Size of samples for labels in clients": train_stats,
         "alpha": 0.0,
         "batch_size": 10,
@@ -347,12 +476,14 @@ def generate_one_dataset(
         "source_train_samples": int(len(train_y)),
         "source_test_samples": int(len(test_y)),
         "splitgp_rho": float(rho),
+        "splitgp_partition_mode": partition_mode,
+        "splitgp_class_pairs": splitgp_class_pairs,
         "splitgp_num_shards": int(num_shards),
         "splitgp_shards_per_client": int(shards_per_client),
+        "splitgp_test_samples_per_client": int(test_samples_per_client),
         "splitgp_test_definition": (
-            "Client test set is all original test samples whose labels are in "
-            "the client's train classes plus rho * #main samples drawn from "
-            "the remaining original test classes."
+            "Each client has a fixed-size local test set. Within that set, "
+            "main-class and OOD-class samples follow #OOD / #main = rho."
         ),
         "client_train_classes": client_train_classes,
         "client_shard_labels": client_shard_labels,
@@ -411,6 +542,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-clients", type=int, default=50)
     parser.add_argument("--num-shards", type=int, default=100)
     parser.add_argument("--shards-per-client", type=int, default=2)
+    parser.add_argument(
+        "--test-samples-per-client",
+        type=int,
+        default=DEFAULT_TEST_SAMPLES_PER_CLIENT,
+        help=(
+            "Fixed number of local test samples per client. The rho value changes "
+            "the main/OOD ratio inside this fixed-size test set."
+        ),
+    )
+    parser.add_argument(
+        "--partition-mode",
+        choices=["class_pair", "shard_random"],
+        default="shard_random",
+        help=(
+            "shard_random reproduces the SplitGP setup: sort by class, divide into "
+            "100 shards, and randomly assign 2 shards per client. class_pair is an "
+            "optional manual-pair ablation."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument(
         "--output-root",
@@ -465,6 +615,8 @@ def main() -> None:
                     num_clients=args.num_clients,
                     num_shards=args.num_shards,
                     shards_per_client=args.shards_per_client,
+                    partition_mode=args.partition_mode,
+                    test_samples_per_client=args.test_samples_per_client,
                     seed=args.seed,
                     download=not args.no_download,
                     force=args.force,
@@ -477,8 +629,10 @@ def main() -> None:
         "output_root": str(output_root),
         "raw_root": str(raw_root),
         "num_clients": int(args.num_clients),
+        "partition_mode": str(args.partition_mode),
         "num_shards": int(args.num_shards),
         "shards_per_client": int(args.shards_per_client),
+        "test_samples_per_client": int(args.test_samples_per_client),
         "rhos": [float(rho) for rho in args.rhos],
         "seed": int(args.seed),
     }
