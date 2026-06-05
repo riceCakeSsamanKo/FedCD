@@ -33,4 +33,4 @@ rho 0.8: main 556, OOD 444, total 1000
 
 data = {"x": numpy.ndarray, "y": numpy.ndarray}
 
-FedCD-Baseline은 FL_DATA_ROOT, FedCD/fl_data, ../fl_data 순서로 데이터셋을 찾는다.
+FedCD-Baseline은 ../data/fl_data, FL_DATA_ROOT, FedCD/fl_data, ../fl_data 순서로 데이터셋을 찾는다.

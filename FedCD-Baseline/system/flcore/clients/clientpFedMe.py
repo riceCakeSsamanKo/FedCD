@@ -84,7 +84,6 @@ class clientpFedMe(Client):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):
             old_param.data = new_param.data.clone()
         self.local_params = self._clone_param_list(model.parameters())
-        self.personalized_params = self._clone_param_list(model.parameters())
 
     def test_metrics_personalized(self):
         testloaderfull = self.load_test_data()
