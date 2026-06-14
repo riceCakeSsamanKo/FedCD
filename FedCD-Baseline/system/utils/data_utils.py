@@ -11,6 +11,7 @@ def _get_fl_data_root(dataset=None):
     env_root = os.environ.get("FL_DATA_ROOT", "").strip()
     candidates = [
         os.path.abspath(os.path.expanduser(env_root)) if env_root else "",
+        os.path.abspath(os.path.join(repo_root, "..", "data", "fl_data")),
         os.path.join(repo_root, "fl_data"),
         os.path.abspath(os.path.join(repo_root, "..", "fl_data")),
     ]

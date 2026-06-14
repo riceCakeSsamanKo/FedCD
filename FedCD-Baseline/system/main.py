@@ -594,6 +594,7 @@ if __name__ == "__main__":
 
     fl_data_candidates = [
         os.environ.get("FL_DATA_ROOT", ""),
+        os.path.abspath(os.path.join(repo_root, "..", "..", "data", "fl_data")),
         os.path.abspath(os.path.join(repo_root, "..", "fl_data")),
         os.path.abspath(os.path.join(repo_root, "..", "..", "fl_data")),
         os.path.join(repo_root, "fl_data"),
