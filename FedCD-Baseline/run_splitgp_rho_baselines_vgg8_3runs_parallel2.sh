@@ -21,6 +21,8 @@ TIMES="1"
 NUM_CLIENTS="50"
 TARGET_RUNS="${TARGET_RUNS:-3}"
 MAX_PARALLEL="${MAX_PARALLEL:-2}"
+WORKER_ID="${WORKER_ID:-${1:-0}}"
+NUM_WORKERS="${NUM_WORKERS:-${2:-1}}"
 
 # Completed old runs are treated as run 1. Missing runs use these seeds.
 seeds=(1 2 3)
@@ -29,11 +31,27 @@ datasets=("Cifar10" "FashionMNIST")
 algorithms=("cwFedAvg" "FedALA" "FedAS" "FedAvg" "FedBN" "FedCross" "pFedMe" "FedProx")
 rhos=("0.0" "0.2" "0.4" "0.6" "0.8")
 
-DATE_STR="$(date -u +%Y%m%d)"
-TIME_STR="$(date -u +%H%M%S)"
-RUN_TAG="splitgp_rho_3runs_${DATE_STR}_${TIME_STR}"
+if ! [[ "$WORKER_ID" =~ ^[0-9]+$ ]] || ! [[ "$NUM_WORKERS" =~ ^[0-9]+$ ]] || [[ "$NUM_WORKERS" -lt 1 ]]; then
+  echo "[ERROR] WORKER_ID and NUM_WORKERS must be non-negative integers, with NUM_WORKERS >= 1." >&2
+  exit 1
+fi
+
+if [[ "$WORKER_ID" -ge "$NUM_WORKERS" ]]; then
+  echo "[ERROR] WORKER_ID=$WORKER_ID must be smaller than NUM_WORKERS=$NUM_WORKERS." >&2
+  exit 1
+fi
+
+DATE_STR="${RUN_DATE_STR:-$(date -u +%Y%m%d)}"
+TIME_STR="${RUN_TIME_STR:-$(date -u +%H%M%S)}"
+RUN_TAG="${RUN_TAG:-splitgp_rho_3runs_${DATE_STR}_${TIME_STR}}"
 QUEUE_PARENT="$SCRIPT_DIR/batch_runs/splitgp_rho_baselines_vgg8_3runs"
-QUEUE_ROOT="$QUEUE_PARENT/date_${DATE_STR}/time_${TIME_STR}"
+if [[ "$NUM_WORKERS" -gt 1 ]]; then
+  QUEUE_ROOT="$QUEUE_PARENT/date_${DATE_STR}/time_${TIME_STR}/worker_${WORKER_ID}"
+  SCHEDULER_LOCK="$QUEUE_PARENT/.scheduler.worker_${WORKER_ID}.lock"
+else
+  QUEUE_ROOT="$QUEUE_PARENT/date_${DATE_STR}/time_${TIME_STR}"
+  SCHEDULER_LOCK="$QUEUE_PARENT/.scheduler.lock"
+fi
 RUN_LOG_DIR="$QUEUE_ROOT/run_logs"
 ITEM_ROOT="$QUEUE_ROOT/items"
 MPL_ROOT="$QUEUE_ROOT/mpl"
@@ -41,7 +59,6 @@ QUEUE_TSV="$QUEUE_ROOT/queue.tsv"
 PLAN_CSV="$QUEUE_ROOT/plan.csv"
 STATUS_CSV="$QUEUE_ROOT/status.csv"
 STATUS_LOCK="$QUEUE_ROOT/status.lock"
-SCHEDULER_LOCK="$QUEUE_PARENT/.scheduler.lock"
 
 if [[ ! -x "$PYTHON_BIN" ]]; then
   echo "[ERROR] Python interpreter not found: $PYTHON_BIN" >&2
@@ -72,13 +89,13 @@ mkdir -p "$QUEUE_PARENT" "$RUN_LOG_DIR" "$ITEM_ROOT" "$MPL_ROOT"
 
 exec 9>"$SCHEDULER_LOCK"
 if ! flock -n 9; then
-  echo "[ERROR] Another splitgp rho 3-run scheduler is already running." >&2
+  echo "[ERROR] Another splitgp rho 3-run scheduler is already running for worker $WORKER_ID/$NUM_WORKERS." >&2
   echo "[ERROR] Lock file: $SCHEDULER_LOCK" >&2
   exit 1
 fi
 
 printf '%s\n' 'dataset_base,algorithm,rho,num_clients,complete_before,queued_runs,existing_acc_csvs' > "$PLAN_CSV"
-printf '%s\n' 'idx,total_jobs,dataset_base,algorithm,rho,num_clients,seed,run_ordinal,target_runs,dataset,status,exit_code,start_utc,end_utc,run_log,complete_before,complete_after,latest_complete_acc_csv' > "$STATUS_CSV"
+printf '%s\n' 'idx,total_jobs,global_job_idx,worker_id,num_workers,dataset_base,algorithm,rho,num_clients,seed,run_ordinal,target_runs,dataset,status,exit_code,start_utc,end_utc,run_log,complete_before,complete_after,latest_complete_acc_csv' > "$STATUS_CSV"
 : > "$QUEUE_TSV"
 
 acc_csv_is_complete() {
@@ -164,7 +181,8 @@ extra_args_for_algo() {
 
 build_queue() {
   local queue_idx=0
-  local dataset_base algo rho dataset complete_before missing queued_runs existing_acc_csvs run_ordinal seed
+  local global_job_idx=0
+  local dataset_base algo rho dataset complete_before queued_runs existing_acc_csvs run_ordinal seed
 
   for dataset_base in "${datasets[@]}"; do
     for algo in "${algorithms[@]}"; do
@@ -185,15 +203,18 @@ build_queue() {
 
         printf '%s\n' "${dataset_base},${algo},${rho},${NUM_CLIENTS},${complete_before},${queued_runs},${existing_acc_csvs}" >> "$PLAN_CSV"
 
-        if [[ "$queued_runs" -eq 0 ]]; then
-          continue
-        fi
-
-        for ((run_ordinal=complete_before + 1; run_ordinal<=TARGET_RUNS; run_ordinal++)); do
+        for ((run_ordinal=1; run_ordinal<=TARGET_RUNS; run_ordinal++)); do
+          global_job_idx=$((global_job_idx + 1))
+          if [[ "$run_ordinal" -le "$complete_before" ]]; then
+            continue
+          fi
+          if [[ $(( (global_job_idx - 1) % NUM_WORKERS )) -ne "$WORKER_ID" ]]; then
+            continue
+          fi
           seed="${seeds[$((run_ordinal - 1))]}"
           queue_idx=$((queue_idx + 1))
-          printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-            "$queue_idx" "$dataset_base" "$algo" "$rho" "$seed" "$run_ordinal" "$complete_before" "$dataset" >> "$QUEUE_TSV"
+          printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$queue_idx" "$global_job_idx" "$dataset_base" "$algo" "$rho" "$seed" "$run_ordinal" "$complete_before" "$dataset" >> "$QUEUE_TSV"
         done
       done
     done
@@ -203,38 +224,39 @@ build_queue() {
 run_one() {
   local idx="$1"
   local total_jobs="$2"
-  local dataset_base="$3"
-  local algo="$4"
-  local rho="$5"
-  local seed="$6"
-  local run_ordinal="$7"
-  local complete_before="$8"
-  local dataset="$9"
+  local global_job_idx="$3"
+  local dataset_base="$4"
+  local algo="$5"
+  local rho="$6"
+  local seed="$7"
+  local run_ordinal="$8"
+  local complete_before="$9"
+  local dataset="${10}"
   local safe_rho="${rho//./p}"
   local start_utc end_utc exit_code status run_log goal item_dir mpl_dir complete_now complete_after latest_acc
   local -a extra_args
 
   complete_now="$(count_complete_acc_csvs "$dataset_base" "$algo" "$rho")"
-  if [[ "$complete_now" -ge "$TARGET_RUNS" ]]; then
+  if [[ "$complete_now" -ge "$TARGET_RUNS" || "$run_ordinal" -le "$complete_now" ]]; then
     start_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     end_utc="$start_utc"
     latest_acc="$(find_complete_acc_csvs "$dataset_base" "$algo" "$rho" | tail -n 1)"
-    append_status "${idx},${total_jobs},${dataset_base},${algo},${rho},${NUM_CLIENTS},${seed},${run_ordinal},${TARGET_RUNS},${dataset},skipped_triplicate,0,${start_utc},${end_utc},,${complete_before},${complete_now},${latest_acc}"
-    echo "[SKIP $idx/$total_jobs] already has ${complete_now}/${TARGET_RUNS}: dataset=$dataset algo=$algo rho=$rho"
+    append_status "${idx},${total_jobs},${global_job_idx},${WORKER_ID},${NUM_WORKERS},${dataset_base},${algo},${rho},${NUM_CLIENTS},${seed},${run_ordinal},${TARGET_RUNS},${dataset},skipped_completed,0,${start_utc},${end_utc},,${complete_before},${complete_now},${latest_acc}"
+    echo "[SKIP $idx/$total_jobs g${global_job_idx}][worker $WORKER_ID/$NUM_WORKERS] already has ${complete_now}/${TARGET_RUNS}: dataset=$dataset algo=$algo rho=$rho run=$run_ordinal"
     return 0
   fi
 
-  goal="${algo}_splitgp_rho${rho}_nc${NUM_CLIENTS}_${RUN_TAG}_job${idx}_seed${seed}_run${run_ordinal}"
-  run_log="$RUN_LOG_DIR/${idx}_${dataset_base}_${algo}_rho${safe_rho}_nc${NUM_CLIENTS}_seed${seed}_run${run_ordinal}.log"
-  item_dir="$ITEM_ROOT/job_${idx}_${dataset_base}_${algo}_rho${safe_rho}_seed${seed}"
-  mpl_dir="$MPL_ROOT/job_${idx}"
+  goal="${algo}_splitgp_rho${rho}_nc${NUM_CLIENTS}_${RUN_TAG}_job${global_job_idx}_seed${seed}_run${run_ordinal}"
+  run_log="$RUN_LOG_DIR/g${global_job_idx}_q${idx}_${dataset_base}_${algo}_rho${safe_rho}_nc${NUM_CLIENTS}_seed${seed}_run${run_ordinal}.log"
+  item_dir="$ITEM_ROOT/job_${global_job_idx}_${dataset_base}_${algo}_rho${safe_rho}_seed${seed}"
+  mpl_dir="$MPL_ROOT/job_${global_job_idx}"
   mkdir -p "$item_dir" "$mpl_dir"
 
   mapfile -t extra_args < <(extra_args_for_algo "$algo")
 
   start_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "=========================================================="
-  echo "[START $idx/$total_jobs] dataset=$dataset algo=$algo rho=$rho seed=$seed run=$run_ordinal/$TARGET_RUNS"
+  echo "[START $idx/$total_jobs g${global_job_idx}][worker $WORKER_ID/$NUM_WORKERS] dataset=$dataset algo=$algo rho=$rho seed=$seed run=$run_ordinal/$TARGET_RUNS"
   echo "[CONFIG] model=$MODEL rounds=$GLOBAL_ROUNDS lr=$LR lbs=$LBS ls=$LOCAL_EPOCHS jr=$JOIN_RATIO nc=$NUM_CLIENTS"
   echo "[LOG] $run_log"
   echo "=========================================================="
@@ -268,15 +290,15 @@ run_one() {
 
   if [[ "$exit_code" -eq 0 ]]; then
     status="ok"
-    echo "[DONE $idx/$total_jobs] dataset=$dataset algo=$algo rho=$rho seed=$seed"
+    echo "[DONE $idx/$total_jobs g${global_job_idx}][worker $WORKER_ID/$NUM_WORKERS] dataset=$dataset algo=$algo rho=$rho seed=$seed"
   else
     status="failed"
-    echo "[FAIL $idx/$total_jobs] dataset=$dataset algo=$algo rho=$rho seed=$seed exit_code=$exit_code"
+    echo "[FAIL $idx/$total_jobs g${global_job_idx}][worker $WORKER_ID/$NUM_WORKERS] dataset=$dataset algo=$algo rho=$rho seed=$seed exit_code=$exit_code"
     echo "[FAIL] Last 40 log lines:"
     tail -n 40 "$run_log" || true
   fi
 
-  append_status "${idx},${total_jobs},${dataset_base},${algo},${rho},${NUM_CLIENTS},${seed},${run_ordinal},${TARGET_RUNS},${dataset},${status},${exit_code},${start_utc},${end_utc},${run_log},${complete_before},${complete_after},${latest_acc}"
+  append_status "${idx},${total_jobs},${global_job_idx},${WORKER_ID},${NUM_WORKERS},${dataset_base},${algo},${rho},${NUM_CLIENTS},${seed},${run_ordinal},${TARGET_RUNS},${dataset},${status},${exit_code},${start_utc},${end_utc},${run_log},${complete_before},${complete_after},${latest_acc}"
 }
 
 running_jobs() {
@@ -295,6 +317,7 @@ echo "[INFO] Python: $PYTHON_BIN"
 echo "[INFO] FL_DATA_ROOT: $FL_DATA_ROOT"
 echo "[INFO] Device: $DEVICE:$DEVICE_ID"
 echo "[INFO] CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
+echo "[INFO] Worker: $WORKER_ID/$NUM_WORKERS"
 echo "[INFO] Target completed acc.csv files per setting: $TARGET_RUNS"
 echo "[INFO] Max parallel processes: $MAX_PARALLEL"
 echo "[INFO] Queued runs: $total_jobs"
@@ -311,18 +334,18 @@ if [[ "$total_jobs" -eq 0 ]]; then
   exit 0
 fi
 
-while IFS=$'\t' read -r idx dataset_base algo rho seed run_ordinal complete_before dataset; do
+while IFS=$'\t' read -r idx global_job_idx dataset_base algo rho seed run_ordinal complete_before dataset; do
   while (( "$(running_jobs)" >= MAX_PARALLEL )); do
     wait -n || true
   done
-  run_one "$idx" "$total_jobs" "$dataset_base" "$algo" "$rho" "$seed" "$run_ordinal" "$complete_before" "$dataset" &
+  run_one "$idx" "$total_jobs" "$global_job_idx" "$dataset_base" "$algo" "$rho" "$seed" "$run_ordinal" "$complete_before" "$dataset" &
 done < "$QUEUE_TSV"
 
 while (( "$(running_jobs)" > 0 )); do
   wait -n || true
 done
 
-failed_count="$(awk -F',' 'NR > 1 && $11 == "failed" {count += 1} END {print count + 0}' "$STATUS_CSV")"
+failed_count="$(awk -F',' 'NR > 1 && $14 == "failed" {count += 1} END {print count + 0}' "$STATUS_CSV")"
 echo "[INFO] SplitGP rho 3-run baseline queue finished."
 echo "[INFO] Status CSV: $STATUS_CSV"
 echo "[INFO] Failed jobs: $failed_count"

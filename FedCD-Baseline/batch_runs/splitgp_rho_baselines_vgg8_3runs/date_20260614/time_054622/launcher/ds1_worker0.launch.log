@@ -1,0 +1,61 @@
+[INFO] Queue root: /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0
+[INFO] Plan CSV: /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/plan.csv
+[INFO] Status CSV: /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/status.csv
+[INFO] Queue TSV: /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/queue.tsv
+[INFO] Run logs: /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs
+[INFO] Python: /ds1home/aislab/miniconda3/envs/pfllib/bin/python
+[INFO] FL_DATA_ROOT: /ds1home/aislab/Min/data/fl_data
+[INFO] Device: cuda:0
+[INFO] CUDA_VISIBLE_DEVICES: 0
+[INFO] Worker: 0/2
+[INFO] Target completed acc.csv files per setting: 3
+[INFO] Max parallel processes: 2
+[INFO] Queued runs: 35
+[INFO] Existing completed runs are never overwritten; new runs use unique goals, result names, and log directories.
+
+==========================================================
+[START 2/35 g95][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.2_nc50 algo=pFedMe rho=0.2 seed=2 run=2/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs/g95_q2_Cifar10_pFedMe_rho0p2_nc50_seed2_run2.log
+==========================================================
+==========================================================
+[START 1/35 g93][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.0_nc50 algo=pFedMe rho=0.0 seed=3 run=3/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs/g93_q1_Cifar10_pFedMe_rho0p0_nc50_seed3_run3.log
+==========================================================
+[DONE 1/35 g93][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.0_nc50 algo=pFedMe rho=0.0 seed=3
+==========================================================
+[START 3/35 g99][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.4_nc50 algo=pFedMe rho=0.4 seed=3 run=3/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs/g99_q3_Cifar10_pFedMe_rho0p4_nc50_seed3_run3.log
+==========================================================
+[DONE 2/35 g95][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.2_nc50 algo=pFedMe rho=0.2 seed=2
+==========================================================
+[START 4/35 g101][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.6_nc50 algo=pFedMe rho=0.6 seed=2 run=2/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs/g101_q4_Cifar10_pFedMe_rho0p6_nc50_seed2_run2.log
+==========================================================
+[DONE 3/35 g99][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.4_nc50 algo=pFedMe rho=0.4 seed=3
+==========================================================
+[START 5/35 g105][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.8_nc50 algo=pFedMe rho=0.8 seed=3 run=3/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs/g105_q5_Cifar10_pFedMe_rho0p8_nc50_seed3_run3.log
+==========================================================
+[DONE 4/35 g101][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.6_nc50 algo=pFedMe rho=0.6 seed=2
+==========================================================
+[START 6/35 g107][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.0_nc50 algo=FedProx rho=0.0 seed=2 run=2/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs/g107_q6_Cifar10_FedProx_rho0p0_nc50_seed2_run2.log
+==========================================================
+[DONE 6/35 g107][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.0_nc50 algo=FedProx rho=0.0 seed=2
+==========================================================
+[START 7/35 g111][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.2_nc50 algo=FedProx rho=0.2 seed=3 run=3/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs/g111_q7_Cifar10_FedProx_rho0p2_nc50_seed3_run3.log
+==========================================================
+[DONE 7/35 g111][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.2_nc50 algo=FedProx rho=0.2 seed=3
+==========================================================
+[START 8/35 g113][worker 0/2] dataset=Cifar10_splitgp_pat_rho0.4_nc50 algo=FedProx rho=0.4 seed=2 run=2/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260614/time_054622/worker_0/run_logs/g113_q8_Cifar10_FedProx_rho0p4_nc50_seed2_run2.log
+==========================================================

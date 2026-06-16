@@ -1,0 +1,2 @@
+[ERROR] Another splitgp rho 3-run scheduler is already running for worker 0/2.
+[ERROR] Lock file: /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/.scheduler.worker_0.lock
