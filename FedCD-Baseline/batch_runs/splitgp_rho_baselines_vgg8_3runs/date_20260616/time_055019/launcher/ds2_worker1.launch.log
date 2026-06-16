@@ -35,3 +35,15 @@
 [CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
 [LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g114_q4_Cifar10_FedProx_rho0p4_nc50_seed3_run3.log
 ==========================================================
+[DONE 3/31 g108][worker 1/2] dataset=Cifar10_splitgp_pat_rho0.0_nc50 algo=FedProx rho=0.0 seed=3
+==========================================================
+[START 5/31 g116][worker 1/2] dataset=Cifar10_splitgp_pat_rho0.6_nc50 algo=FedProx rho=0.6 seed=2 run=2/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g116_q5_Cifar10_FedProx_rho0p6_nc50_seed2_run2.log
+==========================================================
+[DONE 4/31 g114][worker 1/2] dataset=Cifar10_splitgp_pat_rho0.4_nc50 algo=FedProx rho=0.4 seed=3
+==========================================================
+[START 6/31 g120][worker 1/2] dataset=Cifar10_splitgp_pat_rho0.8_nc50 algo=FedProx rho=0.8 seed=3 run=3/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g120_q6_Cifar10_FedProx_rho0p8_nc50_seed3_run3.log
+==========================================================
