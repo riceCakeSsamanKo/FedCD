@@ -1,0 +1,163 @@
+
+[Info] Experiment logs will be saved to: /ds1home/aislab/Min/FedCD/FedCD-Baseline/logs/cifar10/pFedMe/GM_VGG8/splitgp_rho0.8/NC_50/date_20260616/time_052455
+
+==================================================
+goal = pFedMe_splitgp_rho0.8_nc50_splitgp_rho_3runs_20260616_052435_job104_seed2_run2
+device = cuda
+device_id = 0
+dataset = Cifar10_splitgp_pat_rho0.8_nc50
+num_classes = 10
+model = VGG8
+batch_size = 128
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 100
+top_cnt = 100
+local_epochs = 2
+algorithm = pFedMe
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 50
+prev = 0
+times = 1
+seed = 2
+eval_gap = 1
+eval_common_global = False
+global_test_samples = 0
+common_eval_batch_size = 256
+save_folder_name = /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_052435/worker_1/items/job_104_Cifar10_pFedMe_rho0p8_seed2
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+add_cw = False
+add_wdr = False
+decision_layer_only = False
+partial_layer_train = False
+split_train = False
+head_lr = 0.005
+head_bs = 10
+cw_layer_num = 1
+add_proto = False
+use_true_dist = False
+batch_eval = False
+clip_weight = False
+batch_eval_id = 0
+weight_decay = 10.0
+exp_dir = /ds1home/aislab/Min/FedCD/FedCD-Baseline/logs/cifar10/pFedMe/GM_VGG8/splitgp_rho0.8/NC_50/date_20260616/time_052455
+log_path = /ds1home/aislab/Min/FedCD/FedCD-Baseline/logs/cifar10/pFedMe/GM_VGG8/splitgp_rho0.8/NC_50/date_20260616/time_052455/acc.csv
+==================================================
+
+============= Running time: 0th =============
+Using seed: 2
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=10, bias=True)
+  )
+)
+
+Join ratio / total clients: 1.0 / 50
+Finished creating server and clients.
+Distributing models:   0%|          | 0/50 [00:00<?, ?it/s]Distributing models:  86%|████████▌ | 43/50 [00:00<00:00, 422.36it/s]                                                                     
+-------------Round number: 0-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/50 [00:00<?, ?it/s]Testing clients:   2%|▏         | 1/50 [00:00<00:42,  1.15it/s]Testing clients:   6%|▌         | 3/50 [00:01<00:12,  3.64it/s]Testing clients:  10%|█         | 5/50 [00:01<00:07,  6.01it/s]Testing clients:  14%|█▍        | 7/50 [00:01<00:05,  8.09it/s]Testing clients:  18%|█▊        | 9/50 [00:01<00:04,  9.82it/s]Testing clients:  22%|██▏       | 11/50 [00:01<00:03, 11.29it/s]Testing clients:  26%|██▌       | 13/50 [00:01<00:02, 12.39it/s]Testing clients:  30%|███       | 15/50 [00:01<00:02, 13.16it/s]Testing clients:  34%|███▍      | 17/50 [00:01<00:02, 13.59it/s]Testing clients:  38%|███▊      | 19/50 [00:02<00:02, 13.67it/s]Testing clients:  42%|████▏     | 21/50 [00:02<00:02, 13.64it/s]Testing clients:  46%|████▌     | 23/50 [00:02<00:01, 13.96it/s]Testing clients:  50%|█████     | 25/50 [00:02<00:01, 14.09it/s]Testing clients:  54%|█████▍    | 27/50 [00:02<00:01, 13.78it/s]Testing clients:  58%|█████▊    | 29/50 [00:02<00:01, 13.66it/s]Testing clients:  62%|██████▏   | 31/50 [00:02<00:01, 13.57it/s]Testing clients:  66%|██████▌   | 33/50 [00:03<00:01, 13.47it/s]Testing clients:  70%|███████   | 35/50 [00:03<00:01, 13.45it/s]Testing clients:  74%|███████▍  | 37/50 [00:03<00:00, 13.48it/s]Testing clients:  78%|███████▊  | 39/50 [00:03<00:00, 13.48it/s]Testing clients:  82%|████████▏ | 41/50 [00:03<00:00, 13.40it/s]Testing clients:  86%|████████▌ | 43/50 [00:03<00:00, 13.53it/s]Testing clients:  90%|█████████ | 45/50 [00:03<00:00, 13.43it/s]Testing clients:  94%|█████████▍| 47/50 [00:04<00:00, 13.44it/s]Testing clients:  98%|█████████▊| 49/50 [00:04<00:00, 13.39it/s]                                                                Calculating train metrics:   0%|          | 0/50 [00:00<?, ?it/s]Calculating train metrics:   2%|▏         | 1/50 [00:00<00:06,  7.99it/s]Calculating train metrics:   6%|▌         | 3/50 [00:00<00:04, 10.20it/s]Calculating train metrics:  10%|█         | 5/50 [00:00<00:04, 10.73it/s]Calculating train metrics:  14%|█▍        | 7/50 [00:00<00:03, 11.57it/s]Calculating train metrics:  18%|█▊        | 9/50 [00:00<00:03, 12.53it/s]Calculating train metrics:  22%|██▏       | 11/50 [00:00<00:03, 12.86it/s]Calculating train metrics:  26%|██▌       | 13/50 [00:01<00:02, 12.53it/s]Calculating train metrics:  30%|███       | 15/50 [00:01<00:02, 12.71it/s]Calculating train metrics:  34%|███▍      | 17/50 [00:01<00:02, 12.94it/s]Calculating train metrics:  38%|███▊      | 19/50 [00:01<00:02, 13.11it/s]Calculating train metrics:  42%|████▏     | 21/50 [00:01<00:02, 13.30it/s]Calculating train metrics:  46%|████▌     | 23/50 [00:01<00:02, 13.35it/s]Calculating train metrics:  50%|█████     | 25/50 [00:01<00:01, 13.45it/s]Calculating train metrics:  54%|█████▍    | 27/50 [00:02<00:01, 13.61it/s]Calculating train metrics:  58%|█████▊    | 29/50 [00:02<00:01, 13.74it/s]Calculating train metrics:  62%|██████▏   | 31/50 [00:02<00:01, 13.79it/s]Calculating train metrics:  66%|██████▌   | 33/50 [00:02<00:01, 13.94it/s]Calculating train metrics:  70%|███████   | 35/50 [00:02<00:01, 14.03it/s]Calculating train metrics:  74%|███████▍  | 37/50 [00:02<00:00, 13.97it/s]Calculating train metrics:  78%|███████▊  | 39/50 [00:02<00:00, 14.01it/s]Calculating train metrics:  82%|████████▏ | 41/50 [00:03<00:00, 14.00it/s]Calculating train metrics:  86%|████████▌ | 43/50 [00:03<00:00, 13.98it/s]Calculating train metrics:  90%|█████████ | 45/50 [00:03<00:00, 14.00it/s]Calculating train metrics:  94%|█████████▍| 47/50 [00:03<00:00, 14.07it/s]Calculating train metrics:  98%|█████████▊| 49/50 [00:03<00:00, 13.99it/s]                                                                          Averaged Train Loss: 2.3036
+Averaged Local Test Accuracy: 0.1000
+Std Test Accuracy: 0.0890
+
+Evaluate personalized model
+Averaged Train Loss: 2.3036
+Averaged Local Test Accuracy: 0.1000
+Averaged Personalized Train Accuracy: 0.1000
+Std Test Accuracy: 0.0890
+Collecting models:   0%|          | 0/50 [00:00<?, ?it/s]                                                         Aggregating models:   0%|          | 0/50 [00:00<?, ?it/s]Aggregating models:  28%|██▊       | 14/50 [00:00<00:00, 131.29it/s]Aggregating models:  56%|█████▌    | 28/50 [00:00<00:00, 133.88it/s]Aggregating models:  86%|████████▌ | 43/50 [00:00<00:00, 139.65it/s]                                                                    ------------------------- time cost ------------------------- 112.06963205337524
+Distributing models:   0%|          | 0/50 [00:00<?, ?it/s]Distributing models:  42%|████▏     | 21/50 [00:00<00:00, 200.64it/s]Distributing models:  84%|████████▍ | 42/50 [00:00<00:00, 176.35it/s]                                                                     
+-------------Round number: 1-------------
+
+Evaluate global model
+Testing clients:   0%|          | 0/50 [00:00<?, ?it/s]Testing clients:   2%|▏         | 1/50 [00:00<00:06,  7.32it/s]Testing clients:   4%|▍         | 2/50 [00:00<00:07,  6.84it/s]Testing clients:   6%|▌         | 3/50 [00:00<00:06,  7.72it/s]Testing clients:   8%|▊         | 4/50 [00:00<00:06,  7.09it/s]Testing clients:  10%|█         | 5/50 [00:00<00:06,  6.92it/s]Testing clients:  12%|█▏        | 6/50 [00:00<00:06,  6.52it/s]Testing clients:  14%|█▍        | 7/50 [00:01<00:06,  6.77it/s]Testing clients:  16%|█▌        | 8/50 [00:01<00:05,  7.10it/s]Testing clients:  18%|█▊        | 9/50 [00:01<00:05,  7.29it/s]Testing clients:  20%|██        | 10/50 [00:01<00:06,  6.51it/s]Testing clients:  22%|██▏       | 11/50 [00:01<00:05,  6.55it/s]Testing clients:  24%|██▍       | 12/50 [00:01<00:05,  6.52it/s]Testing clients:  26%|██▌       | 13/50 [00:01<00:05,  6.72it/s]Testing clients:  28%|██▊       | 14/50 [00:02<00:04,  7.34it/s]Testing clients:  30%|███       | 15/50 [00:02<00:05,  6.46it/s]Testing clients:  32%|███▏      | 16/50 [00:02<00:04,  7.02it/s]Testing clients:  34%|███▍      | 17/50 [00:02<00:04,  7.48it/s]Testing clients:  38%|███▊      | 19/50 [00:02<00:03,  8.96it/s]Testing clients:  42%|████▏     | 21/50 [00:02<00:02,  9.97it/s]Testing clients:  44%|████▍     | 22/50 [00:02<00:02,  9.60it/s]Testing clients:  46%|████▌     | 23/50 [00:03<00:02,  9.35it/s]Testing clients:  50%|█████     | 25/50 [00:03<00:02,  9.62it/s]Testing clients:  54%|█████▍    | 27/50 [00:03<00:02, 10.23it/s]Testing clients:  58%|█████▊    | 29/50 [00:03<00:02, 10.05it/s]Testing clients:  60%|██████    | 30/50 [00:03<00:02,  9.66it/s]Testing clients:  62%|██████▏   | 31/50 [00:03<00:01,  9.72it/s]Testing clients:  66%|██████▌   | 33/50 [00:03<00:01, 10.24it/s]Testing clients:  70%|███████   | 35/50 [00:04<00:01,  9.51it/s]Testing clients:  72%|███████▏  | 36/50 [00:04<00:01,  9.59it/s]Testing clients:  76%|███████▌  | 38/50 [00:04<00:01,  9.75it/s]Testing clients:  80%|████████  | 40/50 [00:04<00:00, 10.22it/s]Testing clients:  84%|████████▍ | 42/50 [00:04<00:00,  9.81it/s]Testing clients:  86%|████████▌ | 43/50 [00:05<00:00,  9.70it/s]Testing clients:  90%|█████████ | 45/50 [00:05<00:00,  9.31it/s]Testing clients:  94%|█████████▍| 47/50 [00:05<00:00, 10.37it/s]Testing clients:  98%|█████████▊| 49/50 [00:05<00:00, 10.72it/s]                                                                Calculating train metrics:   0%|          | 0/50 [00:00<?, ?it/s]Calculating train metrics:   4%|▍         | 2/50 [00:00<00:04, 11.32it/s]Calculating train metrics:   8%|▊         | 4/50 [00:00<00:03, 11.95it/s]Calculating train metrics:  12%|█▏        | 6/50 [00:00<00:04, 10.95it/s]Calculating train metrics:  16%|█▌        | 8/50 [00:00<00:03, 10.97it/s]Calculating train metrics:  20%|██        | 10/50 [00:00<00:03, 10.96it/s]Calculating train metrics:  24%|██▍       | 12/50 [00:01<00:03, 11.13it/s]Calculating train metrics:  28%|██▊       | 14/50 [00:01<00:03, 10.50it/s]Calculating train metrics:  32%|███▏      | 16/50 [00:01<00:03, 10.04it/s]Calculating train metrics:  36%|███▌      | 18/50 [00:01<00:03,  9.79it/s]Calculating train metrics:  40%|████      | 20/50 [00:01<00:02, 10.57it/s]Calculating train metrics:  44%|████▍     | 22/50 [00:02<00:02, 11.07it/s]Calculating train metrics:  48%|████▊     | 24/50 [00:02<00:02, 11.07it/s]Calculating train metrics:  52%|█████▏    | 26/50 [00:02<00:02, 10.84it/s]Calculating train metrics:  56%|█████▌    | 28/50 [00:02<00:02, 10.20it/s]Calculating train metrics:  60%|██████    | 30/50 [00:02<00:01, 10.15it/s]Calculating train metrics:  64%|██████▍   | 32/50 [00:03<00:01,  9.87it/s]Calculating train metrics:  66%|██████▌   | 33/50 [00:03<00:01,  9.77it/s]Calculating train metrics:  70%|███████   | 35/50 [00:03<00:01,  9.83it/s]Calculating train metrics:  74%|███████▍  | 37/50 [00:03<00:01, 10.92it/s]Calculating train metrics:  78%|███████▊  | 39/50 [00:03<00:00, 11.02it/s]Calculating train metrics:  82%|████████▏ | 41/50 [00:03<00:00, 11.61it/s]Calculating train metrics:  86%|████████▌ | 43/50 [00:04<00:00, 10.67it/s]Calculating train metrics:  90%|█████████ | 45/50 [00:04<00:00, 10.53it/s]Calculating train metrics:  94%|█████████▍| 47/50 [00:04<00:00, 10.92it/s]Calculating train metrics:  98%|█████████▊| 49/50 [00:04<00:00, 10.87it/s]                                                                          Averaged Train Loss: 2.2157
+Averaged Local Test Accuracy: 0.2199
+Std Test Accuracy: 0.0851
+
+Evaluate personalized model
+Averaged Train Loss: 0.8232
+Averaged Local Test Accuracy: 0.4331
+Averaged Personalized Train Accuracy: 0.7919
+Std Test Accuracy: 0.0342
+Traceback (most recent call last):
+  File "/ds1home/aislab/Min/FedCD/FedCD-Baseline/system/main.py", line 692, in <module>
+    run(args)
+  File "/ds1home/aislab/Min/FedCD/FedCD-Baseline/system/main.py", line 417, in run
+    server.train()
+  File "/ds1home/aislab/Min/FedCD/FedCD-Baseline/system/flcore/servers/serverpFedMe.py", line 42, in train
+    self.log_usage_combined(global_metrics, personalized_metrics)
+  File "/ds1home/aislab/Min/FedCD/FedCD-Baseline/system/flcore/servers/serverpFedMe.py", line 241, in log_usage_combined
+    with open(file_path, "w") as f:
+         ^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/ds1home/aislab/Min/FedCD/FedCD-Baseline/logs/cifar10/pFedMe/GM_VGG8/splitgp_rho0.8/NC_50/date_20260616/time_052455/acc.csv'
