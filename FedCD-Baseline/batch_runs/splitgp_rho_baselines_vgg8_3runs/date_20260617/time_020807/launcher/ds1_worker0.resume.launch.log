@@ -46,3 +46,7 @@
 ==========================================================
 [DONE 8/9 g237][worker 0/2] dataset=FashionMNIST_splitgp_pat_rho0.6_nc50 algo=FedProx rho=0.6 seed=3
 [SKIP 9/9 g239][worker 0/2] already has 2/3: dataset=FashionMNIST_splitgp_pat_rho0.8_nc50 algo=FedProx rho=0.8 run=2
+[DONE 4/9 g225][worker 0/2] dataset=FashionMNIST_splitgp_pat_rho0.8_nc50 algo=pFedMe rho=0.8 seed=3
+[INFO] SplitGP rho 3-run baseline queue finished.
+[INFO] Status CSV: /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260617/time_020807/worker_0/status.csv
+[INFO] Failed jobs: 0
