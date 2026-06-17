@@ -3,8 +3,17 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYSTEM_DIR="$SCRIPT_DIR/system"
-PYTHON_BIN="${FEDCD_PYTHON:-/ds1home/aislab/miniconda3/envs/pfllib/bin/python}"
-FL_DATA_ROOT="${FL_DATA_ROOT:-/ds1home/aislab/Min/data/fl_data}"
+if [[ -n "${FEDCD_PYTHON:-}" ]]; then
+  PYTHON_BIN="$FEDCD_PYTHON"
+else
+  PYTHON_BIN="$(command -v python || true)"
+fi
+
+if [[ -n "${FL_DATA_ROOT:-}" ]]; then
+  FL_DATA_ROOT="$FL_DATA_ROOT"
+else
+  FL_DATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)/fl_data"
+fi
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export FL_DATA_ROOT
