@@ -143,3 +143,27 @@
 [CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
 [LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g212_q22_FashionMNIST_pFedMe_rho0p0_nc50_seed2_run2.log
 ==========================================================
+[DONE 21/31 g210][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.8_nc50 algo=FedCross rho=0.8 seed=3
+==========================================================
+[START 23/31 g216][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.2_nc50 algo=pFedMe rho=0.2 seed=3 run=3/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g216_q23_FashionMNIST_pFedMe_rho0p2_nc50_seed3_run3.log
+==========================================================
+[DONE 22/31 g212][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.0_nc50 algo=pFedMe rho=0.0 seed=2
+==========================================================
+[START 24/31 g218][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.4_nc50 algo=pFedMe rho=0.4 seed=2 run=2/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g218_q24_FashionMNIST_pFedMe_rho0p4_nc50_seed2_run2.log
+==========================================================
+[DONE 23/31 g216][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.2_nc50 algo=pFedMe rho=0.2 seed=3
+==========================================================
+[START 25/31 g222][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.6_nc50 algo=pFedMe rho=0.6 seed=3 run=3/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g222_q25_FashionMNIST_pFedMe_rho0p6_nc50_seed3_run3.log
+==========================================================
+[DONE 24/31 g218][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.4_nc50 algo=pFedMe rho=0.4 seed=2
+==========================================================
+[START 26/31 g224][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.8_nc50 algo=pFedMe rho=0.8 seed=2 run=2/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g224_q26_FashionMNIST_pFedMe_rho0p8_nc50_seed2_run2.log
+==========================================================

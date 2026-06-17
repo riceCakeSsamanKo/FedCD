@@ -143,3 +143,9 @@
 [CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
 [LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_0/run_logs/g213_q22_FashionMNIST_pFedMe_rho0p0_nc50_seed3_run3.log
 ==========================================================
+[DONE 21/31 g207][worker 0/2] dataset=FashionMNIST_splitgp_pat_rho0.6_nc50 algo=FedCross rho=0.6 seed=3
+==========================================================
+[START 23/31 g215][worker 0/2] dataset=FashionMNIST_splitgp_pat_rho0.2_nc50 algo=pFedMe rho=0.2 seed=2 run=2/3
+[CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_0/run_logs/g215_q23_FashionMNIST_pFedMe_rho0p2_nc50_seed2_run2.log
+==========================================================
