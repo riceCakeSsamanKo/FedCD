@@ -1,0 +1,9 @@
+1	213	FashionMNIST	pFedMe	0.0	3	3	2	FashionMNIST_splitgp_pat_rho0.0_nc50
+2	219	FashionMNIST	pFedMe	0.4	3	3	2	FashionMNIST_splitgp_pat_rho0.4_nc50
+3	221	FashionMNIST	pFedMe	0.6	2	2	1	FashionMNIST_splitgp_pat_rho0.6_nc50
+4	225	FashionMNIST	pFedMe	0.8	3	3	1	FashionMNIST_splitgp_pat_rho0.8_nc50
+5	227	FashionMNIST	FedProx	0.0	2	2	1	FashionMNIST_splitgp_pat_rho0.0_nc50
+6	231	FashionMNIST	FedProx	0.2	3	3	1	FashionMNIST_splitgp_pat_rho0.2_nc50
+7	233	FashionMNIST	FedProx	0.4	2	2	1	FashionMNIST_splitgp_pat_rho0.4_nc50
+8	237	FashionMNIST	FedProx	0.6	3	3	1	FashionMNIST_splitgp_pat_rho0.6_nc50
+9	239	FashionMNIST	FedProx	0.8	2	2	1	FashionMNIST_splitgp_pat_rho0.8_nc50

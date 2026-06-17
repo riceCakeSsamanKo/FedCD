@@ -4,3 +4,7 @@ cd /ds1home/aislab/Min/FedCD/FedCD-Baseline
   --scale percent \
   --decimals 2 \
   --output-csv /ds1home/aislab/Min/FedCD/baseline_result.csv
+
+
+cd /ds1home/aislab/Min/FedCD/FedCD-Baseline
+./tools/summarize_splitgp_3run_best_acc.py --scale percent --decimals 2
