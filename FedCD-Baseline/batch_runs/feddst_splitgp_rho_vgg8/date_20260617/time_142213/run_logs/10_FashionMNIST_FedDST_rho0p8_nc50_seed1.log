@@ -1,0 +1,649 @@
+
+[Info] Experiment logs will be saved to: /home1/irteam/workspace/FedCD/FedCD-Baseline/logs/FashionMNIST/FedDST/GM_VGG8/splitgp_rho0.8/NC_50/date_20260617/time_233125
+
+==================================================
+goal = FedDST_splitgp_rho0.8_nc50_feddst_splitgp_rho_20260617_142213_seed1
+device = cuda
+device_id = 0
+dataset = FashionMNIST_splitgp_pat_rho0.8_nc50
+num_classes = 10
+model = VGG8
+batch_size = 128
+local_learning_rate = 0.005
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+global_rounds = 100
+top_cnt = 100
+local_epochs = 2
+algorithm = FedDST
+join_ratio = 1.0
+random_join_ratio = False
+num_clients = 50
+prev = 0
+times = 1
+seed = 1
+eval_gap = 1
+eval_common_global = False
+global_test_samples = 0
+common_eval_batch_size = 256
+save_folder_name = items
+auto_break = False
+dlg_eval = False
+dlg_gap = 100
+batch_num_per_client = 2
+num_new_clients = 0
+fine_tuning_epoch_new = 0
+feature_dim = 512
+vocab_size = 80
+max_len = 200
+few_shot = 0
+client_drop_rate = 0.0
+train_slow_rate = 0.0
+send_slow_rate = 0.0
+time_select = False
+time_threthold = 10000
+beta = 0.0
+lamda = 1.0
+mu = 0.0
+K = 5
+p_learning_rate = 0.01
+M = 5
+itk = 4000
+alphaK = 1.0
+sigma = 1.0
+alpha = 1.0
+plocal_epochs = 1
+tau = 1.0
+fine_tuning_epochs = 10
+dr_learning_rate = 0.0
+L = 1.0
+noise_dim = 512
+generator_learning_rate = 0.005
+hidden_dim = 512
+server_epochs = 1000
+localize_feature_extractor = False
+server_learning_rate = 1.0
+eta = 1.0
+rand_percent = 80
+layer_idx = 2
+mentee_learning_rate = 0.005
+T_start = 0.95
+T_end = 0.98
+momentum = 0.1
+kl_weight = 0.0
+first_stage_bound = 0
+fedcross_alpha = 0.99
+collaberative_model_select_strategy = 1
+feddst_sparsity = 0.8
+feddst_final_sparsity = 0.8
+feddst_readjustment_ratio = 0.5
+feddst_rounds_between_readjustments = 10
+feddst_rate_decay_method = cosine
+feddst_rate_decay_end = 50
+feddst_sparsity_distribution = erk
+feddst_min_votes = 0
+feddst_fp16 = False
+feddst_remember_old = False
+add_cw = False
+add_wdr = False
+decision_layer_only = False
+partial_layer_train = False
+split_train = False
+head_lr = 0.005
+head_bs = 10
+cw_layer_num = 1
+add_proto = False
+use_true_dist = False
+batch_eval = False
+clip_weight = False
+batch_eval_id = 0
+weight_decay = 10.0
+exp_dir = /home1/irteam/workspace/FedCD/FedCD-Baseline/logs/FashionMNIST/FedDST/GM_VGG8/splitgp_rho0.8/NC_50/date_20260617/time_233125
+log_path = /home1/irteam/workspace/FedCD/FedCD-Baseline/logs/FashionMNIST/FedDST/GM_VGG8/splitgp_rho0.8/NC_50/date_20260617/time_233125/acc.csv
+==================================================
+
+============= Running time: 0th =============
+Using seed: 1
+Creating server and clients ...
+VGG8(
+  (features): Sequential(
+    (0): Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (4): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (8): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): ReLU(inplace=True)
+    (11): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (12): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (13): ReLU(inplace=True)
+    (14): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
+  (classifier): Sequential(
+    (0): Linear(in_features=256, out_features=256, bias=True)
+    (1): ReLU(inplace=True)
+    (2): Linear(in_features=256, out_features=10, bias=True)
+  )
+)
+
+Join ratio / total clients: 1.0 / 50
+FedDST config: sparsity=0.8, readjustment_ratio=0.5, readjustment_interval=10, distribution=erk
+Finished creating FedDST server and clients.
+Global Rounds:   0%|          | 0/101 [00:00<?, ?it/s]
+Distributing sparse models:   0%|          | 0/50 [00:00<?, ?it/s][A
+Distributing sparse models:   2%|▏         | 1/50 [00:00<00:39,  1.25it/s][A
+Distributing sparse models:   4%|▍         | 2/50 [00:02<01:00,  1.27s/it][A
+Distributing sparse models:   6%|▌         | 3/50 [00:04<01:17,  1.65s/it][A
+Distributing sparse models:   8%|▊         | 4/50 [00:06<01:23,  1.82s/it][A
+Distributing sparse models:  10%|█         | 5/50 [00:08<01:28,  1.96s/it][A
+Distributing sparse models:  12%|█▏        | 6/50 [00:10<01:25,  1.94s/it][A
+Distributing sparse models:  14%|█▍        | 7/50 [00:12<01:27,  2.02s/it][A
+Distributing sparse models:  16%|█▌        | 8/50 [00:15<01:27,  2.08s/it][A
+Distributing sparse models:  18%|█▊        | 9/50 [00:17<01:29,  2.18s/it][A
+Distributing sparse models:  20%|██        | 10/50 [00:19<01:26,  2.15s/it][A
+Distributing sparse models:  22%|██▏       | 11/50 [00:21<01:25,  2.20s/it][A
+Distributing sparse models:  24%|██▍       | 12/50 [00:24<01:24,  2.24s/it][A
+Distributing sparse models:  26%|██▌       | 13/50 [00:26<01:20,  2.19s/it][A
+Distributing sparse models:  28%|██▊       | 14/50 [00:28<01:20,  2.23s/it][A
+Distributing sparse models:  30%|███       | 15/50 [00:30<01:18,  2.25s/it][A
+Distributing sparse models:  32%|███▏      | 16/50 [00:33<01:17,  2.27s/it][A
+Distributing sparse models:  34%|███▍      | 17/50 [00:35<01:14,  2.24s/it][A
+Distributing sparse models:  36%|███▌      | 18/50 [00:37<01:13,  2.29s/it][A
+Distributing sparse models:  38%|███▊      | 19/50 [00:39<01:10,  2.26s/it][A
+Distributing sparse models:  40%|████      | 20/50 [00:42<01:06,  2.22s/it][A
+Distributing sparse models:  42%|████▏     | 21/50 [00:44<01:04,  2.21s/it][A
+Distributing sparse models:  44%|████▍     | 22/50 [00:46<01:01,  2.21s/it][A
+Distributing sparse models:  46%|████▌     | 23/50 [00:48<01:00,  2.23s/it][A
+Distributing sparse models:  48%|████▊     | 24/50 [00:51<00:58,  2.25s/it][A
+Distributing sparse models:  50%|█████     | 25/50 [00:53<00:56,  2.26s/it][A
+Distributing sparse models:  52%|█████▏    | 26/50 [00:55<00:52,  2.19s/it][A
+Distributing sparse models:  54%|█████▍    | 27/50 [00:57<00:50,  2.19s/it][A
+Distributing sparse models:  56%|█████▌    | 28/50 [00:59<00:48,  2.20s/it][A
+Distributing sparse models:  58%|█████▊    | 29/50 [01:01<00:46,  2.20s/it][A
+Distributing sparse models:  60%|██████    | 30/50 [01:04<00:43,  2.19s/it][A
+Distributing sparse models:  62%|██████▏   | 31/50 [01:06<00:41,  2.20s/it][A
+Distributing sparse models:  64%|██████▍   | 32/50 [01:08<00:40,  2.26s/it][A
+Distributing sparse models:  66%|██████▌   | 33/50 [01:11<00:38,  2.27s/it][A
+Distributing sparse models:  68%|██████▊   | 34/50 [01:13<00:36,  2.28s/it][A
+Distributing sparse models:  70%|███████   | 35/50 [01:15<00:34,  2.29s/it][A
+Distributing sparse models:  72%|███████▏  | 36/50 [01:17<00:31,  2.23s/it][A
+Distributing sparse models:  74%|███████▍  | 37/50 [01:19<00:28,  2.19s/it][A
+Distributing sparse models:  76%|███████▌  | 38/50 [01:22<00:26,  2.20s/it][A
+Distributing sparse models:  78%|███████▊  | 39/50 [01:24<00:23,  2.17s/it][A
+Distributing sparse models:  80%|████████  | 40/50 [01:26<00:21,  2.14s/it][A
+Distributing sparse models:  82%|████████▏ | 41/50 [01:28<00:19,  2.19s/it][A
+Distributing sparse models:  84%|████████▍ | 42/50 [01:30<00:18,  2.25s/it][A
+Distributing sparse models:  86%|████████▌ | 43/50 [01:33<00:15,  2.21s/it][A
+Distributing sparse models:  88%|████████▊ | 44/50 [01:35<00:13,  2.24s/it][A
+Distributing sparse models:  90%|█████████ | 45/50 [01:37<00:10,  2.20s/it][A
+Distributing sparse models:  92%|█████████▏| 46/50 [01:39<00:08,  2.19s/it][A
+Distributing sparse models:  94%|█████████▍| 47/50 [01:41<00:06,  2.23s/it][A
+Distributing sparse models:  96%|█████████▌| 48/50 [01:44<00:04,  2.19s/it][A
+Distributing sparse models:  98%|█████████▊| 49/50 [01:46<00:02,  2.19s/it][A
+Distributing sparse models: 100%|██████████| 50/50 [01:48<00:00,  2.25s/it][A
+                                                                           [A
+-------------Round number: 0-------------
+
+Evaluate sparse global model
+
+Testing clients:   0%|          | 0/50 [00:00<?, ?it/s][A
+Testing clients:   2%|▏         | 1/50 [00:02<01:39,  2.03s/it][A
+Testing clients:  10%|█         | 5/50 [00:02<00:14,  3.05it/s][A
+Testing clients:  18%|█▊        | 9/50 [00:02<00:06,  6.03it/s][A
+Testing clients:  24%|██▍       | 12/50 [00:02<00:04,  8.51it/s][A
+Testing clients:  30%|███       | 15/50 [00:02<00:03, 10.90it/s][A
+Testing clients:  36%|███▌      | 18/50 [00:02<00:02, 12.33it/s][A
+Testing clients:  42%|████▏     | 21/50 [00:02<00:02, 13.74it/s][A
+Testing clients:  48%|████▊     | 24/50 [00:03<00:01, 14.87it/s][A
+Testing clients:  54%|█████▍    | 27/50 [00:03<00:01, 15.69it/s][A
+Testing clients:  58%|█████▊    | 29/50 [00:03<00:01, 16.09it/s][A
+Testing clients:  62%|██████▏   | 31/50 [00:03<00:01, 16.45it/s][A
+Testing clients:  66%|██████▌   | 33/50 [00:03<00:00, 17.01it/s][A
+Testing clients:  70%|███████   | 35/50 [00:03<00:00, 17.25it/s][A
+Testing clients:  74%|███████▍  | 37/50 [00:03<00:00, 17.53it/s][A
+Testing clients:  78%|███████▊  | 39/50 [00:03<00:00, 17.56it/s][A
+Testing clients:  82%|████████▏ | 41/50 [00:03<00:00, 17.48it/s][A
+Testing clients:  86%|████████▌ | 43/50 [00:04<00:00, 17.60it/s][A
+Testing clients:  90%|█████████ | 45/50 [00:04<00:00, 17.51it/s][A
+Testing clients:  94%|█████████▍| 47/50 [00:04<00:00, 17.33it/s][A
+Testing clients:  98%|█████████▊| 49/50 [00:04<00:00, 12.91it/s][A
+                                                                [A
+Calculating train metrics:   0%|          | 0/50 [00:00<?, ?it/s][A
+Calculating train metrics:   4%|▍         | 2/50 [00:00<00:02, 17.22it/s][A
+Calculating train metrics:   8%|▊         | 4/50 [00:00<00:02, 17.27it/s][A
+Calculating train metrics:  12%|█▏        | 6/50 [00:00<00:02, 16.79it/s][A
+Calculating train metrics:  16%|█▌        | 8/50 [00:00<00:02, 17.81it/s][A
+Calculating train metrics:  22%|██▏       | 11/50 [00:00<00:01, 21.05it/s][A
+Calculating train metrics:  28%|██▊       | 14/50 [00:00<00:01, 23.76it/s][A
+Calculating train metrics:  34%|███▍      | 17/50 [00:00<00:01, 21.61it/s][A
+Calculating train metrics:  40%|████      | 20/50 [00:01<00:01, 18.69it/s][A
+Calculating train metrics:  44%|████▍     | 22/50 [00:01<00:01, 17.50it/s][A
+Calculating train metrics:  48%|████▊     | 24/50 [00:01<00:01, 16.54it/s][A
+Calculating train metrics:  52%|█████▏    | 26/50 [00:01<00:01, 15.88it/s][A
+Calculating train metrics:  56%|█████▌    | 28/50 [00:01<00:01, 15.48it/s][A
+Calculating train metrics:  60%|██████    | 30/50 [00:01<00:01, 15.36it/s][A
+Calculating train metrics:  64%|██████▍   | 32/50 [00:01<00:01, 15.14it/s][A
+Calculating train metrics:  68%|██████▊   | 34/50 [00:01<00:01, 15.14it/s][A
+Calculating train metrics:  72%|███████▏  | 36/50 [00:02<00:00, 15.07it/s][A
+Calculating train metrics:  76%|███████▌  | 38/50 [00:02<00:00, 15.01it/s][A
+Calculating train metrics:  80%|████████  | 40/50 [00:02<00:00, 15.00it/s][A
+Calculating train metrics:  84%|████████▍ | 42/50 [00:02<00:00, 15.00it/s][A
+Calculating train metrics:  88%|████████▊ | 44/50 [00:02<00:00, 14.92it/s][A
+Calculating train metrics:  92%|█████████▏| 46/50 [00:02<00:00, 14.94it/s][A
+Calculating train metrics:  96%|█████████▌| 48/50 [00:02<00:00, 14.89it/s][A
+Calculating train metrics: 100%|██████████| 50/50 [00:03<00:00, 14.81it/s][A
+                                                                          [AAveraged Train Loss: 2.3029
+Averaged Local Test Accuracy: 0.1000
+Averaged Test AUC: 0.5112
+Std Test Accuracy: 0.0890
+Std Test AUC: 0.1377
+
+Training FedDST clients:   0%|          | 0/50 [00:00<?, ?it/s][A
+
+Client 27 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 27 FedDST Training:  10%|█         | 1/10 [00:00<00:01,  5.62it/s][A[A
+
+Client 27 FedDST Training:  40%|████      | 4/10 [00:00<00:00, 16.24it/s][A[A
+
+Client 27 FedDST Training:  70%|███████   | 7/10 [00:00<00:00, 21.17it/s][A[A
+
+Client 27 FedDST Training: 100%|██████████| 10/10 [00:00<00:00, 20.49it/s][A[A
+
+                                                                          [A[A
+
+Client 27 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 27 FedDST Training:  30%|███       | 3/10 [00:00<00:00, 26.40it/s][A[A
+
+Client 27 FedDST Training:  70%|███████   | 7/10 [00:00<00:00, 27.26it/s][A[A
+
+Client 27 FedDST Training: 100%|██████████| 10/10 [00:00<00:00, 26.61it/s][A[A
+
+                                                                          [A[A
+Training FedDST clients:   2%|▏         | 1/50 [00:00<00:47,  1.04it/s][A
+
+Client 35 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 35 FedDST Training:  30%|███       | 3/10 [00:00<00:00, 22.03it/s][A[A
+
+Client 35 FedDST Training:  70%|███████   | 7/10 [00:00<00:00, 27.42it/s][A[A
+
+Client 35 FedDST Training: 100%|██████████| 10/10 [00:00<00:00, 14.21it/s][A[A
+
+                                                                          [A[A
+
+Client 35 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 35 FedDST Training:  10%|█         | 1/10 [00:00<00:00,  9.15it/s][A[A
+
+Client 35 FedDST Training:  20%|██        | 2/10 [00:00<00:00,  9.23it/s][A[A
+
+Client 35 FedDST Training:  30%|███       | 3/10 [00:00<00:01,  3.51it/s][A[A
+
+Client 35 FedDST Training:  40%|████      | 4/10 [00:01<00:02,  2.47it/s][A[A
+
+Client 35 FedDST Training:  50%|█████     | 5/10 [00:01<00:02,  2.11it/s][A[A
+
+Client 35 FedDST Training:  60%|██████    | 6/10 [00:02<00:02,  1.93it/s][A[A
+
+Client 35 FedDST Training:  70%|███████   | 7/10 [00:03<00:01,  1.82it/s][A[A
+
+Client 35 FedDST Training:  80%|████████  | 8/10 [00:03<00:01,  1.77it/s][A[A
+
+Client 35 FedDST Training:  90%|█████████ | 9/10 [00:04<00:00,  1.65it/s][A[A
+
+Client 35 FedDST Training: 100%|██████████| 10/10 [00:05<00:00,  1.66it/s][A[A
+
+                                                                          [A[A
+Training FedDST clients:   4%|▍         | 2/50 [00:06<03:07,  3.90s/it][A
+
+Client 40 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 40 FedDST Training:  10%|█         | 1/10 [00:00<00:05,  1.65it/s][A[A
+
+Client 40 FedDST Training:  20%|██        | 2/10 [00:01<00:04,  1.68it/s][A[A
+
+Client 40 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.67it/s][A[A
+
+Client 40 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.57it/s][A[A
+
+Client 40 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.51it/s][A[A
+
+Client 40 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.55it/s][A[A
+
+Client 40 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.52it/s][A[A
+
+Client 40 FedDST Training:  80%|████████  | 8/10 [00:05<00:01,  1.56it/s][A[A
+
+Client 40 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.59it/s][A[A
+
+Client 40 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.61it/s][A[A
+
+                                                                          [A[A
+
+Client 40 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 40 FedDST Training:  10%|█         | 1/10 [00:00<00:05,  1.66it/s][A[A
+
+Client 40 FedDST Training:  20%|██        | 2/10 [00:01<00:04,  1.66it/s][A[A
+
+Client 40 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.66it/s][A[A
+
+Client 40 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.67it/s][A[A
+
+Client 40 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.57it/s][A[A
+
+Client 40 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.61it/s][A[A
+
+Client 40 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.72it/s][A[A
+
+Client 40 FedDST Training:  80%|████████  | 8/10 [00:04<00:01,  1.69it/s][A[A
+
+Client 40 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.69it/s][A[A
+
+Client 40 FedDST Training: 100%|██████████| 10/10 [00:05<00:00,  1.68it/s][A[A
+
+                                                                          [A[A
+Training FedDST clients:   6%|▌         | 3/50 [00:19<06:18,  8.06s/it][A
+
+Client 38 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 38 FedDST Training:  10%|█         | 1/10 [00:00<00:06,  1.45it/s][A[A
+
+Client 38 FedDST Training:  20%|██        | 2/10 [00:01<00:05,  1.56it/s][A[A
+
+Client 38 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.50it/s][A[A
+
+Client 38 FedDST Training:  40%|████      | 4/10 [00:02<00:04,  1.47it/s][A[A
+
+Client 38 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.53it/s][A[A
+
+Client 38 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.57it/s][A[A
+
+Client 38 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.60it/s][A[A
+
+Client 38 FedDST Training:  80%|████████  | 8/10 [00:05<00:01,  1.55it/s][A[A
+
+Client 38 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.57it/s][A[A
+
+Client 38 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.54it/s][A[A
+
+                                                                          [A[A
+
+Client 38 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 38 FedDST Training:  10%|█         | 1/10 [00:00<00:04,  1.97it/s][A[A
+
+Client 38 FedDST Training:  20%|██        | 2/10 [00:01<00:04,  1.98it/s][A[A
+
+Client 38 FedDST Training:  30%|███       | 3/10 [00:01<00:03,  1.97it/s][A[A
+
+Client 38 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.85it/s][A[A
+
+Client 38 FedDST Training:  50%|█████     | 5/10 [00:02<00:02,  1.78it/s][A[A
+
+Client 38 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.65it/s][A[A
+
+Client 38 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.64it/s][A[A
+
+Client 38 FedDST Training:  80%|████████  | 8/10 [00:04<00:01,  1.57it/s][A[A
+
+Client 38 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.59it/s][A[A
+
+Client 38 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.54it/s][A[A
+
+                                                                          [A[A
+Training FedDST clients:   8%|▊         | 4/50 [00:33<07:45, 10.13s/it][A
+
+Client 2 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 2 FedDST Training:  10%|█         | 1/10 [00:00<00:06,  1.45it/s][A[A
+
+Client 2 FedDST Training:  20%|██        | 2/10 [00:01<00:05,  1.55it/s][A[A
+
+Client 2 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.60it/s][A[A
+
+Client 2 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.63it/s][A[A
+
+Client 2 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.65it/s][A[A
+
+Client 2 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.74it/s][A[A
+
+Client 2 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.72it/s][A[A
+
+Client 2 FedDST Training:  80%|████████  | 8/10 [00:04<00:01,  1.70it/s][A[A
+
+Client 2 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.62it/s][A[A
+
+Client 2 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.70it/s][A[A
+
+                                                                         [A[A
+
+Client 2 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 2 FedDST Training:  10%|█         | 1/10 [00:00<00:05,  1.68it/s][A[A
+
+Client 2 FedDST Training:  20%|██        | 2/10 [00:01<00:04,  1.68it/s][A[A
+
+Client 2 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.67it/s][A[A
+
+Client 2 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.58it/s][A[A
+
+Client 2 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.60it/s][A[A
+
+Client 2 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.62it/s][A[A
+
+Client 2 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.64it/s][A[A
+
+Client 2 FedDST Training:  80%|████████  | 8/10 [00:04<00:01,  1.56it/s][A[A
+
+Client 2 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.53it/s][A[A
+
+Client 2 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.56it/s][A[A
+
+                                                                         [A[A
+Training FedDST clients:  10%|█         | 5/50 [00:46<08:22, 11.16s/it][A
+
+Client 3 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 3 FedDST Training:  10%|█         | 1/10 [00:00<00:06,  1.45it/s][A[A
+
+Client 3 FedDST Training:  20%|██        | 2/10 [00:01<00:05,  1.55it/s][A[A
+
+Client 3 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.50it/s][A[A
+
+Client 3 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.56it/s][A[A
+
+Client 3 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.60it/s][A[A
+
+Client 3 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.62it/s][A[A
+
+Client 3 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.63it/s][A[A
+
+Client 3 FedDST Training:  80%|████████  | 8/10 [00:05<00:01,  1.57it/s][A[A
+
+Client 3 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.60it/s][A[A
+
+Client 3 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.55it/s][A[A
+
+                                                                         [A[A
+
+Client 3 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 3 FedDST Training:  10%|█         | 1/10 [00:00<00:05,  1.65it/s][A[A
+
+Client 3 FedDST Training:  20%|██        | 2/10 [00:01<00:04,  1.81it/s][A[A
+
+Client 3 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.63it/s][A[A
+
+Client 3 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.65it/s][A[A
+
+Client 3 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.56it/s][A[A
+
+Client 3 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.59it/s][A[A
+
+Client 3 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.54it/s][A[A
+
+Client 3 FedDST Training:  80%|████████  | 8/10 [00:05<00:01,  1.50it/s][A[A
+
+Client 3 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.47it/s][A[A
+
+Client 3 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.52it/s][A[A
+
+                                                                         [A[A
+Training FedDST clients:  12%|█▏        | 6/50 [00:59<08:44, 11.93s/it][A
+
+Client 48 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 48 FedDST Training:  10%|█         | 1/10 [00:00<00:06,  1.44it/s][A[A
+
+Client 48 FedDST Training:  20%|██        | 2/10 [00:01<00:05,  1.56it/s][A[A
+
+Client 48 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.60it/s][A[A
+
+Client 48 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.53it/s][A[A
+
+Client 48 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.58it/s][A[A
+
+Client 48 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.52it/s][A[A
+
+Client 48 FedDST Training:  70%|███████   | 7/10 [00:04<00:02,  1.43it/s][A[A
+
+Client 48 FedDST Training:  80%|████████  | 8/10 [00:05<00:01,  1.50it/s][A[A
+
+Client 48 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.54it/s][A[A
+
+Client 48 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.50it/s][A[A
+
+                                                                          [A[A
+
+Client 48 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 48 FedDST Training:  10%|█         | 1/10 [00:00<00:06,  1.43it/s][A[A
+
+Client 48 FedDST Training:  20%|██        | 2/10 [00:01<00:05,  1.43it/s][A[A
+
+Client 48 FedDST Training:  30%|███       | 3/10 [00:02<00:04,  1.52it/s][A[A
+
+Client 48 FedDST Training:  40%|████      | 4/10 [00:02<00:04,  1.49it/s][A[A
+
+Client 48 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.54it/s][A[A
+
+Client 48 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.59it/s][A[A
+
+Client 48 FedDST Training:  70%|███████   | 7/10 [00:04<00:02,  1.47it/s][A[A
+
+Client 48 FedDST Training:  80%|████████  | 8/10 [00:05<00:01,  1.52it/s][A[A
+
+Client 48 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.56it/s][A[A
+
+Client 48 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.66it/s][A[A
+
+                                                                          [A[A
+Training FedDST clients:  14%|█▍        | 7/50 [01:13<08:59, 12.54s/it][A
+
+Client 29 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 29 FedDST Training:  10%|█         | 1/10 [00:00<00:06,  1.42it/s][A[A
+
+Client 29 FedDST Training:  20%|██        | 2/10 [00:01<00:05,  1.43it/s][A[A
+
+Client 29 FedDST Training:  30%|███       | 3/10 [00:02<00:04,  1.53it/s][A[A
+
+Client 29 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.68it/s][A[A
+
+Client 29 FedDST Training:  50%|█████     | 5/10 [00:03<00:02,  1.68it/s][A[A
+
+Client 29 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.77it/s][A[A
+
+Client 29 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.65it/s][A[A
+
+Client 29 FedDST Training:  80%|████████  | 8/10 [00:04<00:01,  1.75it/s][A[A
+
+Client 29 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.71it/s][A[A
+
+Client 29 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.69it/s][A[A
+
+                                                                          [A[A
+
+Client 29 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 29 FedDST Training:  10%|█         | 1/10 [00:00<00:07,  1.28it/s][A[A
+
+Client 29 FedDST Training:  20%|██        | 2/10 [00:01<00:06,  1.26it/s][A[A
+
+Client 29 FedDST Training:  30%|███       | 3/10 [00:02<00:04,  1.42it/s][A[A
+
+Client 29 FedDST Training:  40%|████      | 4/10 [00:02<00:04,  1.49it/s][A[A
+
+Client 29 FedDST Training:  50%|█████     | 5/10 [00:03<00:03,  1.49it/s][A[A
+
+Client 29 FedDST Training:  60%|██████    | 6/10 [00:04<00:02,  1.54it/s][A[A
+
+Client 29 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.58it/s][A[A
+
+Client 29 FedDST Training:  80%|████████  | 8/10 [00:05<00:01,  1.60it/s][A[A
+
+Client 29 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.71it/s][A[A
+
+Client 29 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.78it/s][A[A
+
+                                                                          [A[A
+Training FedDST clients:  16%|█▌        | 8/50 [01:26<08:52, 12.69s/it][A
+
+Client 46 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 46 FedDST Training:  10%|█         | 1/10 [00:00<00:05,  1.67it/s][A[A
+
+Client 46 FedDST Training:  20%|██        | 2/10 [00:01<00:04,  1.80it/s][A[A
+
+Client 46 FedDST Training:  30%|███       | 3/10 [00:01<00:03,  1.76it/s][A[A
+
+Client 46 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.73it/s][A[A
+
+Client 46 FedDST Training:  50%|█████     | 5/10 [00:02<00:02,  1.92it/s][A[A
+
+Client 46 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.74it/s][A[A
+
+Client 46 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.71it/s][A[A
+
+Client 46 FedDST Training:  80%|████████  | 8/10 [00:04<00:01,  1.69it/s][A[A
+
+Client 46 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.68it/s][A[A
+
+Client 46 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.53it/s][A[A
+
+                                                                          [A[A
+
+Client 46 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A
+
+Client 46 FedDST Training:  10%|█         | 1/10 [00:00<00:05,  1.63it/s][A[A
+
+Client 46 FedDST Training:  20%|██        | 2/10 [00:01<00:04,  1.67it/s][A[A
+
+Client 46 FedDST Training:  30%|███       | 3/10 [00:01<00:04,  1.67it/s][A[A
+
+Client 46 FedDST Training:  40%|████      | 4/10 [00:02<00:03,  1.76it/s][A[A
+
+Client 46 FedDST Training:  50%|█████     | 5/10 [00:02<00:02,  1.73it/s][A[A
+
+Client 46 FedDST Training:  60%|██████    | 6/10 [00:03<00:02,  1.62it/s][A[A
+
+Client 46 FedDST Training:  70%|███████   | 7/10 [00:04<00:01,  1.64it/s][A[A
+
+Client 46 FedDST Training:  80%|████████  | 8/10 [00:04<00:01,  1.63it/s][A[A
+
+Client 46 FedDST Training:  90%|█████████ | 9/10 [00:05<00:00,  1.65it/s][A[A
+
+Client 46 FedDST Training: 100%|██████████| 10/10 [00:06<00:00,  1.59it/s][A[A
+
+                                                                          [A[A
+Training FedDST clients:  18%|█▊        | 9/50 [01:39<08:41, 12.72s/it][A
+
+Client 31 FedDST Training:   0%|          | 0/10 [00:00<?, ?it/s][A[A

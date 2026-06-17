@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/home1/irteam/workspace/FedCD/FedCD-Baseline/system/main.py", line 16, in <module>
+    from flcore.servers.serveravg import FedAvg
+  File "/home1/irteam/workspace/FedCD/FedCD-Baseline/system/flcore/servers/serveravg.py", line 4, in <module>
+    from flcore.servers.serverbase import Server
+  File "/home1/irteam/workspace/FedCD/FedCD-Baseline/system/flcore/servers/serverbase.py", line 10, in <module>
+    from utils.dlg import DLG
+  File "/home1/irteam/workspace/FedCD/FedCD-Baseline/system/utils/dlg.py", line 2, in <module>
+    import matplotlib.pyplot as plt
+  File "/home1/irteam/.conda/envs/pfllib/lib/python3.11/site-packages/matplotlib/__init__.py", line 161, in <module>
+    from . import _api, _version, cbook, _docstring, rcsetup
+  File "/home1/irteam/.conda/envs/pfllib/lib/python3.11/site-packages/matplotlib/cbook.py", line 32, in <module>
+    from matplotlib import _api, _c_internal_utils
+ImportError: /lib/x86_64-linux-gnu/libstdc++.so.6: version `CXXABI_1.3.15' not found (required by /home1/irteam/.conda/envs/pfllib/lib/python3.11/site-packages/matplotlib/_c_internal_utils.cpython-311-x86_64-linux-gnu.so)

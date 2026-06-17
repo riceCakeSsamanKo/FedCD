@@ -1,18 +1,29 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYSTEM_DIR="$SCRIPT_DIR/system"
-PYTHON_BIN="${FEDCD_PYTHON:-/ds1home/aislab/miniconda3/envs/pfllib/bin/python}"
-FL_DATA_ROOT="${FL_DATA_ROOT:-/ds1home/aislab/Min/data/fl_data}"
+PYTHON_BIN="${FEDCD_PYTHON:-/home1/irteam/.conda/envs/pfllib/bin/python}"
+FL_DATA_ROOT="${FL_DATA_ROOT:-/home1/irteam/workspace/fl_data}"
 
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mpl}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export FL_DATA_ROOT
 
+LOCAL_PYTHON_BIN="/home1/irteam/.conda/envs/pfllib/bin/python"
+if [[ ! -x "$PYTHON_BIN" && -x "$LOCAL_PYTHON_BIN" ]]; then
+  echo "[WARN] Python interpreter not found: $PYTHON_BIN" >&2
+  echo "[WARN] Falling back to: $LOCAL_PYTHON_BIN" >&2
+  PYTHON_BIN="$LOCAL_PYTHON_BIN"
+fi
+
 if [[ ! -x "$PYTHON_BIN" ]]; then
   echo "[ERROR] Python interpreter not found: $PYTHON_BIN" >&2
   exit 1
+fi
+PYTHON_PREFIX="$(cd "$(dirname "$PYTHON_BIN")/.." && pwd)"
+if [[ -d "$PYTHON_PREFIX/lib" ]]; then
+  export LD_LIBRARY_PATH="$PYTHON_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 fi
 if [[ ! -d "$SYSTEM_DIR" ]]; then
   echo "[ERROR] System directory not found: $SYSTEM_DIR" >&2
@@ -40,6 +51,7 @@ FEDDST_READJUSTMENT_RATIO="${FEDDST_READJUSTMENT_RATIO:-0.5}"
 FEDDST_READJUSTMENT_INTERVAL="${FEDDST_READJUSTMENT_INTERVAL:-10}"
 FEDDST_SPARSITY_DISTRIBUTION="${FEDDST_SPARSITY_DISTRIBUTION:-erk}"
 FEDDST_RATE_DECAY_METHOD="${FEDDST_RATE_DECAY_METHOD:-cosine}"
+MAX_PARALLEL_JOBS="${MAX_PARALLEL_JOBS:-${MAX_PARALLEL_RHOS:-10}}"
 DATASETS_CSV="${DATASETS:-Cifar10,FashionMNIST}"
 RHOS_CSV="${RHOS:-0.0,0.2,0.4,0.6,0.8}"
 
@@ -57,12 +69,80 @@ IFS=',' read -r -a rhos <<< "$RHOS_CSV"
 total=$(( ${#datasets[@]} * ${#rhos[@]} ))
 idx=0
 
+if ! [[ "$MAX_PARALLEL_JOBS" =~ ^[0-9]+$ ]] || [[ "$MAX_PARALLEL_JOBS" -lt 1 ]]; then
+  echo "[ERROR] MAX_PARALLEL_JOBS must be a positive integer: $MAX_PARALLEL_JOBS" >&2
+  exit 1
+fi
+
+for dataset_base_check in "${datasets[@]}"; do
+  dataset_base_check="$(echo "$dataset_base_check" | xargs)"
+  for rho_check in "${rhos[@]}"; do
+    rho_check="$(echo "$rho_check" | xargs)"
+    dataset_check="${dataset_base_check}_splitgp_pat_rho${rho_check}_nc${NUM_CLIENTS}"
+    if [[ ! -d "$FL_DATA_ROOT/$dataset_check" ]]; then
+      echo "[ERROR] Missing dataset: $FL_DATA_ROOT/$dataset_check" >&2
+      exit 1
+    fi
+  done
+done
+
 cd "$SYSTEM_DIR" || exit 1
 
 echo "[INFO] FedDST SplitGP rho queue root: $queue_root"
 echo "[INFO] Python: $PYTHON_BIN"
 echo "[INFO] FL_DATA_ROOT: $FL_DATA_ROOT"
 echo "[INFO] FedDST sparsity=$FEDDST_SPARSITY readjustment_ratio=$FEDDST_READJUSTMENT_RATIO interval=$FEDDST_READJUSTMENT_INTERVAL"
+echo "[INFO] Max parallel jobs: $MAX_PARALLEL_JOBS"
+
+batch_pids=()
+batch_idxs=()
+batch_dataset_bases=()
+batch_rhos=()
+batch_datasets=()
+batch_logs=()
+batch_starts=()
+
+cleanup_children() {
+  if [[ ${#batch_pids[@]} -gt 0 ]]; then
+    echo "[INFO] Stopping ${#batch_pids[@]} running rho job(s)..." >&2
+    kill "${batch_pids[@]}" 2>/dev/null || true
+  fi
+}
+trap cleanup_children INT TERM
+
+wait_for_batch() {
+  local i pid exit_code status end_utc
+
+  for i in "${!batch_pids[@]}"; do
+    pid="${batch_pids[$i]}"
+    if wait "$pid"; then
+      exit_code=0
+    else
+      exit_code=$?
+    fi
+    end_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    if [[ $exit_code -eq 0 ]]; then
+      status="ok"
+      echo "[DONE ${batch_idxs[$i]}/$total] dataset=${batch_datasets[$i]} algo=FedDST seed=$SEED"
+    else
+      status="failed"
+      echo "[FAIL ${batch_idxs[$i]}/$total] dataset=${batch_datasets[$i]} algo=FedDST seed=$SEED exit_code=$exit_code"
+      tail -n 40 "${batch_logs[$i]}" || true
+    fi
+
+    printf '%s\n' "${batch_idxs[$i]},${total},${batch_dataset_bases[$i]},FedDST,${batch_rhos[$i]},${NUM_CLIENTS},${SEED},${batch_datasets[$i]},${status},${exit_code},${batch_starts[$i]},${end_utc},${batch_logs[$i]}" >> "$status_csv"
+    echo
+  done
+
+  batch_pids=()
+  batch_idxs=()
+  batch_dataset_bases=()
+  batch_rhos=()
+  batch_datasets=()
+  batch_logs=()
+  batch_starts=()
+}
 
 for dataset_base in "${datasets[@]}"; do
   dataset_base="$(echo "$dataset_base" | xargs)"
@@ -107,22 +187,26 @@ for dataset_base in "${datasets[@]}"; do
       --feddst_readjustment_ratio "$FEDDST_READJUSTMENT_RATIO" \
       --feddst_rounds_between_readjustments "$FEDDST_READJUSTMENT_INTERVAL" \
       --feddst_sparsity_distribution "$FEDDST_SPARSITY_DISTRIBUTION" \
-      --feddst_rate_decay_method "$FEDDST_RATE_DECAY_METHOD" > "$run_log" 2>&1
-    exit_code=$?
-    end_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      --feddst_rate_decay_method "$FEDDST_RATE_DECAY_METHOD" > "$run_log" 2>&1 &
+    pid=$!
 
-    if [[ $exit_code -eq 0 ]]; then
-      status="ok"
-      echo "[DONE $idx/$total] dataset=$dataset algo=FedDST seed=$SEED"
-    else
-      status="failed"
-      echo "[FAIL $idx/$total] dataset=$dataset algo=FedDST seed=$SEED exit_code=$exit_code"
-      tail -n 40 "$run_log" || true
+    batch_pids+=("$pid")
+    batch_idxs+=("$idx")
+    batch_dataset_bases+=("$dataset_base")
+    batch_rhos+=("$rho")
+    batch_datasets+=("$dataset")
+    batch_logs+=("$run_log")
+    batch_starts+=("$start_utc")
+
+    if [[ ${#batch_pids[@]} -ge $MAX_PARALLEL_JOBS ]]; then
+      wait_for_batch
     fi
-    printf '%s\n' "${idx},${total},${dataset_base},FedDST,${rho},${NUM_CLIENTS},${SEED},${dataset},${status},${exit_code},${start_utc},${end_utc},${run_log}" >> "$status_csv"
-    echo
   done
 done
+
+if [[ ${#batch_pids[@]} -gt 0 ]]; then
+  wait_for_batch
+fi
 
 echo "[INFO] FedDST SplitGP rho queue finished."
 echo "[INFO] Status CSV: $status_csv"

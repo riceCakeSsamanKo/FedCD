@@ -1,0 +1,1 @@
+bash FedCD/FedCD-Baseline/run_feddst_splitgp_rho_vgg8.sh
