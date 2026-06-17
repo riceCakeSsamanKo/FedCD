@@ -197,3 +197,8 @@
 [CONFIG] model=VGG8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
 [LOG] /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/run_logs/g240_q31_FashionMNIST_FedProx_rho0p8_nc50_seed3_run3.log
 ==========================================================
+[DONE 30/31 g236][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.6_nc50 algo=FedProx rho=0.6 seed=2
+[DONE 31/31 g240][worker 1/2] dataset=FashionMNIST_splitgp_pat_rho0.8_nc50 algo=FedProx rho=0.8 seed=3
+[INFO] SplitGP rho 3-run baseline queue finished.
+[INFO] Status CSV: /ds1home/aislab/Min/FedCD/FedCD-Baseline/batch_runs/splitgp_rho_baselines_vgg8_3runs/date_20260616/time_055019/worker_1/status.csv
+[INFO] Failed jobs: 0
