@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-"""Summarize 3 completed splitgp rho baseline runs as best_acc mean ± std.
+﻿#!/usr/bin/env python3
+"""Summarize 3 completed splitgp rho baseline runs as best_acc mean 짹 std.
 
 Usage:
   cd /ds1home/aislab/Min/FedCD/FedCD-Baseline
@@ -25,6 +25,7 @@ DEFAULT_METHODS = (
     "FedALA",
     "FedAS",
     "FedAvg",
+    "FedDST",
     "FedBN",
     "FedCross",
     "pFedMe",
@@ -33,6 +34,7 @@ DEFAULT_METHODS = (
 
 BASELINE_TABLE_METHODS = (
     ("FedAvg", "FedAvg"),
+    ("FedDST", "FedDST"),
     ("FedAS", "FedAS"),
     ("FedProx", "FedProx"),
     ("FedBN", "FedBN"),
@@ -227,7 +229,7 @@ def format_mean_pm(values: list[float], scale: str, std_mode: str, decimals: int
     scaled_values = [scale_value(value, scale) for value in values]
     mean_value = mean(scaled_values)
     std_value = stddev(scaled_values, std_mode)
-    return mean_value, std_value, f"{mean_value:.{decimals}f} ± {std_value:.{decimals}f}"
+    return mean_value, std_value, f"{mean_value:.{decimals}f} 짹 {std_value:.{decimals}f}"
 
 
 def find_acc_csvs(
@@ -376,7 +378,7 @@ def write_baseline_table_csv(path: Path, summaries: list[SettingSummary], client
             if section_index:
                 writer.writerow([])
             writer.writerow([f"Client {clients} / {dataset_label}"])
-            writer.writerow(["메서드 \\ 정확도(%)", *BASELINE_TABLE_RHOS])
+            writer.writerow(["硫붿꽌??\\ ?뺥솗??%)", *BASELINE_TABLE_RHOS])
             for method, display_method in BASELINE_TABLE_METHODS:
                 writer.writerow(
                     [
@@ -392,7 +394,7 @@ def write_baseline_table_csv(path: Path, summaries: list[SettingSummary], client
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "For splitgp rho baselines, report mean ± std of per-run best accuracy "
+            "For splitgp rho baselines, report mean 짹 std of per-run best accuracy "
             "for settings with enough completed runs."
         )
     )
@@ -434,7 +436,7 @@ def parse_args() -> argparse.Namespace:
         "--std",
         choices=("sample", "population"),
         default="sample",
-        help="How to compute the value after ±.",
+        help="How to compute the value after 짹.",
     )
     parser.add_argument("--decimals", type=int, default=4, help="Decimal places for output cells.")
     parser.add_argument("--format", choices=("markdown", "csv"), default="markdown", help="Output format.")
@@ -464,3 +466,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

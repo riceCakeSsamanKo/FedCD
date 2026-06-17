@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 import copy
 import torch
 import torch.nn as nn
@@ -54,6 +54,7 @@ from flcore.servers.serverlc import FedLC
 from flcore.servers.serveras import FedAS
 from flcore.servers.servercross import FedCross
 from flcore.servers.servercwavg import cwFedAvg
+from flcore.servers.serverdst import FedDST
 
 from flcore.trainmodel.models import *
 
@@ -396,6 +397,9 @@ def run(args):
         elif args.algorithm == "FedCross":
             server = FedCross(args, i)
 
+        elif args.algorithm == "FedDST":
+            server = FedDST(args, i)
+
         elif args.algorithm == "cwFedAvg":
             args.add_cw = True
             args.model = split_model(args.model)
@@ -552,6 +556,28 @@ if __name__ == "__main__":
     parser.add_argument('-ca', "--fedcross_alpha", type=float, default=0.99)
     parser.add_argument('-cmss', "--collaberative_model_select_strategy", type=int, default=1)
 
+
+    # FedDST
+    parser.add_argument('--feddst_sparsity', type=float, default=0.3,
+                        help='Target sparsity for FedDST sparse weights.')
+    parser.add_argument('--feddst_final_sparsity', type=float, default=None,
+                        help='Final sparsity after optional sparsity schedule.')
+    parser.add_argument('--feddst_readjustment_ratio', type=float, default=0.5,
+                        help='Fraction of active sparse weights to prune/regrow at readjustment rounds.')
+    parser.add_argument('--feddst_rounds_between_readjustments', type=int, default=10,
+                        help='FedDST mask readjustment interval in communication rounds.')
+    parser.add_argument('--feddst_rate_decay_method', type=str, default='cosine', choices=['constant', 'cosine'],
+                        help='Schedule for FedDST readjustment ratio.')
+    parser.add_argument('--feddst_rate_decay_end', type=int, default=0,
+                        help='Round where cosine readjustment decay ends; 0 means global_rounds/2.')
+    parser.add_argument('--feddst_sparsity_distribution', type=str, default='erk', choices=['uniform', 'er', 'erk'],
+                        help='Layer-wise sparse budget allocation.')
+    parser.add_argument('--feddst_min_votes', type=int, default=0,
+                        help='Minimum client mask votes required to keep a sparse weight during aggregation.')
+    parser.add_argument('--feddst_fp16', action='store_true',
+                        help='Count uploaded sparse weights as fp16 for FedDST communication cost.')
+    parser.add_argument('--feddst_remember_old', action='store_true',
+                        help='Keep old server weights for sparse positions not uploaded by any client.')
     # cwFedAvg
     parser.add_argument('-cw', "--add_cw", action='store_true')
     parser.add_argument('-wdr', "--add_wdr", action='store_true')
@@ -571,7 +597,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # [New] Experiment Logging Setup (FedCD Style)
+    if args.feddst_final_sparsity is None:
+        args.feddst_final_sparsity = args.feddst_sparsity
+    if getattr(args, "feddst_rate_decay_end", 0) == 0:
+        args.feddst_rate_decay_end = max(1, args.global_rounds // 2)    # [New] Experiment Logging Setup (FedCD Style)
     partition_info = "unknown"
     alpha_info = ""
     # Parse info from dataset name (e.g., Cifar10_dir0.1_nc20)
@@ -694,3 +723,6 @@ if __name__ == "__main__":
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
     # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")
+
+
+
