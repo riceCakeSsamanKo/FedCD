@@ -157,10 +157,24 @@ FEDCD_ROUTER_BALANCE_WEIGHT="${FEDCD_ROUTER_BALANCE_WEIGHT:-0.1}"
 FEDCD_ROUTER_BALANCE_TARGET="${FEDCD_ROUTER_BALANCE_TARGET:-0.55}"
 FEDCD_ROUTER_BALANCE_TOLERANCE="${FEDCD_ROUTER_BALANCE_TOLERANCE:-0.2}"
 FEDCD_ROUTER_SERVER_DISTILL_ENABLE="${FEDCD_ROUTER_SERVER_DISTILL_ENABLE:-false}"
+FEDCD_ROUTER_SERVER_DISTILL_WEIGHT="${FEDCD_ROUTER_SERVER_DISTILL_WEIGHT:-0.4}"
+FEDCD_ROUTER_SERVER_BLEND="${FEDCD_ROUTER_SERVER_BLEND:-0.5}"
+FEDCD_ROUTER_SERVER_TAU="${FEDCD_ROUTER_SERVER_TAU:-0.2}"
+FEDCD_ROUTER_SERVER_OOD_SCALE="${FEDCD_ROUTER_SERVER_OOD_SCALE:-1.0}"
+FEDCD_ROUTER_SERVER_USE_CLASS_STATS="${FEDCD_ROUTER_SERVER_USE_CLASS_STATS:-true}"
+FEDCD_ROUTER_SERVER_CLASS_MIX="${FEDCD_ROUTER_SERVER_CLASS_MIX:-0.6}"
+FEDCD_ROUTER_SERVER_SAMPLES="${FEDCD_ROUTER_SERVER_SAMPLES:-256}"
+FEDCD_ROUTER_SERVER_PERIOD="${FEDCD_ROUTER_SERVER_PERIOD:-1}"
 FEDCD_ROUTER_SERVER_NEG_MODE="${FEDCD_ROUTER_SERVER_NEG_MODE:-all_other}"
 FEDCD_ROUTER_SERVER_NEG_TOPK="${FEDCD_ROUTER_SERVER_NEG_TOPK:-2}"
 FEDCD_ROUTER_SERVER_SYNTH_WEIGHT="${FEDCD_ROUTER_SERVER_SYNTH_WEIGHT:-0.0}"
 FEDCD_ROUTER_SERVER_SYNTH_SAMPLES="${FEDCD_ROUTER_SERVER_SYNTH_SAMPLES:-128}"
+FEDCD_ROUTER_TSNE_DUMP="${FEDCD_ROUTER_TSNE_DUMP:-false}"
+FEDCD_ROUTER_TSNE_DIR="${FEDCD_ROUTER_TSNE_DIR:-}"
+FEDCD_ROUTER_TSNE_CLIENTS="${FEDCD_ROUTER_TSNE_CLIENTS:-0}"
+FEDCD_ROUTER_TSNE_MAX_SAMPLES="${FEDCD_ROUTER_TSNE_MAX_SAMPLES:-1000}"
+FEDCD_ROUTER_TSNE_SOURCE="${FEDCD_ROUTER_TSNE_SOURCE:-client_test}"
+FEDCD_ROUTER_TSNE_DEVICE="${FEDCD_ROUTER_TSNE_DEVICE:-cpu}"
 FEDCD_LOCAL_PM_ONLY_OBJECTIVE="${FEDCD_LOCAL_PM_ONLY_OBJECTIVE:-false}"
 FEDCD_GM_UPDATE_MODE="${FEDCD_GM_UPDATE_MODE:-local}"
 FEDCD_TASK_FEXT_TRAIN_MODE="${FEDCD_TASK_FEXT_TRAIN_MODE:-full}"
@@ -191,7 +205,9 @@ case "${FEDCD_FUSION_MODE}" in
     ;;
 esac
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+CORE_DIR="${REPO_ROOT}/FedCD-Core"
 
 echo "=========================================================="
 echo "FedCD run"
@@ -206,7 +222,7 @@ echo "teacher-competence: enable=${FEDCD_PM_TEACHER_COMPETENCE_FILTER} rel=${FED
 echo "teacher-cluster-dist: enable=${FEDCD_PM_TEACHER_CLUSTER_DIST_WEIGHTING} metric=${FEDCD_PM_TEACHER_CLUSTER_DIST_METRIC} tau=${FEDCD_PM_TEACHER_CLUSTER_DIST_TAU}"
 echo "=========================================================="
 
-cd "${ROOT_DIR}"
+cd "${CORE_DIR}"
 CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
   python -u system/main.py \
     -go "${GOAL}" \
@@ -350,10 +366,24 @@ CONDA_NO_PLUGINS=true conda run --no-capture-output -n "${CONDA_ENV}" \
     --fedcd_router_balance_target "${FEDCD_ROUTER_BALANCE_TARGET}" \
     --fedcd_router_balance_tolerance "${FEDCD_ROUTER_BALANCE_TOLERANCE}" \
     --fedcd_router_server_distill_enable "${FEDCD_ROUTER_SERVER_DISTILL_ENABLE}" \
+    --fedcd_router_server_distill_weight "${FEDCD_ROUTER_SERVER_DISTILL_WEIGHT}" \
+    --fedcd_router_server_blend "${FEDCD_ROUTER_SERVER_BLEND}" \
+    --fedcd_router_server_tau "${FEDCD_ROUTER_SERVER_TAU}" \
+    --fedcd_router_server_ood_scale "${FEDCD_ROUTER_SERVER_OOD_SCALE}" \
+    --fedcd_router_server_use_class_stats "${FEDCD_ROUTER_SERVER_USE_CLASS_STATS}" \
+    --fedcd_router_server_class_mix "${FEDCD_ROUTER_SERVER_CLASS_MIX}" \
+    --fedcd_router_server_samples "${FEDCD_ROUTER_SERVER_SAMPLES}" \
+    --fedcd_router_server_period "${FEDCD_ROUTER_SERVER_PERIOD}" \
     --fedcd_router_server_neg_mode "${FEDCD_ROUTER_SERVER_NEG_MODE}" \
     --fedcd_router_server_neg_topk "${FEDCD_ROUTER_SERVER_NEG_TOPK}" \
     --fedcd_router_server_synth_weight "${FEDCD_ROUTER_SERVER_SYNTH_WEIGHT}" \
     --fedcd_router_server_synth_samples "${FEDCD_ROUTER_SERVER_SYNTH_SAMPLES}" \
+    --fedcd_router_tsne_dump "${FEDCD_ROUTER_TSNE_DUMP}" \
+    --fedcd_router_tsne_dir "${FEDCD_ROUTER_TSNE_DIR}" \
+    --fedcd_router_tsne_clients "${FEDCD_ROUTER_TSNE_CLIENTS}" \
+    --fedcd_router_tsne_max_samples "${FEDCD_ROUTER_TSNE_MAX_SAMPLES}" \
+    --fedcd_router_tsne_source "${FEDCD_ROUTER_TSNE_SOURCE}" \
+    --fedcd_router_tsne_device "${FEDCD_ROUTER_TSNE_DEVICE}" \
     --fedcd_gate_reliability_ema 0.9 \
     --fedcd_gate_reliability_samples 512 \
     --fedcd_gate_feature_ema 0.9 \

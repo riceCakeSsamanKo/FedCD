@@ -717,6 +717,20 @@ if __name__ == "__main__":
                         help="Extra router BCE weight on server in/out synthetic features.")
     parser.add_argument('--fedcd_router_server_synth_samples', type=int, default=128,
                         help="Synthetic feature sample count for server in/out router supervision per local step.")
+    parser.add_argument('--fedcd_router_tsne_dump', type=str2bool, default=False,
+                        help="Dump router t-SNE sample features after training.")
+    parser.add_argument('--fedcd_router_tsne_dir', type=str, default="",
+                        help="Output directory for router t-SNE .npz files and manifest.")
+    parser.add_argument('--fedcd_router_tsne_clients', type=str, default="0",
+                        help="Client ids to dump for router t-SNE, e.g. 0,1,3-5 or all.")
+    parser.add_argument('--fedcd_router_tsne_max_samples', type=int, default=1000,
+                        help="Max evaluation samples per dumped client (0 means all selected source samples).")
+    parser.add_argument('--fedcd_router_tsne_source', type=str, default="client_test",
+                        choices=["client_test", "all_test", "global_test", "all"],
+                        help="Evaluation source for router t-SNE dump.")
+    parser.add_argument('--fedcd_router_tsne_device', type=str, default="cpu",
+                        choices=["cpu", "cuda"],
+                        help="Device used for router t-SNE sample extraction.")
     parser.add_argument('--fedcd_branch_temp_calibration_enable', type=str2bool, default=False,
                         help="Enable post-local temperature calibration for PM/GM outputs (Guo et al., 2017 style).")
     parser.add_argument('--fedcd_branch_temp_calibration_period', type=int, default=1,

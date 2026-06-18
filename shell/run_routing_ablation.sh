@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CORE_DIR="${ROOT_DIR}/FedCD-Core"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 OUT_DIR="${ROOT_DIR}/compare/${STAMP}_routing_ablation"

@@ -2,6 +2,7 @@ import copy
 import time
 import os
 import random
+import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -98,6 +99,16 @@ class FedCD(Server):
         self.router_server_samples = max(0, self.router_server_samples)
         self.router_server_period = int(getattr(args, "fedcd_router_server_period", 1))
         self.router_server_period = max(1, self.router_server_period)
+        self.router_tsne_dump = bool(getattr(args, "fedcd_router_tsne_dump", False))
+        self.router_tsne_dir = str(getattr(args, "fedcd_router_tsne_dir", "") or "").strip()
+        self.router_tsne_clients = str(getattr(args, "fedcd_router_tsne_clients", "0") or "0")
+        self.router_tsne_max_samples = max(0, int(getattr(args, "fedcd_router_tsne_max_samples", 1000)))
+        self.router_tsne_source = str(
+            getattr(args, "fedcd_router_tsne_source", "client_test") or "client_test"
+        ).strip().lower()
+        self.router_tsne_device = str(
+            getattr(args, "fedcd_router_tsne_device", "cpu") or "cpu"
+        ).strip().lower()
         self.router_server_neg_mode = str(
             getattr(args, "fedcd_router_server_neg_mode", "all_other")
         ).strip().lower()
@@ -1162,6 +1173,8 @@ class FedCD(Server):
 
         print("\nTraining finished. Saving results...")
         self.save_results()
+        if self.router_tsne_dump:
+            self.dump_router_tsne_samples()
 
     # 기존 evaluate 함수 대신 클러스터 정보 포함하여 평가
     def evaluate_with_clusters(self, round_idx, wall_start, cpu_start, uplink=0, downlink=0):
@@ -1570,6 +1583,103 @@ class FedCD(Server):
                 total_broadcast_bytes += self._tensor_state_nbytes(ctx)
 
         return total_broadcast_bytes
+
+    def _parse_router_tsne_client_ids(self):
+        text = str(self.router_tsne_clients or "0").strip().lower()
+        available = {int(client.id): client for client in self.clients}
+        if text in {"all", "*"}:
+            return sorted(available.keys())
+
+        ids = []
+        for part in text.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                lo_text, hi_text = part.split("-", 1)
+                try:
+                    lo = int(lo_text)
+                    hi = int(hi_text)
+                except ValueError:
+                    continue
+                if hi < lo:
+                    lo, hi = hi, lo
+                ids.extend(range(lo, hi + 1))
+                continue
+            try:
+                ids.append(int(part))
+            except ValueError:
+                continue
+
+        seen = set()
+        valid_ids = []
+        for client_id in ids:
+            if client_id in available and client_id not in seen:
+                valid_ids.append(client_id)
+                seen.add(client_id)
+        return valid_ids
+
+    def dump_router_tsne_samples(self):
+        client_ids = self._parse_router_tsne_client_ids()
+        if not client_ids:
+            print("[FedCD][router-tsne] No valid clients selected; skip dump.")
+            return
+
+        output_dir = self.router_tsne_dir
+        if not output_dir:
+            output_dir = os.path.join(os.path.dirname(self.log_usage_path), "router_tsne")
+        os.makedirs(output_dir, exist_ok=True)
+
+        client_by_id = {int(client.id): client for client in self.clients}
+        files = []
+        for client_id in client_ids:
+            client = client_by_id.get(client_id)
+            if client is None:
+                continue
+            try:
+                sample = client.collect_router_tsne_samples(
+                    max_samples=self.router_tsne_max_samples,
+                    device=self.router_tsne_device,
+                    source=self.router_tsne_source,
+                )
+            except Exception as err:
+                print(f"[FedCD][router-tsne] Client {client_id} dump failed: {err}")
+                continue
+            if sample is None:
+                print(f"[FedCD][router-tsne] Client {client_id} has no router samples; skip.")
+                continue
+
+            path = os.path.join(output_dir, f"client_{client_id}_router_tsne.npz")
+            np.savez_compressed(path, **sample)
+            files.append(
+                {
+                    "client_id": int(client_id),
+                    "path": path,
+                    "num_samples": int(sample["label"].shape[0]),
+                    "seen_classes": sample["seen_classes"].astype(int).tolist(),
+                    "source": str(sample.get("source", "client_test")),
+                }
+            )
+            print(
+                f"[FedCD][router-tsne] Saved client {client_id}: "
+                f"{sample['label'].shape[0]} samples -> {path}"
+            )
+
+        manifest = {
+            "dataset": self.dataset,
+            "algorithm": self.algorithm,
+            "num_clients": int(self.num_clients),
+            "selected_clients": client_ids,
+            "max_samples": int(self.router_tsne_max_samples),
+            "source": self.router_tsne_source,
+            "router_server_distill_enable": bool(self.router_server_distill_enable),
+            "router_server_neg_mode": self.router_server_neg_mode,
+            "files": files,
+        }
+        manifest_path = os.path.join(output_dir, "manifest.json")
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2)
+        print(f"[FedCD][router-tsne] Wrote manifest -> {manifest_path}")
 
     def aggregate_global_gms(self, received_gms):
         """

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+import numpy as np
 from torch.utils.data import DataLoader, Subset
 from flcore.clients.clientbase import Client
 from flcore.trainmodel.models import SmallFExt, TinyFExt
@@ -2623,6 +2624,179 @@ class clientFedCD(Client):
         mixed_prob, pm_weight = self.model.mix_prob(gm_logits, pm_logits, feat=z)
         fused_logits = torch.log(mixed_prob.clamp_min(1e-12))
         return fused_logits, gm_logits, pm_logits, pm_weight
+
+    @staticmethod
+    def _label_to_int(label):
+        if torch.is_tensor(label):
+            return int(label.detach().cpu().view(-1)[0].item())
+        return int(label)
+
+    def _load_router_tsne_eval_data(self, source):
+        source = str(source or "client_test").strip().lower()
+        if source in {"all", "all_test", "global_test"}:
+            data = []
+            for client_id in range(int(getattr(self.args, "num_clients", 0))):
+                data.extend(
+                    read_client_data(
+                        self.dataset,
+                        client_id,
+                        is_train=False,
+                        few_shot=self.few_shot,
+                    )
+                )
+            return data, "all_test"
+        return (
+            read_client_data(self.dataset, self.id, is_train=False, few_shot=self.few_shot),
+            "client_test",
+        )
+
+    def collect_router_tsne_samples(self, max_samples=1000, batch_size=None, device="cpu", source="client_test"):
+        if self.router is None:
+            return None
+
+        train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
+        seen_classes = sorted({self._label_to_int(y) for _, y in train_data})
+        seen_class_set = set(seen_classes)
+        test_data, source_name = self._load_router_tsne_eval_data(source)
+        if not test_data:
+            return None
+
+        max_samples = int(max_samples)
+        if max_samples <= 0:
+            max_samples = len(test_data)
+        if batch_size is None:
+            batch_size = min(max(1, int(self.batch_size)), 256)
+        batch_size = max(1, int(batch_size))
+
+        generator = torch.Generator()
+        generator.manual_seed(2026 + int(self.id))
+        loader = DataLoader(
+            test_data,
+            batch_size=batch_size,
+            drop_last=False,
+            shuffle=True,
+            num_workers=0,
+            generator=generator,
+        )
+
+        eval_device = str(device or "cpu").strip().lower()
+        if eval_device == "cuda" and not torch.cuda.is_available():
+            eval_device = "cpu"
+
+        modules = [
+            self.f_ext,
+            self.generalized_module,
+            self.personalized_module,
+            self.router,
+            self.model,
+        ]
+        if self.residual_module is not None:
+            modules.append(self.residual_module)
+        if getattr(self, "residual_adapter", None) is not None:
+            modules.append(self.residual_adapter)
+        if self.generalized_adapter is not None:
+            modules.append(self.generalized_adapter)
+        if self.personalized_adapter is not None:
+            modules.append(self.personalized_adapter)
+        for module in modules:
+            module.to(eval_device)
+            module.eval()
+
+        raw_features = []
+        router_features = []
+        labels = []
+        is_seen = []
+        router_probs = []
+        server_pm_probs = []
+        pm_weights = []
+        pm_preds = []
+        gm_preds = []
+        pm_confs = []
+        gm_confs = []
+        collected = 0
+
+        with torch.no_grad():
+            for x, y in loader:
+                if type(x) == type([]):
+                    x = x[0]
+                x = self._to_device(x, eval_device)
+                y = self._to_device(y, eval_device).long()
+
+                z = self.f_ext(x)
+                if z.dim() > 2:
+                    z = torch.flatten(z, 1)
+                z_gm = self.generalized_adapter(z) if self.generalized_adapter is not None else z
+                logits_gm = self.generalized_module(z_gm)
+                _, logits_pm, _, _ = self._forward_personalized_branch(z)
+                _, pm_weight = self.model.mix_prob(logits_gm, logits_pm, feat=z)
+
+                pm_prob = torch.softmax(logits_pm, dim=1)
+                gm_prob = torch.softmax(logits_gm, dim=1)
+                pred_pm = torch.argmax(pm_prob, dim=1)
+                pred_gm = torch.argmax(gm_prob, dim=1)
+                router_feat = self.model._prepare_router_feature(z)
+                router_prob = self.model._router_local_prob(
+                    z,
+                    pm_logits=logits_pm,
+                    gm_logits=logits_gm,
+                )
+                if router_prob is None:
+                    router_prob = torch.full((y.size(0), 1), float("nan"), device=eval_device)
+                server_prob = self.model._compute_server_router_pm_prob(z, pred_pm)
+                if server_prob is None:
+                    server_prob = torch.full((y.size(0), 1), float("nan"), device=eval_device)
+
+                keep = min(y.size(0), max_samples - collected)
+                if keep <= 0:
+                    break
+
+                y_cpu = y[:keep].detach().cpu()
+                seen_cpu = torch.tensor(
+                    [int(int(label.item()) in seen_class_set) for label in y_cpu],
+                    dtype=torch.int64,
+                )
+
+                raw_features.append(z[:keep].detach().cpu().float().numpy())
+                router_features.append(router_feat[:keep].detach().cpu().float().numpy())
+                labels.append(y_cpu.numpy().astype(np.int64))
+                is_seen.append(seen_cpu.numpy().astype(np.int64))
+                router_probs.append(router_prob[:keep].detach().cpu().float().view(-1).numpy())
+                server_pm_probs.append(server_prob[:keep].detach().cpu().float().view(-1).numpy())
+                pm_weights.append(pm_weight[:keep].detach().cpu().float().view(-1).numpy())
+                pm_preds.append(pred_pm[:keep].detach().cpu().numpy().astype(np.int64))
+                gm_preds.append(pred_gm[:keep].detach().cpu().numpy().astype(np.int64))
+                pm_confs.append(pm_prob[:keep].max(dim=1).values.detach().cpu().float().numpy())
+                gm_confs.append(gm_prob[:keep].max(dim=1).values.detach().cpu().float().numpy())
+
+                collected += keep
+                if collected >= max_samples:
+                    break
+
+        if self.args.avoid_oom:
+            for module in modules:
+                module.to("cpu")
+            if eval_device == "cuda":
+                torch.cuda.empty_cache()
+
+        if not raw_features:
+            return None
+
+        return {
+            "client_id": np.full(collected, int(self.id), dtype=np.int64),
+            "label": np.concatenate(labels, axis=0),
+            "is_seen": np.concatenate(is_seen, axis=0),
+            "raw_feature": np.concatenate(raw_features, axis=0),
+            "router_feature": np.concatenate(router_features, axis=0),
+            "router_prob": np.concatenate(router_probs, axis=0),
+            "server_pm_prob": np.concatenate(server_pm_probs, axis=0),
+            "pm_weight": np.concatenate(pm_weights, axis=0),
+            "pm_pred": np.concatenate(pm_preds, axis=0),
+            "gm_pred": np.concatenate(gm_preds, axis=0),
+            "pm_conf": np.concatenate(pm_confs, axis=0),
+            "gm_conf": np.concatenate(gm_confs, axis=0),
+            "seen_classes": np.asarray(seen_classes, dtype=np.int64),
+            "source": np.asarray(source_name),
+        }
 
     def upload_parameters(self):
         # 업링크 비용 절감: Personalized Module만 전송
