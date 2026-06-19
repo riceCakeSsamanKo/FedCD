@@ -1,0 +1,11 @@
+dataset_base,algorithm,rho,num_clients,complete_before,queued_runs,existing_acc_csvs
+Cifar10,cwFedAvg,0.0,50,0,3,
+Cifar10,cwFedAvg,0.2,50,0,3,
+Cifar10,cwFedAvg,0.4,50,0,3,
+Cifar10,cwFedAvg,0.6,50,0,3,
+Cifar10,cwFedAvg,0.8,50,0,3,
+FashionMNIST,cwFedAvg,0.0,50,0,3,
+FashionMNIST,cwFedAvg,0.2,50,0,3,
+FashionMNIST,cwFedAvg,0.4,50,0,3,
+FashionMNIST,cwFedAvg,0.6,50,0,3,
+FashionMNIST,cwFedAvg,0.8,50,0,3,

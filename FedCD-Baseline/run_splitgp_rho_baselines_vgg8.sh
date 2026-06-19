@@ -147,7 +147,7 @@ for dataset_base in "${datasets[@]}"; do
           extra_args+=(-fsb 0 -ca 0.99 -cmss 1)
           ;;
         cwFedAvg)
-          extra_args+=(-cw -wdr -plt -ncw 1 -wd 10)
+          extra_args+=(-cw -wdr -plt -ncw 1 -wd 10 -gt)
           ;;
       esac
 

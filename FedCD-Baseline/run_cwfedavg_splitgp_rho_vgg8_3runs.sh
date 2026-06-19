@@ -46,7 +46,7 @@ split_csv() {
 }
 
 split_csv "${DATASETS:-Cifar10,FashionMNIST}" datasets
-split_csv "${ALGORITHMS:-cwFedAvg,FedALA,FedAS,FedAvg,FedBN,FedCross,pFedMe,FedProx}" algorithms
+split_csv "${ALGORITHMS:-cwFedAvg}" algorithms
 split_csv "${RHOS:-0.0,0.2,0.4,0.6,0.8}" rhos
 
 if ! [[ "$WORKER_ID" =~ ^[0-9]+$ ]] || ! [[ "$NUM_WORKERS" =~ ^[0-9]+$ ]] || [[ "$NUM_WORKERS" -lt 1 ]]; then
@@ -61,8 +61,8 @@ fi
 
 DATE_STR="${RUN_DATE_STR:-$(date -u +%Y%m%d)}"
 TIME_STR="${RUN_TIME_STR:-$(date -u +%H%M%S)}"
-RUN_TAG="${RUN_TAG:-splitgp_rho_3runs_${DATE_STR}_${TIME_STR}}"
-QUEUE_PARENT="$SCRIPT_DIR/batch_runs/splitgp_rho_baselines_vgg8_3runs"
+RUN_TAG="${RUN_TAG:-cwfedavg_splitgp_rho_3runs_${DATE_STR}_${TIME_STR}}"
+QUEUE_PARENT="$SCRIPT_DIR/batch_runs/cwfedavg_splitgp_rho_vgg8_3runs"
 if [[ "$NUM_WORKERS" -gt 1 ]]; then
   QUEUE_ROOT="$QUEUE_PARENT/date_${DATE_STR}/time_${TIME_STR}/worker_${WORKER_ID}"
   SCHEDULER_LOCK="$QUEUE_PARENT/.scheduler.worker_${WORKER_ID}.lock"
