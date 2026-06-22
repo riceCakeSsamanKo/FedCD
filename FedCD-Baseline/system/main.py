@@ -55,6 +55,8 @@ from flcore.servers.serveras import FedAS
 from flcore.servers.servercross import FedCross
 from flcore.servers.servercwavg import cwFedAvg
 from flcore.servers.serverdst import FedDST
+from flcore.servers.serverfedmoe import FedMoE
+from flcore.servers.serverpmoefedper import PMOEFedPer
 
 from flcore.trainmodel.models import *
 
@@ -287,6 +289,9 @@ def run(args):
             args.model = split_model(args.model)
             server = FedPer(args, i)
 
+        elif args.algorithm == "PMOE_FedPer":
+            args.model = split_model(args.model)
+            server = PMOEFedPer(args, i)
         elif args.algorithm == "Ditto":
             server = Ditto(args, i)
 
@@ -399,6 +404,10 @@ def run(args):
 
         elif args.algorithm == "FedDST":
             server = FedDST(args, i)
+
+        elif args.algorithm == "FedMoE":
+            args.model = split_model(args.model)
+            server = FedMoE(args, i)
 
         elif args.algorithm == "cwFedAvg":
             args.add_cw = True
@@ -578,6 +587,16 @@ if __name__ == "__main__":
                         help='Count uploaded sparse weights as fp16 for FedDST communication cost.')
     parser.add_argument('--feddst_remember_old', action='store_true',
                         help='Keep old server weights for sparse positions not uploaded by any client.')
+    # FedMoE / PM-MOE
+    parser.add_argument('-tk', "--topk", type=int, default=2,
+                        help='Top-k experts selected by the MoE gate.')
+    parser.add_argument('-mfte', "--moe_fine_tuning_epochs", type=int, default=10,
+                        help='Local PM-MOE gate fine-tuning epochs after FedPer pre-training.')
+    parser.add_argument('-le', "--lock_experts", type=int, choices=[0, 1], default=0,
+                        help='Original PM-MOE convention: 0 freezes experts, 1 fine-tunes experts.')
+    parser.add_argument('-moelr', "--moe_lr", type=float, default=0.1,
+                        help='PM-MOE gate/expert fine-tuning learning rate.')
+
     # cwFedAvg
     parser.add_argument('-cw', "--add_cw", action='store_true')
     parser.add_argument('-wdr', "--add_wdr", action='store_true')
@@ -723,6 +742,5 @@ if __name__ == "__main__":
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
     # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")
-
 
 

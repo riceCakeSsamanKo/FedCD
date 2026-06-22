@@ -1,0 +1,2 @@
+﻿idx,total,dataset_base,algorithm,rho,num_clients,seed,dataset,status,exit_code,start_utc,end_utc,run_log,existing_acc_csv
+"1","5","Cifar10","FedMoE","0.0","50","1","Cifar10_splitgp_pat_rho0.0_nc50","ok","0","2026-06-20T12:53:50Z","2026-06-20T23:46:30Z","C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\batch_runs\splitgp_rho_baselines_vgg8_windows\cifar10\date_20260620\time_125350\run_logs\001_cifar10_FedMoE_rho0p0_nc50_seed1.log",""

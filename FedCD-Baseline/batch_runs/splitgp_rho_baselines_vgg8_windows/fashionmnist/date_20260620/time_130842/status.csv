@@ -1,0 +1,2 @@
+﻿idx,total,dataset_base,algorithm,rho,num_clients,seed,dataset,status,exit_code,start_utc,end_utc,run_log,existing_acc_csv
+"1","5","FashionMnist","FedMoE","0.0","50","1","FashionMnist_splitgp_pat_rho0.0_nc50","ok","0","2026-06-20T13:08:42Z","2026-06-21T01:15:27Z","C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\batch_runs\splitgp_rho_baselines_vgg8_windows\fashionmnist\date_20260620\time_130842\run_logs\001_fashionmnist_FedMoE_rho0p0_nc50_seed1.log",""
