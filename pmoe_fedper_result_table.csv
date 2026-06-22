@@ -1,0 +1,7 @@
+﻿Client 50 / CIFAR10
+Method,rho 0,rho 0.2,rho 0.4,rho 0.6,rho 0.8
+PMOE_FedPer,87.42 ± 0.34,72.84 ± 0.33,62.55 ± 0.33,54.53 ± 0.27,48.73 ± 0.27
+
+Client 50 / FMNIST
+Method,rho 0,rho 0.2,rho 0.4,rho 0.6,rho 0.8
+PMOE_FedPer,99.08 ± 0.01,82.56 ± 0.02,70.75 ± 0.01,61.89 ± 0.01,55.07 ± 0.01

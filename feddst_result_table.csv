@@ -1,0 +1,7 @@
+﻿Client 50 / CIFAR10
+Method,rho 0,rho 0.2,rho 0.4,rho 0.6,rho 0.8
+FedDST,39.78 ± 0.00,37.93 ± 0.58,36.75 ± 0.14,35.78 ± 0.82,35.23 ± 1.05
+
+Client 50 / FMNIST
+Method,rho 0,rho 0.2,rho 0.4,rho 0.6,rho 0.8
+FedDST,92.58 ± 0.00,77.66 ± 12.37,73.59 ± 9.20,70.74 ± 6.66,68.45 ± 4.90

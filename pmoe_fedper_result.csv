@@ -1,0 +1,22 @@
+﻿dataset,method,rho,metric,completed_runs,used_runs,mean,std,formatted,sources
+
+cifar10,PMOE_FedPer,0.0,local_test_acc,3,2,87.4200000000,0.3394112550,87.42 ± 0.34,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.0\NC_50\date_20260622\time_010533\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.0\NC_50\date_20260622\time_080832\acc.csv
+
+cifar10,PMOE_FedPer,0.2,local_test_acc,3,2,72.8450000000,0.3323401872,72.84 ± 0.33,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.2\NC_50\date_20260622\time_022303\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.2\NC_50\date_20260622\time_083756\acc.csv
+
+cifar10,PMOE_FedPer,0.4,local_test_acc,3,2,62.5550000000,0.3323401872,62.55 ± 0.33,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.4\NC_50\date_20260622\time_034103\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.4\NC_50\date_20260622\time_090718\acc.csv
+
+cifar10,PMOE_FedPer,0.6,local_test_acc,3,2,54.5300000000,0.2687005769,54.53 ± 0.27,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.6\NC_50\date_20260622\time_045537\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.6\NC_50\date_20260622\time_093605\acc.csv
+
+cifar10,PMOE_FedPer,0.8,local_test_acc,3,2,48.7300000000,0.2687005769,48.73 ± 0.27,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.8\NC_50\date_20260622\time_054838\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\cifar10\PMOE_FedPer\GM_VGG8\splitgp_rho0.8\NC_50\date_20260622\time_100520\acc.csv
+
+FashionMNIST,PMOE_FedPer,0.0,local_test_acc,3,2,99.0750000000,0.0070710678,99.08 ± 0.01,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.0\NC_50\date_20260622\time_062619\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.0\NC_50\date_20260622\time_103437\acc.csv
+
+FashionMNIST,PMOE_FedPer,0.2,local_test_acc,3,2,82.5650000000,0.0212132034,82.56 ± 0.02,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.2\NC_50\date_20260622\time_065244\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.2\NC_50\date_20260622\time_105344\acc.csv
+
+FashionMNIST,PMOE_FedPer,0.4,local_test_acc,3,2,70.7450000000,0.0070710678,70.75 ± 0.01,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.4\NC_50\date_20260622\time_071133\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.4\NC_50\date_20260622\time_111647\acc.csv
+
+FashionMNIST,PMOE_FedPer,0.6,local_test_acc,3,2,61.8950000000,0.0070710678,61.89 ± 0.01,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.6\NC_50\date_20260622\time_073032\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.6\NC_50\date_20260622\time_114241\acc.csv
+
+FashionMNIST,PMOE_FedPer,0.8,local_test_acc,3,2,55.0750000000,0.0070710678,55.07 ± 0.01,C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.8\NC_50\date_20260622\time_074931\acc.csv;C:\Users\mulso\Documents\GitHub\FedCD\FedCD-Baseline\logs\FashionMNIST\PMOE_FedPer\GM_VGG8\splitgp_rho0.8\NC_50\date_20260622\time_120858\acc.csv
+
