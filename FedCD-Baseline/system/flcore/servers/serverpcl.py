@@ -105,6 +105,9 @@ class FedPCL(Server):
         print("Averaged Test Accuracy: {:.4f}".format(test_acc))
         # self.print_(test_acc, train_acc, train_loss)
         print("Std Test Accuracy: {:.4f}".format(np.std(accs)))
+        if acc is None:
+            self.log_usage(test_acc, train_loss, None)
+            self.log_multi_rho_eval(train_loss=train_loss)
 
     def prototype_padding(self):
         for cid in range(self.num_clients):

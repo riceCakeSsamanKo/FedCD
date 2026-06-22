@@ -1,10 +1,11 @@
 import copy
 import torch
 import time
+import torch.nn as nn
+import torch.nn.functional as F
 from flcore.clients.clientcp import *
 from flcore.servers.serverbase import Server
 from utils.data_utils import read_client_data
-from threading import Thread
 
 
 class FedCP(Server):
@@ -14,34 +15,50 @@ class FedCP(Server):
         in_dim = list(args.model.head.parameters())[0].shape[1]
         cs = ConditionalSelection(in_dim, in_dim).to(args.device)
 
-        # select slow clients
+        self.global_modules = copy.deepcopy(args.model.base)
+        self.base_size_MB = self._module_size_mb(args.model.base)
+        self.head_size_MB = self._module_size_mb(args.model.head)
+        self.cs_size_MB = self._module_size_mb(cs)
+        self.model_size_MB = self.base_size_MB + self.head_size_MB + self.cs_size_MB
+
         self.set_slow_clients()
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
             train_data = read_client_data(self.dataset, i, is_train=True, few_shot=self.few_shot)
             test_data = read_client_data(self.dataset, i, is_train=False, few_shot=self.few_shot)
-            client = clientCP(self.args, 
-                            id=i, 
-                            train_samples=len(train_data), 
-                            test_samples=len(test_data), 
-                            train_slow=train_slow, 
+            client = clientCP(self.args,
+                            id=i,
+                            train_samples=len(train_data),
+                            test_samples=len(test_data),
+                            train_slow=train_slow,
                             send_slow=send_slow,
                             ConditionalSelection=cs)
             self.clients.append(client)
 
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
+        print(
+            "FedCP communication payloads: "
+            f"base={self.base_size_MB:.4f} MB, "
+            f"head={self.head_size_MB:.4f} MB, "
+            f"conditional_selector={self.cs_size_MB:.4f} MB"
+        )
         print("Finished creating server and clients.")
 
-        # self.load_model()
         self.Budget = []
         self.head = None
         self.cs = None
 
+    @staticmethod
+    def _module_size_mb(module):
+        return sum(param.numel() for param in module.parameters()) * 4 / (1024 * 1024)
 
     def send_models(self):
         assert (len(self.clients) > 0)
-
         for client in self.clients:
+            start_time = time.time()
             client.set_parameters(self.global_modules)
+            client.send_time_cost['num_rounds'] += 1
+            client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+        self.downlink_MB += len(self.clients) * self.base_size_MB
 
     def add_parameters(self, w, client_model):
         for server_param, client_param in zip(self.global_modules.parameters(), client_model.parameters()):
@@ -53,7 +70,7 @@ class FedCP(Server):
         self.global_modules = copy.deepcopy(self.uploaded_models[0])
         for param in self.global_modules.parameters():
             param.data = torch.zeros_like(param.data)
-            
+
         for w, client_model in zip(self.uploaded_weights, self.uploaded_models):
             self.add_parameters(w, client_model)
 
@@ -62,15 +79,16 @@ class FedCP(Server):
 
         test_acc = sum(stats[2])*1.0 / sum(stats[1])
         test_auc = sum(stats[3])*1.0 / sum(stats[1])
-        
+
         if acc == None:
             self.rs_test_acc.append(test_acc)
+            self.log_usage(test_acc, 0.0, None)
+            self.log_multi_rho_eval(train_loss=0.0)
         else:
             acc.append(test_acc)
 
         print("Averaged Test Accuracy: {:.4f}".format(test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
-
 
     def train(self):
         for i in range(self.global_rounds+1):
@@ -98,11 +116,13 @@ class FedCP(Server):
         print("\nBest accuracy.")
         print(max(self.rs_test_acc))
         print("\nAverage time cost per round.")
-        print(sum(self.Budget[1:])/len(self.Budget[1:]))
+        if len(self.Budget) > 1:
+            print(sum(self.Budget[1:])/len(self.Budget[1:]))
+        else:
+            print(0.0)
 
         self.save_results()
         self.save_global_model()
-
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)
@@ -118,40 +138,45 @@ class FedCP(Server):
             self.uploaded_weights.append(client.train_samples / active_train_samples)
             self.uploaded_ids.append(client.id)
             self.uploaded_models.append(client.model.model.base)
+        self.uplink_MB += len(self.selected_clients) * self.base_size_MB
 
     def global_head(self):
         self.uploaded_model_gs = []
         for client in self.selected_clients:
             self.uploaded_model_gs.append(client.model.head_g)
+        self.uplink_MB += len(self.selected_clients) * self.head_size_MB
 
         self.head = copy.deepcopy(self.uploaded_model_gs[0])
         for param in self.head.parameters():
             param.data = torch.zeros_like(param.data)
-            
+
         for w, client_model in zip(self.uploaded_weights, self.uploaded_model_gs):
             self.add_head(w, client_model)
 
         for client in self.selected_clients:
             client.set_head_g(self.head)
+        self.downlink_MB += len(self.selected_clients) * self.head_size_MB
 
     def add_head(self, w, head):
         for server_param, client_param in zip(self.head.parameters(), head.parameters()):
             server_param.data += client_param.data.clone() * w
-            
+
     def global_cs(self):
         self.uploaded_model_gs = []
         for client in self.selected_clients:
             self.uploaded_model_gs.append(client.model.gate.cs)
+        self.uplink_MB += len(self.selected_clients) * self.cs_size_MB
 
         self.cs = copy.deepcopy(self.uploaded_model_gs[0])
         for param in self.cs.parameters():
             param.data = torch.zeros_like(param.data)
-            
+
         for w, client_model in zip(self.uploaded_weights, self.uploaded_model_gs):
             self.add_cs(w, client_model)
 
         for client in self.selected_clients:
             client.set_cs(self.cs)
+        self.downlink_MB += len(self.selected_clients) * self.cs_size_MB
 
     def add_cs(self, w, cs):
         for server_param, client_param in zip(self.cs.parameters(), cs.parameters()):
@@ -161,9 +186,9 @@ class FedCP(Server):
 class ConditionalSelection(nn.Module):
     def __init__(self, in_dim, h_dim):
         super(ConditionalSelection, self).__init__()
-        
+
         self.fc = nn.Sequential(
-            nn.Linear(in_dim, h_dim*2), 
+            nn.Linear(in_dim, h_dim*2),
             nn.LayerNorm([h_dim*2]),
             nn.ReLU(),
         )

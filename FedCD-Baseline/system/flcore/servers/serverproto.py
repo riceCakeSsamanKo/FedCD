@@ -139,6 +139,8 @@ class FedProto(Server):
             self.rs_global_test_acc.append(global_test_acc)
 
         self.log_usage(local_test_acc, train_loss, global_test_acc)
+        if acc is None:
+            self.log_multi_rho_eval(train_loss=train_loss)
             
 
 def proto_aggregation(local_protos_list):

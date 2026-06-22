@@ -45,7 +45,7 @@ class clientCP(Client):
         for mat in headw_ps[-2::-1]:
             headw_p = torch.matmul(headw_p, mat)
         headw_p.detach_()
-        self.context = torch.sum(headw_p, dim=0, keepdim=True)
+        self.context = torch.sum(headw_p, dim=0, keepdim=True).to(self.device)
         
         for new_param, old_param in zip(head.parameters(), self.model.head_g.parameters()):
             old_param.data = new_param.data.clone()
@@ -66,6 +66,8 @@ class clientCP(Client):
 
     def test_metrics(self):
         testloader = self.load_test_data()
+        self.model.to(self.device)
+        self.context = self.context.to(self.device)
         self.model.eval()
 
         test_acc = 0
@@ -103,12 +105,16 @@ class clientCP(Client):
         auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
 
         self.pm_test.extend(self.model.gate.pm_)
+        self.model.cpu()
+        self.context = self.context.cpu()
         
         return test_acc, test_num, auc
 
                 
     def train_cs_model(self):
         trainloader = self.load_train_data()
+        self.model.to(self.device)
+        self.context = self.context.to(self.device)
         self.model.train()
 
         max_local_epochs = self.local_epochs
@@ -135,6 +141,8 @@ class clientCP(Client):
         self.pm_train.extend(self.model.gate.pm)
         scores = [torch.mean(pm).item() for pm in self.pm_train]
         print(np.mean(scores), np.std(scores))
+        self.model.cpu()
+        self.context = self.context.cpu()
 
 
 def MMD(x, y, kernel, device='cpu'):

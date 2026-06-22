@@ -122,6 +122,9 @@ class FedPAC(Server):
         print("Averaged Test Accuracy: {:.4f}".format(test_acc))
         # self.print_(test_acc, train_acc, train_loss)
         print("Std Test Accuracy: {:.4f}".format(np.std(accs)))
+        if acc is None:
+            self.log_usage(test_acc, 0.0, None)
+            self.log_multi_rho_eval(train_loss=0.0)
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)

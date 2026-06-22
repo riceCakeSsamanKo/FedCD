@@ -1,6 +1,19 @@
 import numpy as np
 import time
+import torch.nn as nn
 from flcore.clients.clientbase import Client
+
+
+_BN_TYPES = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm)
+
+
+def _bn_parameter_names(model):
+    names = set()
+    for module_name, module in model.named_modules():
+        if isinstance(module, _BN_TYPES):
+            for param_name, _ in module.named_parameters(recurse=False):
+                names.add(f"{module_name}.{param_name}" if module_name else param_name)
+    return names
 
 
 class clientBN(Client):
@@ -44,6 +57,8 @@ class clientBN(Client):
 
 
     def set_parameters(self, model):
-        for (nn, np), (on, op) in zip(model.named_parameters(), self.model.named_parameters()):
-            if 'bn' not in nn:
-                op.data = np.data.clone()
+        bn_names = _bn_parameter_names(model)
+        own_params = dict(self.model.named_parameters())
+        for name, param in model.named_parameters():
+            if name not in bn_names:
+                own_params[name].data = param.data.clone()

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Summarize 3 completed splitgp rho baseline runs as best_acc mean 짹 std.
 
 Usage:
@@ -27,6 +27,8 @@ DEFAULT_METHODS = (
     "FedAvg",
     "FedDST",
     "FedBN",
+    "FedCP",
+    "DualFed",
     "FedCross",
     "pFedMe",
     "FedProx",
@@ -38,6 +40,8 @@ BASELINE_TABLE_METHODS = (
     ("FedAS", "FedAS"),
     ("FedProx", "FedProx"),
     ("FedBN", "FedBN"),
+    ("FedCP", "FedCP"),
+    ("DualFed", "DualFed"),
     ("FedALA", "FedALA"),
     ("FedCross", "FedCross"),
     ("pFedMe", "pFedME"),

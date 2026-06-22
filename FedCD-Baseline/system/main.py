@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 import copy
 import torch
 import torch.nn as nn
@@ -57,6 +57,7 @@ from flcore.servers.servercwavg import cwFedAvg
 from flcore.servers.serverdst import FedDST
 from flcore.servers.serverfedmoe import FedMoE
 from flcore.servers.serverpmoefedper import PMOEFedPer
+from flcore.servers.serverdualfed import DualFed
 
 from flcore.trainmodel.models import *
 
@@ -292,6 +293,10 @@ def run(args):
         elif args.algorithm == "PMOE_FedPer":
             args.model = split_model(args.model)
             server = PMOEFedPer(args, i)
+
+        elif args.algorithm == "DualFed":
+            args.model = split_model(args.model)
+            server = DualFed(args, i)
         elif args.algorithm == "Ditto":
             server = Ditto(args, i)
 
@@ -484,6 +489,8 @@ if __name__ == "__main__":
                         help="Evaluate each client model on one shared common global test subset.")
     parser.add_argument('--global_test_samples', '--common_test_samples', dest='global_test_samples', type=int, default=0,
                         help="Number of samples for shared global test evaluation (0 = full union).")
+    parser.add_argument('--eval_rhos', '--eval-rhos', type=str, default='',
+                        help='Comma/space-separated SplitGP rho test sets to evaluate in one training run.')
     parser.add_argument('--common_eval_batch_size', type=int, default=256,
                         help="Batch size for common global test evaluation.")
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
@@ -596,6 +603,11 @@ if __name__ == "__main__":
                         help='Original PM-MOE convention: 0 freezes experts, 1 fine-tunes experts.')
     parser.add_argument('-moelr', "--moe_lr", type=float, default=0.1,
                         help='PM-MOE gate/expert fine-tuning learning rate.')
+    # DualFed
+    parser.add_argument('--dualfed_con_lambda', type=float, default=0.1,
+                        help='Weight of DualFed supervised contrastive regularization.')
+    parser.add_argument('--dualfed_con_temp', type=float, default=0.5,
+                        help='Temperature for DualFed supervised contrastive regularization.')
 
     # cwFedAvg
     parser.add_argument('-cw', "--add_cw", action='store_true')

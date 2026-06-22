@@ -5,6 +5,7 @@ import h5py
 import copy
 import time
 import random
+import re
 from tqdm import tqdm
 from utils.data_utils import read_client_data
 from utils.dlg import DLG
@@ -82,6 +83,69 @@ class Server(object):
         self.rs_global_test_acc = []
         # Backward-compatible alias
         self.rs_common_test_acc = self.rs_global_test_acc
+        self.eval_rhos = self._parse_eval_rhos(getattr(args, "eval_rhos", ""))
+        self.multi_rho_eval = bool(self.eval_rhos) and self._is_splitgp_rho_dataset(self.dataset)
+        self.eval_rho_items = self._build_eval_rho_items(self.eval_rhos) if self.multi_rho_eval else []
+        self.eval_rho_log_paths = {}
+        self._last_eval_round_comm = (0.0, 0.0)
+        if self.multi_rho_eval:
+            exp_dir = getattr(args, "exp_dir", None)
+            if exp_dir:
+                for item in self.eval_rho_items:
+                    log_dir = os.path.join(exp_dir, item["label"])
+                    os.makedirs(log_dir, exist_ok=True)
+                    self.eval_rho_log_paths[item["label"]] = os.path.join(log_dir, "acc.csv")
+            print(
+                "[Multi-Rho Eval] One training run will evaluate test rho(s): "
+                + ", ".join(f"{item['rho']:.1f}" for item in self.eval_rho_items)
+            )
+
+    @staticmethod
+    def _parse_eval_rhos(value):
+        if value is None:
+            return []
+        tokens = re.split(r"[\s,]+", str(value).strip())
+        rhos = []
+        seen = set()
+        for token in tokens:
+            if not token:
+                continue
+            rho = float(token)
+            if not np.isfinite(rho):
+                continue
+            key = round(rho, 12)
+            if key in seen:
+                continue
+            seen.add(key)
+            rhos.append(rho)
+        return rhos
+
+    @staticmethod
+    def _is_splitgp_rho_dataset(dataset):
+        return bool(re.search(r"rho[0-9]+(?:\.[0-9]+)?", str(dataset), flags=re.IGNORECASE))
+
+    @staticmethod
+    def _format_eval_rho_label(rho):
+        return f"eval_rho_{float(rho):.1f}"
+
+    def _dataset_for_eval_rho(self, rho):
+        return re.sub(
+            r"rho[0-9]+(?:\.[0-9]+)?",
+            f"rho{float(rho):.1f}",
+            str(self.dataset),
+            count=1,
+            flags=re.IGNORECASE,
+        )
+
+    def _build_eval_rho_items(self, rhos):
+        return [
+            {
+                "rho": float(rho),
+                "label": self._format_eval_rho_label(rho),
+                "dataset": self._dataset_for_eval_rho(rho),
+            }
+            for rho in rhos
+        ]
 
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
@@ -378,25 +442,85 @@ class Server(object):
             self.rs_global_test_acc.append(global_test_acc)
 
         self.log_usage(local_test_acc, train_loss, global_test_acc)
+        if acc is None:
+            self.log_multi_rho_eval(train_loss=train_loss)
 
     def log_usage(self, local_test_acc, train_loss, global_test_acc=None):
         file_path = getattr(self.args, "log_path", "usage.csv")
-        if not os.path.exists(file_path):
-            with open(file_path, "w") as f:
-                f.write("round,local_test_acc,global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n")
-        
         round_num = len(self.rs_test_acc)
         round_uplink = max(0.0, self.uplink_MB - self._last_logged_uplink_MB)
         round_downlink = max(0.0, self.downlink_MB - self._last_logged_downlink_MB)
-        total_mb = round_uplink + round_downlink
         self._last_logged_uplink_MB = self.uplink_MB
         self._last_logged_downlink_MB = self.downlink_MB
+        self._last_eval_round_comm = (round_uplink, round_downlink)
+        self._write_usage_row(
+            file_path,
+            round_num,
+            local_test_acc,
+            train_loss,
+            global_test_acc,
+            round_uplink,
+            round_downlink,
+        )
+
+    def _write_usage_row(
+        self,
+        file_path,
+        round_num,
+        local_test_acc,
+        train_loss,
+        global_test_acc,
+        round_uplink,
+        round_downlink,
+    ):
+        if not os.path.exists(file_path):
+            with open(file_path, "w") as f:
+                f.write("round,local_test_acc,global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n")
+
+        total_mb = round_uplink + round_downlink
         global_str = f"{global_test_acc:.4f}" if global_test_acc is not None else ""
         with open(file_path, "a") as f:
             f.write(
                 f"{round_num},{local_test_acc:.4f},{global_str},{train_loss:.4f},"
                 f"{round_uplink:.2f},{round_downlink:.2f},{total_mb:.2f}\n"
             )
+
+    def _evaluate_local_acc_on_dataset(self, dataset):
+        original_dataset = self.dataset
+        original_client_datasets = [client.dataset for client in self.clients]
+        try:
+            self.dataset = dataset
+            for client in self.clients:
+                client.dataset = dataset
+            stats = self.test_metrics()
+            total_test_samples = sum(stats[1])
+            if total_test_samples <= 0:
+                return 0.0
+            return sum(stats[2]) * 1.0 / total_test_samples
+        finally:
+            self.dataset = original_dataset
+            for client, client_dataset in zip(self.clients, original_client_datasets):
+                client.dataset = client_dataset
+
+    def log_multi_rho_eval(self, train_loss=0.0):
+        if not self.multi_rho_eval:
+            return
+        round_num = len(self.rs_test_acc)
+        round_uplink, round_downlink = self._last_eval_round_comm
+        for item in self.eval_rho_items:
+            acc = self._evaluate_local_acc_on_dataset(item["dataset"])
+            print(f"[Multi-Rho Eval] rho={item['rho']:.1f} Local Test Accuracy: {acc:.4f}")
+            file_path = self.eval_rho_log_paths.get(item["label"])
+            if file_path:
+                self._write_usage_row(
+                    file_path,
+                    round_num,
+                    acc,
+                    train_loss,
+                    None,
+                    round_uplink,
+                    round_downlink,
+                )
 
     def print_(self, local_test_acc, test_auc, train_loss):
         print("Average Local Test Accuracy: {:.4f}".format(local_test_acc))
