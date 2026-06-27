@@ -64,6 +64,20 @@ class clientCP(Client):
         for (np, pp), (ng, pg) in zip(self.model.model.head.named_parameters(), self.model.head_g.named_parameters()):
             pg.data = pp * 0.5 + pg * 0.5
 
+    def _prepare_eval_model(self):
+        self.model.to(self.device)
+        self.context = self.context.to(self.device)
+        self.model.eval()
+        self.model.gate.pm_ = []
+        self.model.gate.gm_ = []
+
+    def _cleanup_eval_model(self):
+        self.model.cpu()
+        self.context = self.context.cpu()
+
+    def _eval_forward(self, x):
+        return self.model(x, is_rep=False, context=self.context)
+
     def test_metrics(self):
         testloader = self.load_test_data()
         self.model.to(self.device)

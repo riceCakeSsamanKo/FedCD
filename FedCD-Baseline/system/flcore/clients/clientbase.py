@@ -63,6 +63,83 @@ class Client(object):
             batch_size = self.batch_size
         test_data = read_client_data(self.dataset, self.id, is_train=False, few_shot=self.few_shot)
         return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
+
+    @staticmethod
+    def _label_to_int(label):
+        if torch.is_tensor(label):
+            return int(label.item())
+        return int(label)
+
+    def _train_label_set(self):
+        train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
+        return {self._label_to_int(label) for _, label in train_data}
+
+    def _move_eval_batch(self, x, y):
+        if type(x) == type([]):
+            x[0] = x[0].to(self.device)
+            if torch.is_floating_point(x[0]) and not torch.isfinite(x[0]).all():
+                x[0] = torch.nan_to_num(x[0], nan=0.0, posinf=1.0, neginf=0.0)
+        else:
+            x = x.to(self.device)
+            if torch.is_floating_point(x) and not torch.isfinite(x).all():
+                x = torch.nan_to_num(x, nan=0.0, posinf=1.0, neginf=0.0)
+        return x, y.to(self.device)
+
+    def _prepare_eval_model(self):
+        self.model.to(self.device)
+        self.model.eval()
+
+    def _cleanup_eval_model(self):
+        self.model.cpu()
+
+    def _eval_forward(self, x):
+        return self.model(x)
+
+    def test_label_split_metrics(self):
+        """Return per-client ID/OOD correct counts using train labels as ID labels."""
+        train_labels = self._train_label_set()
+        testloader = self.load_test_data()
+        self._prepare_eval_model()
+
+        id_correct = 0
+        id_total = 0
+        ood_correct = 0
+        ood_total = 0
+        invalid_values_found = False
+
+        with torch.no_grad():
+            for x, y in testloader:
+                x, y = self._move_eval_batch(x, y)
+                output = self._eval_forward(x)
+                if not torch.isfinite(output).all():
+                    output = torch.nan_to_num(output, nan=0.0, posinf=1e6, neginf=-1e6)
+                    invalid_values_found = True
+
+                pred = torch.argmax(output, dim=1)
+                correct = pred.eq(y)
+                y_cpu = y.detach().cpu().tolist()
+                id_mask = torch.tensor(
+                    [int(label) in train_labels for label in y_cpu],
+                    dtype=torch.bool,
+                    device=y.device,
+                )
+                ood_mask = ~id_mask
+
+                id_correct += correct[id_mask].sum().item()
+                id_total += id_mask.sum().item()
+                ood_correct += correct[ood_mask].sum().item()
+                ood_total += ood_mask.sum().item()
+
+        self._cleanup_eval_model()
+        if invalid_values_found:
+            print(f"Warning: non-finite values detected during ID/OOD eval on client {self.id}; sanitized.")
+
+        return {
+            "id_correct": id_correct,
+            "id_total": id_total,
+            "ood_correct": ood_correct,
+            "ood_total": ood_total,
+        }
         
     def set_parameters(self, model):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):

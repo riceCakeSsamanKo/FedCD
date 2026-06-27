@@ -48,7 +48,7 @@ NUM_CLIENTS="${NUM_CLIENTS:-50}"
 MAX_PARALLEL_JOBS="${MAX_PARALLEL_JOBS:-${MAX_PARALLEL_RHOS:-1}}"
 DATASETS_CSV="${DATASETS:-Cifar10,FashionMNIST}"
 RHOS_CSV="${RHOS:-0.0,0.2,0.4,0.6,0.8}"
-EVAL_RHOS="${EVAL_RHOS:-}"
+EVAL_RHOS="${EVAL_RHOS:-0.0,0.2,0.4,0.6,0.8}"
 FEDCP_LAMDA="${FEDCP_LAMDA:-1.0}"
 
 if ! [[ "$MAX_PARALLEL_JOBS" =~ ^[0-9]+$ ]] || [[ "$MAX_PARALLEL_JOBS" -lt 1 ]]; then
@@ -84,10 +84,7 @@ done
 
 cd "$SYSTEM_DIR" || exit 1
 
-eval_rho_args=()
-if [[ -n "$EVAL_RHOS" ]]; then
-  eval_rho_args=(--eval-rhos "$EVAL_RHOS")
-fi
+eval_rho_args=(--eval-rhos "$EVAL_RHOS")
 
 echo "[INFO] FedCP SplitGP rho queue root: $queue_root"
 echo "[INFO] Python: $PYTHON_BIN"

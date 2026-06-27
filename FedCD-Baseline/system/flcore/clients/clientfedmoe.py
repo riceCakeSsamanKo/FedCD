@@ -1,4 +1,4 @@
-﻿import copy
+import copy
 import time
 
 import numpy as np
@@ -109,6 +109,12 @@ class clientFedMoE(Client):
                 rep = self.model.moe(x)
             return self.model.head(rep)
         return self.model(x)
+
+    def _move_eval_batch(self, x, y):
+        return self._move_batch_to_device(x), y.to(self.device)
+
+    def _eval_forward(self, x):
+        return self._forward_fedmoe(x)
 
     def test_metrics(self):
         testloaderfull = self.load_test_data()

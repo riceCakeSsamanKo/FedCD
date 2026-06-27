@@ -144,6 +144,7 @@ class pFedMe(Server):
             train_loss = 0.0
 
         global_test_acc = self.evaluate_global_test_acc()
+        split_metrics = self.evaluate_label_split_metrics()
         accs = [a / n for a, n in zip(stats[2], stats[1]) if n > 0]
 
         self.rs_test_acc.append(local_test_acc)
@@ -156,11 +157,16 @@ class pFedMe(Server):
         if global_test_acc is not None:
             print("Averaged Global Test Accuracy: {:.4f}".format(global_test_acc))
         print("Std Test Accuracy: {:.4f}".format(float(np.std(accs)) if len(accs) > 0 else 0.0))
+        if split_metrics is not None:
+            id_text = self._format_optional_metric(split_metrics.get("id_test_acc")) or "N/A"
+            ood_text = self._format_optional_metric(split_metrics.get("ood_test_acc")) or "N/A"
+            print(f"Averaged Global ID/OOD Test Accuracy: {id_text}/{ood_text}")
 
         return {
             "local_test_acc": local_test_acc,
             "global_test_acc": global_test_acc,
             "train_loss": train_loss,
+            "split_metrics": split_metrics,
         }
 
 
@@ -213,6 +219,7 @@ class pFedMe(Server):
         train_acc = sum(stats_train[2])*1.0 / sum(stats_train[1])
         train_loss = sum(stats_train[3])*1.0 / sum(stats_train[1])
         global_test_acc = self.evaluate_personalized_global_test_acc()
+        split_metrics = self.evaluate_label_split_metrics("test_label_split_metrics_personalized")
         accs = [a / n for a, n in zip(stats[2], stats[1]) if n > 0]
         
         self.rs_test_acc_per.append(test_acc)
@@ -227,53 +234,140 @@ class pFedMe(Server):
             print("Averaged Global Test Accuracy: {:.4f}".format(global_test_acc))
         print("Averaged Personalized Train Accuracy: {:.4f}".format(train_acc))
         print("Std Test Accuracy: {:.4f}".format(float(np.std(accs)) if len(accs) > 0 else 0.0))
+        if split_metrics is not None:
+            id_text = self._format_optional_metric(split_metrics.get("id_test_acc")) or "N/A"
+            ood_text = self._format_optional_metric(split_metrics.get("ood_test_acc")) or "N/A"
+            print(f"Averaged Personalized ID/OOD Test Accuracy: {id_text}/{ood_text}")
 
         return {
             "local_test_acc": test_acc,
             "global_test_acc": global_test_acc,
             "train_loss": train_loss,
             "train_acc": train_acc,
+            "split_metrics": split_metrics,
         }
 
-    def log_usage_combined(self, global_metrics, personalized_metrics):
-        file_path = getattr(self.args, "log_path", "usage.csv")
+    def _evaluate_personalized_local_metrics_on_dataset(self, dataset):
+        original_dataset = self.dataset
+        original_client_datasets = [client.dataset for client in self.clients]
+        try:
+            self.dataset = dataset
+            for client in self.clients:
+                client.dataset = dataset
+            stats = self.test_metrics_personalized()
+            total_test_samples = sum(stats[1])
+            if total_test_samples <= 0:
+                local_acc = 0.0
+            else:
+                local_acc = sum(stats[2]) * 1.0 / total_test_samples
+            split_metrics = self.evaluate_label_split_metrics("test_label_split_metrics_personalized")
+            return local_acc, split_metrics
+        finally:
+            self.dataset = original_dataset
+            for client, client_dataset in zip(self.clients, original_client_datasets):
+                client.dataset = client_dataset
+
+    def _write_combined_usage_row(
+        self,
+        file_path,
+        round_num,
+        global_metrics,
+        personalized_metrics,
+        round_uplink,
+        round_downlink,
+    ):
         if not os.path.exists(file_path):
             with open(file_path, "w") as f:
                 f.write(
                     "round,global_local_test_acc,global_global_test_acc,global_train_loss,"
+                    "global_id_test_acc,global_ood_test_acc,global_id_test_count,global_ood_test_count,"
                     "personalized_local_test_acc,personalized_global_test_acc,personalized_train_loss,"
+                    "personalized_id_test_acc,personalized_ood_test_acc,"
+                    "personalized_id_test_count,personalized_ood_test_count,"
                     "uplink_mb,downlink_mb,total_mb\n"
                 )
 
-        round_num = len(self.rs_test_acc_per)
-        round_uplink = max(0.0, self.uplink_MB - self._last_logged_uplink_MB)
-        round_downlink = max(0.0, self.downlink_MB - self._last_logged_downlink_MB)
         total_mb = round_uplink + round_downlink
-        self._last_logged_uplink_MB = self.uplink_MB
-        self._last_logged_downlink_MB = self.downlink_MB
-
-        personal_global_acc = (
-            f"{personalized_metrics['global_test_acc']:.4f}"
-            if personalized_metrics["global_test_acc"] is not None
-            else ""
-        )
         global_global_acc = (
             f"{global_metrics['global_test_acc']:.4f}"
             if global_metrics["global_test_acc"] is not None
             else ""
         )
-
+        personal_global_acc = (
+            f"{personalized_metrics['global_test_acc']:.4f}"
+            if personalized_metrics["global_test_acc"] is not None
+            else ""
+        )
+        global_split = global_metrics.get("split_metrics")
+        personal_split = personalized_metrics.get("split_metrics")
         with open(file_path, "a") as f:
             f.write(
                 f"{round_num},"
-                f"{global_metrics['local_test_acc']:.4f},"
-                f"{global_global_acc},"
-                f"{global_metrics['train_loss']:.4f},"
-                f"{personalized_metrics['local_test_acc']:.4f},"
-                f"{personal_global_acc},"
-                f"{personalized_metrics['train_loss']:.4f},"
+                f"{global_metrics['local_test_acc']:.4f},{global_global_acc},{global_metrics['train_loss']:.4f},"
+                f"{self._format_optional_metric(global_split.get('id_test_acc') if global_split else None)},"
+                f"{self._format_optional_metric(global_split.get('ood_test_acc') if global_split else None)},"
+                f"{self._format_optional_count(global_split.get('id_test_count') if global_split else None)},"
+                f"{self._format_optional_count(global_split.get('ood_test_count') if global_split else None)},"
+                f"{personalized_metrics['local_test_acc']:.4f},{personal_global_acc},{personalized_metrics['train_loss']:.4f},"
+                f"{self._format_optional_metric(personal_split.get('id_test_acc') if personal_split else None)},"
+                f"{self._format_optional_metric(personal_split.get('ood_test_acc') if personal_split else None)},"
+                f"{self._format_optional_count(personal_split.get('id_test_count') if personal_split else None)},"
+                f"{self._format_optional_count(personal_split.get('ood_test_count') if personal_split else None)},"
                 f"{round_uplink:.2f},{round_downlink:.2f},{total_mb:.2f}\n"
             )
+
+    def log_multi_rho_eval_combined(self, global_metrics, personalized_metrics):
+        if not self.multi_rho_eval:
+            return
+        round_num = len(self.rs_test_acc_per)
+        round_uplink, round_downlink = self._last_eval_round_comm
+        for item in self.eval_rho_items:
+            for client in self.clients:
+                client.update_parameters(client.model, client.local_params)
+            global_acc, global_split = self._evaluate_local_metrics_on_dataset(item["dataset"])
+            personal_acc, personal_split = self._evaluate_personalized_local_metrics_on_dataset(item["dataset"])
+            print(
+                f"[Multi-Rho Eval] rho={item['rho']:.1f} "
+                f"Global/Personalized Local Test Accuracy: {global_acc:.4f}/{personal_acc:.4f}"
+            )
+            file_path = self.eval_rho_log_paths.get(item["label"])
+            if file_path:
+                self._write_combined_usage_row(
+                    file_path,
+                    round_num,
+                    {
+                        "local_test_acc": global_acc,
+                        "global_test_acc": None,
+                        "train_loss": global_metrics["train_loss"],
+                        "split_metrics": global_split,
+                    },
+                    {
+                        "local_test_acc": personal_acc,
+                        "global_test_acc": None,
+                        "train_loss": personalized_metrics["train_loss"],
+                        "split_metrics": personal_split,
+                    },
+                    round_uplink,
+                    round_downlink,
+                )
+
+    def log_usage_combined(self, global_metrics, personalized_metrics):
+        file_path = getattr(self.args, "log_path", "usage.csv")
+        round_num = len(self.rs_test_acc_per)
+        round_uplink = max(0.0, self.uplink_MB - self._last_logged_uplink_MB)
+        round_downlink = max(0.0, self.downlink_MB - self._last_logged_downlink_MB)
+        self._last_logged_uplink_MB = self.uplink_MB
+        self._last_logged_downlink_MB = self.downlink_MB
+        self._last_eval_round_comm = (round_uplink, round_downlink)
+        self._write_combined_usage_row(
+            file_path,
+            round_num,
+            global_metrics,
+            personalized_metrics,
+            round_uplink,
+            round_downlink,
+        )
+        self.log_multi_rho_eval_combined(global_metrics, personalized_metrics)
 
     def save_results(self):
         algo = self.dataset + "_" + self.algorithm

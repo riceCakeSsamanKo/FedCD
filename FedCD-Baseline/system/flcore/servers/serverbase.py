@@ -83,6 +83,12 @@ class Server(object):
         self.rs_global_test_acc = []
         # Backward-compatible alias
         self.rs_common_test_acc = self.rs_global_test_acc
+        self.rs_id_test_acc = []
+        self.rs_ood_test_acc = []
+        self.rs_id_client_std = []
+        self.rs_ood_client_std = []
+        self.rs_id_test_count = []
+        self.rs_ood_test_count = []
         self.eval_rhos = self._parse_eval_rhos(getattr(args, "eval_rhos", ""))
         self.multi_rho_eval = bool(self.eval_rhos) and self._is_splitgp_rho_dataset(self.dataset)
         self.eval_rho_items = self._build_eval_rho_items(self.eval_rhos) if self.multi_rho_eval else []
@@ -275,6 +281,13 @@ class Server(object):
                 if len(self.rs_global_test_acc) > 0:
                     hf.create_dataset('rs_global_test_acc', data=self.rs_global_test_acc)
                     hf.create_dataset('rs_common_test_acc', data=self.rs_global_test_acc)
+                if len(self.rs_id_test_acc) > 0:
+                    hf.create_dataset('rs_id_test_acc', data=self.rs_id_test_acc)
+                    hf.create_dataset('rs_ood_test_acc', data=self.rs_ood_test_acc)
+                    hf.create_dataset('rs_id_client_std', data=self.rs_id_client_std)
+                    hf.create_dataset('rs_ood_client_std', data=self.rs_ood_client_std)
+                    hf.create_dataset('rs_id_test_count', data=self.rs_id_test_count)
+                    hf.create_dataset('rs_ood_test_count', data=self.rs_ood_test_count)
 
     def save_item(self, item, item_name):
         if not os.path.exists(self.save_folder_name):
@@ -306,6 +319,60 @@ class Server(object):
         ids = [c.id for c in self.clients]
 
         return ids, num_samples, tot_correct, tot_auc
+
+    @staticmethod
+    def _metric_or_nan(value):
+        if value is None:
+            return float("nan")
+        return float(value)
+
+    @staticmethod
+    def _format_optional_metric(value):
+        if value is None:
+            return ""
+        try:
+            if np.isnan(value):
+                return ""
+        except TypeError:
+            pass
+        return f"{float(value):.4f}"
+
+    @staticmethod
+    def _format_optional_count(value):
+        if value is None:
+            return ""
+        return str(int(value))
+
+    def evaluate_label_split_metrics(self, metric_method="test_label_split_metrics"):
+        if not self._is_splitgp_rho_dataset(self.dataset):
+            return None
+
+        id_accs = []
+        ood_accs = []
+        id_total = 0
+        ood_total = 0
+        for client in tqdm(self.clients, desc="Testing ID/OOD clients", leave=False):
+            metrics_fn = getattr(client, metric_method, None)
+            if metrics_fn is None:
+                continue
+            metrics = metrics_fn()
+            client_id_total = int(metrics.get("id_total", 0))
+            client_ood_total = int(metrics.get("ood_total", 0))
+            id_total += client_id_total
+            ood_total += client_ood_total
+            if client_id_total > 0:
+                id_accs.append(float(metrics.get("id_correct", 0)) / client_id_total)
+            if client_ood_total > 0:
+                ood_accs.append(float(metrics.get("ood_correct", 0)) / client_ood_total)
+
+        return {
+            "id_test_acc": float(np.mean(id_accs)) if id_accs else None,
+            "ood_test_acc": float(np.mean(ood_accs)) if ood_accs else None,
+            "id_client_std": float(np.std(id_accs)) if id_accs else None,
+            "ood_client_std": float(np.std(ood_accs)) if ood_accs else None,
+            "id_test_count": id_total,
+            "ood_test_count": ood_total,
+        }
 
     def _build_global_test_loader(self):
         shared_test_data = []
@@ -413,6 +480,7 @@ class Server(object):
         else:
             train_loss = 0.0
         global_test_acc = self.evaluate_global_test_acc()
+        split_metrics = self.evaluate_label_split_metrics()
 
         accs = [a / n for a, n in zip(stats[2], stats[1]) if n > 0]
         aucs = [a / n for a, n in zip(stats[3], stats[1]) if n > 0]
@@ -421,6 +489,13 @@ class Server(object):
         
         if acc == None:
             self.rs_test_acc.append(local_test_acc)
+            if split_metrics is not None:
+                self.rs_id_test_acc.append(self._metric_or_nan(split_metrics.get("id_test_acc")))
+                self.rs_ood_test_acc.append(self._metric_or_nan(split_metrics.get("ood_test_acc")))
+                self.rs_id_client_std.append(self._metric_or_nan(split_metrics.get("id_client_std")))
+                self.rs_ood_client_std.append(self._metric_or_nan(split_metrics.get("ood_client_std")))
+                self.rs_id_test_count.append(int(split_metrics.get("id_test_count", 0)))
+                self.rs_ood_test_count.append(int(split_metrics.get("ood_test_count", 0)))
         else:
             acc.append(local_test_acc)
         
@@ -437,15 +512,25 @@ class Server(object):
         # self.print_(test_acc, train_acc, train_loss)
         print("Std Test Accuracy: {:.4f}".format(std_acc))
         print("Std Test AUC: {:.4f}".format(std_auc))
+        if split_metrics is not None:
+            id_text = self._format_optional_metric(split_metrics.get("id_test_acc")) or "N/A"
+            ood_text = self._format_optional_metric(split_metrics.get("ood_test_acc")) or "N/A"
+            print(f"Averaged ID Test Accuracy: {id_text}")
+            print(f"Averaged OOD Test Accuracy: {ood_text}")
+            print(
+                "ID/OOD Test Counts: "
+                f"{split_metrics.get('id_test_count', 0)}/"
+                f"{split_metrics.get('ood_test_count', 0)}"
+            )
 
         if acc == None and global_test_acc is not None:
             self.rs_global_test_acc.append(global_test_acc)
 
-        self.log_usage(local_test_acc, train_loss, global_test_acc)
+        self.log_usage(local_test_acc, train_loss, global_test_acc, split_metrics=split_metrics)
         if acc is None:
             self.log_multi_rho_eval(train_loss=train_loss)
 
-    def log_usage(self, local_test_acc, train_loss, global_test_acc=None):
+    def log_usage(self, local_test_acc, train_loss, global_test_acc=None, split_metrics=None):
         file_path = getattr(self.args, "log_path", "usage.csv")
         round_num = len(self.rs_test_acc)
         round_uplink = max(0.0, self.uplink_MB - self._last_logged_uplink_MB)
@@ -461,6 +546,7 @@ class Server(object):
             global_test_acc,
             round_uplink,
             round_downlink,
+            split_metrics=split_metrics,
         )
 
     def _write_usage_row(
@@ -472,20 +558,32 @@ class Server(object):
         global_test_acc,
         round_uplink,
         round_downlink,
+        split_metrics=None,
     ):
         if not os.path.exists(file_path):
             with open(file_path, "w") as f:
-                f.write("round,local_test_acc,global_test_acc,train_loss,uplink_mb,downlink_mb,total_mb\n")
+                f.write(
+                    "round,local_test_acc,global_test_acc,train_loss,"
+                    "id_test_acc,ood_test_acc,id_test_count,ood_test_count,"
+                    "id_client_std,ood_client_std,uplink_mb,downlink_mb,total_mb\n"
+                )
 
         total_mb = round_uplink + round_downlink
         global_str = f"{global_test_acc:.4f}" if global_test_acc is not None else ""
+        id_acc = self._format_optional_metric(split_metrics.get("id_test_acc") if split_metrics else None)
+        ood_acc = self._format_optional_metric(split_metrics.get("ood_test_acc") if split_metrics else None)
+        id_count = self._format_optional_count(split_metrics.get("id_test_count") if split_metrics else None)
+        ood_count = self._format_optional_count(split_metrics.get("ood_test_count") if split_metrics else None)
+        id_std = self._format_optional_metric(split_metrics.get("id_client_std") if split_metrics else None)
+        ood_std = self._format_optional_metric(split_metrics.get("ood_client_std") if split_metrics else None)
         with open(file_path, "a") as f:
             f.write(
                 f"{round_num},{local_test_acc:.4f},{global_str},{train_loss:.4f},"
+                f"{id_acc},{ood_acc},{id_count},{ood_count},{id_std},{ood_std},"
                 f"{round_uplink:.2f},{round_downlink:.2f},{total_mb:.2f}\n"
             )
 
-    def _evaluate_local_acc_on_dataset(self, dataset):
+    def _evaluate_local_metrics_on_dataset(self, dataset):
         original_dataset = self.dataset
         original_client_datasets = [client.dataset for client in self.clients]
         try:
@@ -495,12 +593,19 @@ class Server(object):
             stats = self.test_metrics()
             total_test_samples = sum(stats[1])
             if total_test_samples <= 0:
-                return 0.0
-            return sum(stats[2]) * 1.0 / total_test_samples
+                local_acc = 0.0
+            else:
+                local_acc = sum(stats[2]) * 1.0 / total_test_samples
+            split_metrics = self.evaluate_label_split_metrics()
+            return local_acc, split_metrics
         finally:
             self.dataset = original_dataset
             for client, client_dataset in zip(self.clients, original_client_datasets):
                 client.dataset = client_dataset
+
+    def _evaluate_local_acc_on_dataset(self, dataset):
+        local_acc, _ = self._evaluate_local_metrics_on_dataset(dataset)
+        return local_acc
 
     def log_multi_rho_eval(self, train_loss=0.0):
         if not self.multi_rho_eval:
@@ -508,8 +613,12 @@ class Server(object):
         round_num = len(self.rs_test_acc)
         round_uplink, round_downlink = self._last_eval_round_comm
         for item in self.eval_rho_items:
-            acc = self._evaluate_local_acc_on_dataset(item["dataset"])
+            acc, split_metrics = self._evaluate_local_metrics_on_dataset(item["dataset"])
             print(f"[Multi-Rho Eval] rho={item['rho']:.1f} Local Test Accuracy: {acc:.4f}")
+            if split_metrics is not None:
+                id_text = self._format_optional_metric(split_metrics.get("id_test_acc")) or "N/A"
+                ood_text = self._format_optional_metric(split_metrics.get("ood_test_acc")) or "N/A"
+                print(f"[Multi-Rho Eval] rho={item['rho']:.1f} ID/OOD Accuracy: {id_text}/{ood_text}")
             file_path = self.eval_rho_log_paths.get(item["label"])
             if file_path:
                 self._write_usage_row(
@@ -520,6 +629,7 @@ class Server(object):
                     None,
                     round_uplink,
                     round_downlink,
+                    split_metrics=split_metrics,
                 )
 
     def print_(self, local_test_acc, test_auc, train_loss):

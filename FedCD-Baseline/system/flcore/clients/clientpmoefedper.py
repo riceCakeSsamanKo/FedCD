@@ -1,4 +1,4 @@
-﻿import copy
+import copy
 import time
 
 import numpy as np
@@ -145,6 +145,12 @@ class clientPMOEFedPer(Client):
         if self.is_moe_finetune:
             return self.model.moe(representation)
         return self.model.head(representation)
+
+    def _move_eval_batch(self, x, y):
+        return self._move_batch(x, y)
+
+    def _eval_forward(self, x):
+        return torch.nan_to_num(self._forward(x), nan=0.0, posinf=1e6, neginf=-1e6)
 
     def test_metrics(self):
         testloader = self.load_test_data()

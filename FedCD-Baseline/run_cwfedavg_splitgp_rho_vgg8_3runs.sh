@@ -48,6 +48,10 @@ split_csv() {
 split_csv "${DATASETS:-Cifar10,FashionMNIST}" datasets
 split_csv "${ALGORITHMS:-cwFedAvg}" algorithms
 split_csv "${RHOS:-0.0,0.2,0.4,0.6,0.8}" rhos
+EVAL_RHOS="${EVAL_RHOS:-0.0,0.2,0.4,0.6,0.8}"
+REQUIRE_ID_OOD="${REQUIRE_ID_OOD:-1}"
+split_csv "$EVAL_RHOS" eval_rhos
+eval_rho_args=(--eval-rhos "$EVAL_RHOS")
 
 if ! [[ "$WORKER_ID" =~ ^[0-9]+$ ]] || ! [[ "$NUM_WORKERS" =~ ^[0-9]+$ ]] || [[ "$NUM_WORKERS" -lt 1 ]]; then
   echo "[ERROR] WORKER_ID and NUM_WORKERS must be non-negative integers, with NUM_WORKERS >= 1." >&2
@@ -129,7 +133,23 @@ acc_csv_is_complete() {
     END {
       exit !(count >= 101 && max_round >= 101)
     }
-  ' "$acc_csv"
+  ' "$acc_csv" || return 1
+
+  if [[ "$REQUIRE_ID_OOD" == "1" ]]; then
+    local header
+    header="$(head -n 1 "$acc_csv")"
+    [[ "$header" == *"id_test_acc"* && "$header" == *"ood_test_acc"* ]] || return 1
+  fi
+}
+
+eval_rho_csvs_are_complete() {
+  local acc_csv="$1"
+  local eval_rho eval_csv
+  for eval_rho in "${eval_rhos[@]}"; do
+    [[ -n "$eval_rho" ]] || continue
+    eval_csv="$(dirname "$acc_csv")/eval_rho_${eval_rho}/acc.csv"
+    acc_csv_is_complete "$eval_csv" || return 1
+  done
 }
 
 log_dataset_name() {
@@ -151,7 +171,7 @@ find_complete_acc_csvs() {
   local acc_csv
   shopt -s nullglob
   for acc_csv in "$SCRIPT_DIR/logs/$log_dataset/$algo/GM_${MODEL}/splitgp_rho${rho}/NC_${NUM_CLIENTS}"/date_*/time_*/acc.csv; do
-    if acc_csv_is_complete "$acc_csv"; then
+    if acc_csv_is_complete "$acc_csv" && eval_rho_csvs_are_complete "$acc_csv"; then
       printf '%s\n' "$acc_csv"
     fi
   done
@@ -275,7 +295,7 @@ run_one() {
   start_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "=========================================================="
   echo "[START $idx/$total_jobs g${global_job_idx}][worker $WORKER_ID/$NUM_WORKERS] dataset=$dataset algo=$algo rho=$rho seed=$seed run=$run_ordinal/$TARGET_RUNS"
-  echo "[CONFIG] model=$MODEL rounds=$GLOBAL_ROUNDS lr=$LR lbs=$LBS ls=$LOCAL_EPOCHS jr=$JOIN_RATIO nc=$NUM_CLIENTS"
+  echo "[CONFIG] model=$MODEL rounds=$GLOBAL_ROUNDS lr=$LR lbs=$LBS ls=$LOCAL_EPOCHS jr=$JOIN_RATIO nc=$NUM_CLIENTS eval_rhos=$EVAL_RHOS"
   echo "[LOG] $run_log"
   echo "=========================================================="
 
@@ -298,6 +318,7 @@ run_one() {
       -dev "$DEVICE" \
       -did "$DEVICE_ID" \
       -sfn "$item_dir" \
+      "${eval_rho_args[@]}" \
       "${extra_args[@]}"
   ) > "$run_log" 2>&1
   exit_code=$?

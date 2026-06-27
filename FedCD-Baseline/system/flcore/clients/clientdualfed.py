@@ -118,6 +118,22 @@ class clientDualFed(Client):
         features = self.model.base(x)
         return self.model.head(features) + self.global_head(features)
 
+    def _move_eval_batch(self, x, y):
+        return self._move_batch(x, y)
+
+    def _prepare_eval_model(self):
+        self.model.to(self.device)
+        self.global_head.to(self.device)
+        self.model.eval()
+        self.global_head.eval()
+
+    def _cleanup_eval_model(self):
+        self.model.cpu()
+        self.global_head.cpu()
+
+    def _eval_forward(self, x):
+        return torch.nan_to_num(self._forward_logits(x), nan=0.0, posinf=1e6, neginf=-1e6)
+
     def test_metrics(self):
         testloader = self.load_test_data()
         self.model.to(self.device)

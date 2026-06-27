@@ -49,6 +49,7 @@ FEDMOE_TOPK="${FEDMOE_TOPK:-2}"
 MAX_PARALLEL_JOBS="${MAX_PARALLEL_JOBS:-${MAX_PARALLEL_RHOS:-1}}"
 DATASETS_CSV="${DATASETS:-Cifar10,FashionMNIST}"
 RHOS_CSV="${RHOS:-0.0,0.2,0.4,0.6,0.8}"
+EVAL_RHOS="${EVAL_RHOS:-0.0,0.2,0.4,0.6,0.8}"
 
 if ! [[ "$MAX_PARALLEL_JOBS" =~ ^[0-9]+$ ]] || [[ "$MAX_PARALLEL_JOBS" -lt 1 ]]; then
   echo "[ERROR] MAX_PARALLEL_JOBS must be a positive integer: $MAX_PARALLEL_JOBS" >&2
@@ -83,11 +84,14 @@ done
 
 cd "$SYSTEM_DIR" || exit 1
 
+eval_rho_args=(--eval-rhos "$EVAL_RHOS")
+
 echo "[INFO] FedMoE SplitGP rho queue root: $queue_root"
 echo "[INFO] Python: $PYTHON_BIN"
 echo "[INFO] FL_DATA_ROOT: $FL_DATA_ROOT"
 echo "[INFO] FedMoE topk=$FEDMOE_TOPK"
 echo "[INFO] Max parallel jobs: $MAX_PARALLEL_JOBS"
+echo "[INFO] Eval rhos: $EVAL_RHOS"
 
 batch_pids=()
 batch_idxs=()
@@ -173,6 +177,7 @@ for dataset_base in "${datasets[@]}"; do
       -go "$goal" \
       -dev "$DEVICE" \
       -did "$DEVICE_ID" \
+      "${eval_rho_args[@]}" \
       -tk "$FEDMOE_TOPK" > "$run_log" 2>&1 &
     pid=$!
 

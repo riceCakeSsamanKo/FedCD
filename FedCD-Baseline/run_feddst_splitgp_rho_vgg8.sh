@@ -54,6 +54,7 @@ FEDDST_RATE_DECAY_METHOD="${FEDDST_RATE_DECAY_METHOD:-cosine}"
 MAX_PARALLEL_JOBS="${MAX_PARALLEL_JOBS:-${MAX_PARALLEL_RHOS:-10}}"
 DATASETS_CSV="${DATASETS:-Cifar10,FashionMNIST}"
 RHOS_CSV="${RHOS:-0.0,0.2,0.4,0.6,0.8}"
+EVAL_RHOS="${EVAL_RHOS:-0.0,0.2,0.4,0.6,0.8}"
 
 date_str="$(date -u +%Y%m%d)"
 time_str="$(date -u +%H%M%S)"
@@ -88,11 +89,14 @@ done
 
 cd "$SYSTEM_DIR" || exit 1
 
+eval_rho_args=(--eval-rhos "$EVAL_RHOS")
+
 echo "[INFO] FedDST SplitGP rho queue root: $queue_root"
 echo "[INFO] Python: $PYTHON_BIN"
 echo "[INFO] FL_DATA_ROOT: $FL_DATA_ROOT"
 echo "[INFO] FedDST sparsity=$FEDDST_SPARSITY readjustment_ratio=$FEDDST_READJUSTMENT_RATIO interval=$FEDDST_READJUSTMENT_INTERVAL"
 echo "[INFO] Max parallel jobs: $MAX_PARALLEL_JOBS"
+echo "[INFO] Eval rhos: $EVAL_RHOS"
 
 batch_pids=()
 batch_idxs=()
@@ -182,6 +186,7 @@ for dataset_base in "${datasets[@]}"; do
       -go "$goal" \
       -dev "$DEVICE" \
       -did "$DEVICE_ID" \
+      "${eval_rho_args[@]}" \
       --feddst_sparsity "$FEDDST_SPARSITY" \
       --feddst_final_sparsity "$FEDDST_FINAL_SPARSITY" \
       --feddst_readjustment_ratio "$FEDDST_READJUSTMENT_RATIO" \

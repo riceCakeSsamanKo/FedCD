@@ -85,6 +85,10 @@ class clientpFedMe(Client):
             old_param.data = new_param.data.clone()
         self.local_params = self._clone_param_list(model.parameters())
 
+    def test_label_split_metrics_personalized(self):
+        self.update_parameters(self.model, self.personalized_params)
+        return self.test_label_split_metrics()
+
     def test_metrics_personalized(self):
         testloaderfull = self.load_test_data()
         self.update_parameters(self.model, self.personalized_params)
