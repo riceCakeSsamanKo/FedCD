@@ -1,0 +1,3 @@
+batch	method	dataset	seed	gpu	status	exit_code	start_utc	end_utc	wrapper_log
+1	FedALA	cifar10	9	0	ok	0	2026-07-17T16:30:31Z	2026-07-17T16:30:31Z	/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/rq3_dynamic_parallel/date_20260717/time_163031_pid2632267/wrapper_logs/batch1_FedALA_cifar10_seed9.log
+1	FedALA	fashionmnist	9	0	ok	0	2026-07-17T16:30:31Z	2026-07-17T16:30:31Z	/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/rq3_dynamic_parallel/date_20260717/time_163031_pid2632267/wrapper_logs/batch1_FedALA_fashionmnist_seed9.log

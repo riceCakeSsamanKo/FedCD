@@ -1,0 +1,2 @@
+round,local_test_acc,global_test_acc,train_loss,id_test_acc,ood_test_acc,id_test_count,ood_test_count,id_client_std,ood_client_std,uplink_mb,downlink_mb,total_mb
+1,0.1000,,2.3019,,,,,,,0.00,3.93,3.93

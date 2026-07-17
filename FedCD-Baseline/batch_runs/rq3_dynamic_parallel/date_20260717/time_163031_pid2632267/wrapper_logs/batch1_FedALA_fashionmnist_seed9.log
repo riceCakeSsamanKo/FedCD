@@ -1,0 +1,18 @@
+[INFO] VGG8 SplitGP train-once multi-rho queue root: /home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/splitgp_multirho_vgg8_dynamic_clients/date_20260717/time_163031
+[INFO] Python: /bin/echo
+[INFO] FL_DATA_ROOT: /home1/irteam/workspace/fl_data
+[INFO] Datasets: FashionMNIST
+[INFO] Algorithms: FedALA
+[INFO] Train rho: 0.0
+[INFO] Eval rhos: 0.0,0.2,0.4,0.6,0.8
+[INFO] Dynamic clients: true (join round: 51)
+[INFO] Max parallel jobs: 1
+[INFO] Stream logs: 0
+
+==========================================================
+[LAUNCH 1/1] dataset=FashionMNIST_dynamic_clients_nc50 algorithm=FedALA model=VGG8 seed=9
+[CONFIG] train_rho=0.0 eval_rhos=0.0,0.2,0.4,0.6,0.8 rounds=5 lr=0.005 lbs=128 ls=1 jr=0.5 nc=50
+[LOG] /home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/splitgp_multirho_vgg8_dynamic_clients/date_20260717/time_163031/run_logs/001_FashionMNIST_FedALA_trainrho0p0_seed9.log
+==========================================================
+[DONE] 1|1|FashionMNIST|FedALA|0.0|0.0,0.2,0.4,0.6,0.8|50|9|true|51|FashionMNIST_dynamic_clients_nc50
+[INFO] Finished. Status CSV: /home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/splitgp_multirho_vgg8_dynamic_clients/date_20260717/time_163031/status.csv

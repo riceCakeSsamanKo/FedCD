@@ -47,6 +47,7 @@ ENABLE_MULTI_RHO_EVAL="${ENABLE_MULTI_RHO_EVAL:-true}"
 DATASETS_CSV="${DATASETS:-Cifar10,FashionMNIST}"
 ALGORITHMS_CSV="${ALGORITHMS:-FedAvg,FedProx,FedCross,FedBN,FedALA,FedAS,pFedMe,cwFedAvg,FedDST,PMOE_FedPer,FedCP,DualFed}"
 MAX_PARALLEL_JOBS="${MAX_PARALLEL_JOBS:-1}"
+STREAM_LOGS="${STREAM_LOGS:-false}"
 DYNAMIC_CLIENT_ENABLED="${DYNAMIC_CLIENT_ENABLED:-false}"
 DYNAMIC_CLIENT_JOIN_ROUND="${DYNAMIC_CLIENT_JOIN_ROUND:-51}"
 DYNAMIC_CLIENT_OLD_CLASSES="${DYNAMIC_CLIENT_OLD_CLASSES:-0,1,2,3,4,5}"
@@ -226,9 +227,8 @@ launch_job() {
   echo "[LOG] $run_log"
   echo "=========================================================="
 
-  (
-    cd "$SYSTEM_DIR" || exit 1
-    "$PYTHON_BIN" -u main.py \
+  local command_args=(
+      "$PYTHON_BIN" -u main.py
       -data "$dataset" \
       -ncl "$NUM_CLASSES" \
       -m "$MODEL" \
@@ -249,7 +249,17 @@ launch_job() {
       "${eval_args[@]}" \
       "${dynamic_args[@]}" \
       "${extra_args[@]}"
-  ) > "$run_log" 2>&1 &
+  )
+
+  (
+    cd "$SYSTEM_DIR" || exit 1
+    if [[ "${STREAM_LOGS,,}" =~ ^(1|true|yes|y|on)$ ]]; then
+      set -o pipefail
+      "${command_args[@]}" 2>&1 | tee "$run_log"
+      exit "${PIPESTATUS[0]}"
+    fi
+    "${command_args[@]}" > "$run_log" 2>&1
+  ) &
 
   pids+=("$!")
   labels+=("${idx}|${total}|${dataset_base}|${algorithm}|${TRAIN_RHO}|${EVAL_RHOS}|${NUM_CLIENTS}|${SEED}|${DYNAMIC_CLIENT_ENABLED}|${DYNAMIC_CLIENT_JOIN_ROUND}|${dataset}")
@@ -266,6 +276,7 @@ echo "[INFO] Train rho: $TRAIN_RHO"
 echo "[INFO] Eval rhos: $EVAL_RHOS"
 echo "[INFO] Dynamic clients: $DYNAMIC_CLIENT_ENABLED (join round: $DYNAMIC_CLIENT_JOIN_ROUND)"
 echo "[INFO] Max parallel jobs: $MAX_PARALLEL_JOBS"
+echo "[INFO] Stream logs: $STREAM_LOGS"
 echo ""
 
 for dataset_base_raw in "${datasets[@]}"; do

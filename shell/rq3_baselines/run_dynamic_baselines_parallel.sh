@@ -8,12 +8,14 @@ set -uo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bash shell/rq3_baselines/run_dynamic_baselines_parallel.sh [N_METHODS] [SEED]
+  bash shell/rq3_baselines/run_dynamic_baselines_parallel.sh [N_METHODS] [SEED] [METHODS]
 
 Arguments:
   N_METHODS  Maximum number of methods active at once (default: 2).
              The maximum number of concurrent experiments is 2 * N_METHODS.
   SEED       Baseline seed (default: 1).
+  METHODS    Optional comma-separated method list. This takes precedence over
+             METHODS_CSV (example: FedAvg,FedProx,FedBN).
 
 Environment variables:
   BASELINE_DIR             FedCD-Baseline directory. By default, use the
@@ -23,6 +25,8 @@ Environment variables:
   GPU_IDS                  Comma/space-separated physical GPU IDs. If unset,
                            detect all GPUs with nvidia-smi; fall back to 0.
   METHODS_CSV              Optional comma-separated method list override.
+  LIVE_LOGS                Stream per-job logs to this terminal while retaining
+                           log files (default: 1; set to 0 to disable).
   LAUNCH_STAGGER_SECONDS   Delay between wrapper starts (default: 2). This
                            avoids same-second queue metadata collisions.
 
@@ -33,6 +37,10 @@ Examples:
 
   # Run at most three methods (six experiments) concurrently on GPUs 0 and 1.
   GPU_IDS=0,1 bash shell/rq3_baselines/run_dynamic_baselines_parallel.sh 3 1
+
+  # Run only the selected methods and show their logs live.
+  GPU_IDS=0 bash shell/rq3_baselines/run_dynamic_baselines_parallel.sh \
+    2 1 FedAvg,FedProx,FedBN
 EOF
 }
 
@@ -43,7 +51,16 @@ fi
 
 MAX_PARALLEL_METHODS="${1:-${MAX_PARALLEL_METHODS:-2}}"
 RUN_SEED="${2:-${SEED:-1}}"
+METHODS_ARG="${3:-}"
 LAUNCH_STAGGER_SECONDS="${LAUNCH_STAGGER_SECONDS:-2}"
+LIVE_LOGS="${LIVE_LOGS:-1}"
+EXPERIMENT_MODEL="${MODEL:-VGG8}"
+EXPERIMENT_GLOBAL_ROUNDS="${GLOBAL_ROUNDS:-100}"
+EXPERIMENT_LOCAL_EPOCHS="${LOCAL_EPOCHS:-2}"
+EXPERIMENT_JOIN_RATIO="${JOIN_RATIO:-1.0}"
+EXPERIMENT_LR="${LR:-0.005}"
+EXPERIMENT_BATCH_SIZE="${LBS:-128}"
+EXPERIMENT_NUM_CLIENTS="${NUM_CLIENTS:-50}"
 
 if ! [[ "$MAX_PARALLEL_METHODS" =~ ^[1-9][0-9]*$ ]]; then
   echo "[ERROR] N_METHODS must be a positive integer: $MAX_PARALLEL_METHODS" >&2
@@ -55,6 +72,10 @@ if ! [[ "$RUN_SEED" =~ ^[0-9]+$ ]]; then
 fi
 if ! [[ "$LAUNCH_STAGGER_SECONDS" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
   echo "[ERROR] LAUNCH_STAGGER_SECONDS must be a non-negative number." >&2
+  exit 2
+fi
+if ! [[ "${LIVE_LOGS,,}" =~ ^(1|true|yes|y|on|0|false|no|n|off)$ ]]; then
+  echo "[ERROR] LIVE_LOGS must be a boolean value: $LIVE_LOGS" >&2
   exit 2
 fi
 
@@ -88,8 +109,9 @@ trim() {
 }
 
 METHODS=()
-if [[ -n "${METHODS_CSV:-}" ]]; then
-  IFS=',' read -r -a method_tokens <<< "$METHODS_CSV"
+METHODS_INPUT="${METHODS_ARG:-${METHODS_CSV:-}}"
+if [[ -n "$METHODS_INPUT" ]]; then
+  IFS=',' read -r -a method_tokens <<< "$METHODS_INPUT"
   for token in "${method_tokens[@]}"; do
     method="$(trim "$token")"
     [[ -n "$method" ]] && METHODS+=("$method")
@@ -178,6 +200,7 @@ launch_dataset() {
   local dataset_key="$3"
   local gpu_id="$4"
   local dataset_script
+  local log_prefix
 
   case "$dataset_key" in
     cifar10)
@@ -194,20 +217,43 @@ launch_dataset() {
 
   LAST_LOG="$WRAPPER_LOG_DIR/batch${batch_number}_${method}_${dataset_key}_seed${RUN_SEED}.log"
   LAST_START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  log_prefix="[$method/$dataset_key/gpu$gpu_id]"
   mkdir -p "$MPL_ROOT/${method}_${dataset_key}_seed${RUN_SEED}"
 
-  (
-    cd "$BASELINE_DIR" || exit 2
-    export FEDCD_PYTHON="$FEDCD_PYTHON_BIN"
-    export FL_DATA_ROOT
-    export CUDA_VISIBLE_DEVICES="$gpu_id"
-    export DEVICE_ID="$gpu_id"
-    export MPLCONFIGDIR="$MPL_ROOT/${method}_${dataset_key}_seed${RUN_SEED}"
-    export MAX_PARALLEL_JOBS=1
-    export SEED="$RUN_SEED"
-    export ALGORITHMS="$method"
-    bash "$dataset_script"
-  ) > "$LAST_LOG" 2>&1 &
+  if [[ "${LIVE_LOGS,,}" =~ ^(1|true|yes|y|on)$ ]]; then
+    (
+      set -o pipefail
+      (
+        cd "$BASELINE_DIR" || exit 2
+        export FEDCD_PYTHON="$FEDCD_PYTHON_BIN"
+        export FL_DATA_ROOT
+        export CUDA_VISIBLE_DEVICES="$gpu_id"
+        # CUDA_VISIBLE_DEVICES remaps the selected physical GPU to logical 0.
+        export DEVICE_ID=0
+        export MPLCONFIGDIR="$MPL_ROOT/${method}_${dataset_key}_seed${RUN_SEED}"
+        export MAX_PARALLEL_JOBS=1
+        export SEED="$RUN_SEED"
+        export ALGORITHMS="$method"
+        export STREAM_LOGS=1
+        bash "$dataset_script"
+      ) 2>&1 | tee "$LAST_LOG" | sed -u "s|^|$log_prefix |"
+      exit "${PIPESTATUS[0]}"
+    ) &
+  else
+    (
+      cd "$BASELINE_DIR" || exit 2
+      export FEDCD_PYTHON="$FEDCD_PYTHON_BIN"
+      export FL_DATA_ROOT
+      export CUDA_VISIBLE_DEVICES="$gpu_id"
+      export DEVICE_ID=0
+      export MPLCONFIGDIR="$MPL_ROOT/${method}_${dataset_key}_seed${RUN_SEED}"
+      export MAX_PARALLEL_JOBS=1
+      export SEED="$RUN_SEED"
+      export ALGORITHMS="$method"
+      export STREAM_LOGS=0
+      bash "$dataset_script"
+    ) > "$LAST_LOG" 2>&1 &
+  fi
 
   LAST_PID=$!
   echo "[LAUNCH] batch=$batch_number method=$method dataset=$dataset_key seed=$RUN_SEED gpu=$gpu_id pid=$LAST_PID"
@@ -215,15 +261,31 @@ launch_dataset() {
 }
 
 echo "============================================================"
-echo "[RQ3 BASELINE PARALLEL LAUNCHER]"
+echo "[RQ3 DYNAMIC-CLIENT BASELINE EXPERIMENT]"
+echo "objective=Compare FL baselines before and after newcomer clients join"
+echo "model=$EXPERIMENT_MODEL"
+echo "datasets=CIFAR-10,FashionMNIST"
+echo "dataset_paths=Cifar10_dynamic_clients_nc50,FashionMNIST_dynamic_clients_nc50"
+echo "client_schedule=rounds 0-50: clients 0-29/classes 0-5"
+echo "                round 51+: add clients 30-49/classes 6-9"
+echo "metrics=existing/newcomer ID-OOD accuracy and communication cost"
+echo "global_rounds=$EXPERIMENT_GLOBAL_ROUNDS"
+echo "local_epochs=$EXPERIMENT_LOCAL_EPOCHS"
+echo "learning_rate=$EXPERIMENT_LR"
+echo "local_batch_size=$EXPERIMENT_BATCH_SIZE"
+echo "join_ratio=$EXPERIMENT_JOIN_RATIO"
+echo "num_clients=$EXPERIMENT_NUM_CLIENTS"
+echo "seed=$RUN_SEED"
+echo "methods=${METHODS[*]}"
+echo "total_experiments=$((2 * ${#METHODS[@]})) (${#METHODS[@]} methods x 2 datasets)"
+echo "parallel_methods=$MAX_PARALLEL_METHODS"
+echo "max_concurrent_experiments=$((2 * MAX_PARALLEL_METHODS))"
+echo "physical_gpu_pool=${GPU_ID_LIST[*]}"
+echo "live_logs=$LIVE_LOGS"
+echo "------------------------------------------------------------"
 echo "baseline_dir=$BASELINE_DIR"
 echo "fl_data_root=$FL_DATA_ROOT"
 echo "python=$FEDCD_PYTHON_BIN"
-echo "seed=$RUN_SEED"
-echo "parallel_methods=$MAX_PARALLEL_METHODS"
-echo "max_concurrent_experiments=$((2 * MAX_PARALLEL_METHODS))"
-echo "gpu_ids=${GPU_ID_LIST[*]}"
-echo "methods=${METHODS[*]}"
 echo "status=$STATUS_TSV"
 echo "============================================================"
 
