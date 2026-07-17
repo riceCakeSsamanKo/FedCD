@@ -104,7 +104,8 @@ class pFedMe(Server):
         acc_sum = 0.0
         valid_clients = 0
 
-        for client in self.clients:
+        eval_clients = self._evaluation_clients()
+        for client in eval_clients:
             client.update_parameters(client.model, client.personalized_params)
             client.model.to(self.device)
             client.model.eval()
@@ -189,7 +190,8 @@ class pFedMe(Server):
         
         num_samples = []
         tot_correct = []
-        for c in self.clients:
+        eval_clients = self._evaluation_clients()
+        for c in eval_clients:
             ct, ns = c.test_metrics_personalized()
             if not bool(getattr(self, "eval_common_global", True)) and ns > 0:
                 tot_correct.append(ct * 1.0 / ns)
@@ -197,7 +199,7 @@ class pFedMe(Server):
             else:
                 tot_correct.append(ct*1.0)
                 num_samples.append(ns)
-        ids = [c.id for c in self.clients]
+        ids = [c.id for c in eval_clients]
 
         return ids, num_samples, tot_correct
 
@@ -208,13 +210,14 @@ class pFedMe(Server):
         num_samples = []
         tot_correct = []
         losses = []
-        for c in self.clients:
+        eval_clients = self._evaluation_clients()
+        for c in eval_clients:
             ct, cl, ns = c.train_metrics_personalized()
             tot_correct.append(ct*1.0)
             num_samples.append(ns)
             losses.append(cl*1.0)
 
-        ids = [c.id for c in self.clients]
+        ids = [c.id for c in eval_clients]
 
         return ids, num_samples, tot_correct, losses
 
