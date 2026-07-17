@@ -1,0 +1,657 @@
+                         Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+
+    Heterogeneous Federated Learning with Scalable Server Mixture-of-Experts
+
+          Jingang Jiang† , Yanzhao Chen† , Xiangyang Liu , Haiqi Jiang and Chenyou Fan∗
+                           South China Normal University, Guangzhou, China
+                                       fanchenyou@scnu.edu.cn
+
+
+
+                          Abstract
+     Classical Federated Learning (FL) faces challenges
+     when deploying large models on power-constrained
+     clients. We propose an asymmetric FL mechanism
+     that enables the aggregation of compact client mod-
+     els into a comprehensive server Mixture-of-Experts
+     (MoE), allowing for efficient fusion of the most
+     pertinent client models to update each server ex-
+     pert based on the measured relevance. To address
+     the Non-IID data issue, we optimize the server-side
+     MoE architecture by incorporating a main expert
+     that always activates alongside a set of selectively
+     activated routed experts. This configuration ensures                      Figure 1: Overview of Fed-MoE. Compact client models federate
+     a balance between learning general knowledge and                          into a large unified server Mixture-of-Experts.
+     specific data distribution. Our Fed-MoE framework
+     is model-agnostic and has demonstrated notable im-
+                                                                               dynamically routes input samples to the most suitable experts.
+     provements on vision FL tasks with million-scale
+                                                                               Inspired by this approach, we propose a novel design where
+     ResNet backbones, and language tasks with billion-
+                                                                               identical compact client models are deployed at the client side,
+     scale BERT and GPT-2 backbones.
+                                                                               while a large MoE model resides on the server side. Each ex-
+                                                                               pert within the server MoE shares identical architecture with
+1   Introduction                                                               each client model .
+Federated Learning (FL) [McMahan et al., 2017] has become                         We introduce Fed-MoE, a Federated Mixture-of-Expert sys-
+a widely adopted approach for distributed learning from di-                    tem that enables the aggregation of compact client models into
+verse data sources while preserving data privacy. However,                     a powerful and large central model. In Fig. 1, we depict this
+classical FL requires the learning model to be identical across                practical scenario featuring a M distributed power-efficient
+all clients for possible parameter averaging. This requirement                 clients, each having with a compact single model. Each client
+poses challenges in environments with constrained client-side                  model contributes to one or multiple relevant experts within
+capacities such as edge devices, rendering standard FL un-                     the server’s MoE. This collaboration between client and server
+suitable for learning large language models (LLMs) and large                   models, detailed in the subsequent paragraphs, aims to en-
+visual models (LVMs) with many edge devices.                                   hance overall performance and efficiency. With Fed-MoE,
+    Recognizing this critical limitation, a question comes to                  thousands of users can collaborate to build a unified billion-
+us naturally: can we deploy asymmetric models at client and                    scaled large model on the server side, leveraging expertise
+server levels? Given that clients typically possess relatively                 from all client data.
+scarce data and limited computational capabilities, their mod-                    Our approach involves a three-stage iterative process for up-
+els should be designed to be compact and efficient. Conversely,                dating the server’s MoE gate and experts from heterogeneous
+the server boasts substantial computational resources, enabling                client models. To facilitate this, we postulate the existence
+it to leverage significantly larger and more complex models.                   of a small, reserved dataset at the server. We also made sub-
+Thus, the second question arises: how can we perform model                     stantial re-design of the classical model averaging mechanism.
+averaging for asymmetric client and server models?                             In the first stage, we calculate the relevance between each
+    We are seeking the answer from the recently explored                       client expert and each server MoE expert. Then we update
+Mixture-of-Experts (MoE) [Shazeer et al., 2017] architecture.                  the server’s MoE experts through a weighted FedAvg process,
+A MoE comprises of multiple expert sub-networks, each tai-                     with weights derived from the relevance scores.
+lored to a specific segment of the input space. A learnable gate                  In the second stage, we focus on updating the MoE gate.
+
+
+
+                                                                        5480
+                          Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+Initially, we compute the gating probabilities on the reserved                  works are combined under a gating module which specialize
+data instances. Subsequently, we aggregate predictions from                     in different aspects of the input data. Recently, MoE has been
+the top-K most activated experts and calculate the classifica-                  applied in language modeling with notable successes. The
+tion loss based on the gating outcomes. Finally, we update the                  sparsely-gated MoE [Shazeer et al., 2017; Zuo et al., 2021;
+gate parameters end-to-end to minimize this loss.                               Jiang et al., 2024a] can scale up the model capacity with less
+   In the third stage, we synchronize the updated server experts                increased computational complexity. GShard [Lepikhin et
+back to each client. By computing a server-to-client correla-                   al., 2020] enable the scaling of multilingual neural machine
+tion matrix, we gather the top-K most relevant server experts                   translation models using sparse gating and automatic sharding.
+for updating each client model. After, the clients perform                      Switch Transformers [Fedus et al., 2022] further scales up
+local updates and send to the server for the next round of FL.                  Transformer models to trillion-parameter models. GLaM [Du
+Subsequently, the expertise of server experts gradually aligns                  and others, 2022] reduces both training and inference costs of a
+with the global data space across all clients.                                  large MoE language model. MoE has also been widely applied
+   During inference, the MoE gate selectively activates only                    in building large vision-language models [Mustafa et al., 2022;
+the relevant subset of experts for each incoming data, reducing                 Lin et al., 2024]. DeepSeek-MoE [DeepSeek-AI, 2024] first
+computational costs and diversifying expert functions.                          proposes the concept of shared experts and routed experts.
+   To further tackle the non-IID data issue over the clients, at                   Recently, some FL studies have made attempts to use MoE
+the server-MoE level, we design two types of MoE experts: a                     for personalized learning. FLMoE [Zec et al., 2020] directly
+main expert which always activates, and a set of routed experts                 applies FL for MoE models to better suite to heterogeneous
+which share activation together. The main expert dedicates to                   client data. AEPFL [Isaksson et al., 2022] achieves a more
+capturing common knowledge while the routed experts focus                       adaptive cluster model by balancing exploration and uses the
+on learning specific client data classes. This design enables                   cluster model as an expert model in the MoE to enhance per-
+different routed experts to capture the unique data patterns                    formance. PFL-MoE [Guo et al., 2021] modifies the MoE
+from different clients. To facilitate the diversification of the                architecture to enhance decision-making capabilities. Fed-
+routed experts, we further introduce a novel Gating Entropy                     Mix [Reisser et al., 2021] directly employs one global MoE to
+loss, which encourages a sharply peaked gating distribution                     mitigate the Non-IID data by segmenting data source regions.
+over the routed experts.                                                        FedJETs [Dun et al., 2023] reduces communication costs by
+   Our contributions are summarized as follows:                                 selecting a subset of experts that match the features of client
+1. We propose an effective Federated Mixture-of-Expert learn-                   data for communication. Differently, our method allows the
+    ing framework that allows for the deployment of a large                     server MoE to have a heterogeneous number of experts.
+    number of compact client models while maintaining a uni-
+    fied large MoE at the server-side.
+2. To address the Non-IID issue, we devise a main expert that                   3    Task Description and FL Preliminaries
+    captures common knowledge, and a set of routed experts                     We construct a practical scenarios in which models at client-
+    that share activation to learn specific client data classes.               side and server-side are asymmetric such that the client model
+3. We design efficient server MoE-experts and MoE-gate up-                     is compact while the server model is a large unified MoE.
+    date mechanism with innovated gating entropy loss to en-
+    sure diversification of the routed experts.                                 Model at client side. We consider the FL scenario with M
+4. Our Fed-MoE shows promising results upon benchmark                           distributed clients, each having a compact single-expert model.
+    FL datasets in large-scale vision and language tasks.                       Let Mi be the i-th client model parameters. At each FL round,
+                                                                                we randomly select m participating clients.
+2    Related Work                                                               MoE at server side. We deploy a large K-expert MoE at
+Federated learning (FL). FL [McMahan et al., 2017; Zhao                         the server side, including two types of experts: a main expert
+et al., 2018; Sattler et al., 2019; Li and others, 2019; Wu                     which always activates, denoted as E0 and a group of K routed
+et al., 2020; Karimireddy and others, 2020] emerges as a                        experts denoted as E1:K . The routed experts has a trainable
+decentralized and privacy-preserving learning strategy. The                     gating module G responsible for activating corresponding
+pioneering FedAvg [McMahan et al., 2017] demonstrated the                       routed experts. For brevity, we use K ∗ = 1 + K to denote the
+effectiveness of model averaging from separately trained client                 number of both main and routed experts.
+models. Many recent studies worked on tackling the Non-IID
+setting [Zhao et al., 2018; Sattler et al., 2019; Li et al., 2020],             Server reserved data. We assume the server possesses a
+few-shot setting [Wu et al., 2020; Itahara et al., 2023; Jiang et               tiny reserved dataset Dr , sampled uniformly from the global
+al., 2024b] and privacy enhancement [Wei and others, 2020;                      data space as prior knowledge. The Dr assists training an
+Xin et al., 2020; Liu et al., 2023; Fan et al., 2022] of client                 effective server gating module exclusive to the server side,
+data in FL scenarios. Some approaches focus on handling                         which is non-overlapping with client data, thus adhering to
+model heterogeneity, including HeteroFL [Diao et al., 2021],                    federated learning principles.
+FedHM [Park and Ko, 2024], FedRolex [Alam et al., 2022],                        Fed-MoE task formulation. Let G(x) be the gating prob-
+and Split-Mix [Hong et al., 2022].                                              ability of input x over K routed experts, and Ei (x) be the
+Mixture-of-Experts (MoE). MoE techniques [Jacobs et al.,                        i-th expert network which predicts input x. The collective
+1991; Jordan and Jacobs, 1994] utilize a set of expert net-                     response of the MoE module can be expressed as a weighted
+
+
+
+                                                                         5481
+                                  Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+                 Stage-A                                                             Stage-B                                                              Stage-C
+    Client model training and aggregation                                  Server experts and gate update                                   Client experts synchronization
+    Step 0: Client MoE pretrain                 Step 0 : Probe client experts’ responses          Step 2 : Get server-client correlation
+                                                                                                                                            Step 0 : Get updated server gating
+                                                reserved               Client Expert               Response P
+      private               Client                                          M                                                              reserved        Server Gate      Activation
+                                                   set                                                                            …
+
+
+                                                                                                                                                              Gnew
+       data                 MoE                                                                                                   …           set                             Qnew
+                                                Step 1 : Get server gating responses
+
+
+
+
+                                                                                                                          …
+
+
+                                                                                                                              …
+
+
+
+
+                                                                                                                                      …
+    Step 1: Server MoE initialize                                                                                                 …
+
+                                                                                                                                            Step 1 : Client Expert Update
+                                                reserved              Server Gate
+                            Server                                                                Activation Q Correlation Matrix
+      reserved                                     set                      G                                                                            Update   Client Expert
+                             MoE                                                                                       W                     Eq.(13)
+         set                                                                                        Update                                                              M
+ Step 2: Client Expert Upload to Server Step 3 : Update server experts with moving FedAvg Step 4 : Update server gating module              Step 2 : Client Synchronization
+                                                               Update
+    Client Expert           Server              Eq.(6)                     Server Expert                      SGD
+                                                                                                                        Server Gate             Server               Client
+                                                                                                    ∆LGce
+         M                    MoE                                              Enew                                        Gnew                  MoE                 MoE
+
+
+Figure 2: Overview of our Fed-MoE pipeline. Stage A-C completes one FL round. Stage-A trains client experts and sends to server. Stage-B
+iteratively updates server experts and gate. Stage-C synchronizes updated client experts back to clients.
+
+
+sum of all experts as follows:                                                                 Step-0: Probe client experts’ responses
+                                                                                               We firstly get client experts’ responses over reserved set Dr
+                                              K
+                                              X                                                in order to learn their expertise of data classes. For each data
+           ŷ = (1 − α) E0 (x) +α                     Gi (x) · Ei (x) ,               (1)      instance (X, y) ∈ Dr (e.g., image-label pair), we feed to all m
+                                                                                               client experts and obtain the C-way classification probability
+                        | {z }                        |     {z      }
+                                                i=1
+                             main expert                   routed expert
+                                                                                               distribution as P ← M(X) ∈ Rm×C . With ground-truth
+where α balances main-expert and routed-experts.                                               label y, we get the true class prob. as confidence level of each
+                                                                                               expert as Py = P [:, y] ∈ Rm×1 .
+Training objective. Let nk be the number of data samples
+for client k. The global learning objective is to minimize the                                    Step-1: Get server gating responses
+average loss over each client on local data as follows:                                           Next, we will repeat Step-1 to Step-4 for T iterations as an
+                                                                                                  inner-loop to update server gate and α.
+                                            nk                                                      At t-th iteration, we begin by feeding data X to the gating
+                                        1 X
+                      L(E, G) =                ℓ(ŷj , yj ) ,                         (2)         module G, providing the activation prob. distribution as:
+                                        nk j=1
+                                                                                                                                  Q ← G(X) ∈ RK×1 .                                 (3)
+where ŷi is server model prediction following Eq (1).                                            Q gives soft assignment of query data X to K server experts,
+   Following FL, we decompose the above global training ob-                                       which has been normalized with softmax.
+jective into training each client model wc . Then the weights of                                  Step-2: Get server-client correlation
+the server experts E1,...,K ∗ are aggregated from client model
+  c                                                                                               The outer product of Q and Py is a correlation matrix:
+w1,...,M , denoted as: E ← F use(w c ). We will devise an
+effective F use function which enables dynamic expertise dis-                                                                 W = Q · PyT ∈ RK×m ,                                  (4)
+patching to enhance server experts from client models.                                            where Wi,j measures the relevance between the i-th expert of
+                                                                                                  the server MoE and expert from collected j-th client expert.
+4      Our Fed-MoE Approach                                                                          We subsequently apply a row-wise softmax operation to
+                                                                                                  normalize the correlation matrix as:
+We decompose our Fed-MoE framework with three stages                                                                     W r = σ row (W ) ∈ RK×m ,                                  (5)
+which we introduce in below sections.                                                                              r
+                                                                                                  where each row Wi,· sums to one and indicates the correspon-
+4.1      Stage-A: Local client training and uploading                                             dence between server expert-i with all m client experts.
+                                                                                                  Step-3: Update server experts with moving FedAvg
+Following standard FL procedure, each FL round starts by                                          At t-th iteration, we denote the K ∗ server experts as main-
+training client models with local data. After, m clients are                                      expert E0t and routed experts Eit for i ∈ {1, ..., K} which get
+randomly selected to upload their local models to the server                                      updated with moving-average strategy as follows:
+through networks, as shown in Stage-A of Fig. 2. The server
+aggregates these m client models as a federation denoted as                                                  E0t+1 ← (1 − λ) · E0t + λ · M̄ ,
+M = {M1 , M2 , ..., Mm−1 , Mm }.                                                                                                                                                    (6)
+                                                                                                             Eit+1 ← (1 − λ) · Eit + λ · W r M , ∀i ≥ 1 .
+4.2      Stage-B: Server experts and gate update                                                  The λ ∈ (0, 1) controls the moving-average  Prate. We use
+                                                                                                                                                 m
+                                                                                                  simple averaging for M̄ with M̄ = 1/m i=1 Mi . The
+Stage-B iteratively updates server experts E and gate G for T                                     term W r M assigns relevant client parameters weighted by
+iterations, which we decompose as the following steps.                                            correlation W r and adds up to server weights.
+
+
+
+                                                                                           5482
+                           Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+Step-4: Update server gating module                                              Algorithm 1 Fed-MoE overview.
+In an ideally diversified MoE system, the gate G learns to route                 while round e ≤ E do
+queries to relevant experts with the highest precision for that                      Stage-A: Local client training and uploading
+data class. To this end, we design the learning objective to be                          /* Upload m participating client models to server. */
+the cross-entropy task loss with gating entropy regularization,                          M ← {M1 , M2 , ..., Mm−1 , Mm }.
+outlined as follows.                                                                 Stage-B: Server MoE iterative update
+                                                                                         /* Step-0: Probe client experts’ responses on Dr . */
+   Task loss. For each data in reserved set {X, y} ∈ Dr , we
+                                                                                         P ← M (X), ∀(X, y) ∈ D // client responses
+estimate C-way distribution from the main expert as P̂0 ∈                                Py ← P [:, y] ∈ RK×1 // label confidence
+R1×C and K routed experts as P̂X ∈ RK×C .                                                while t ≤ T do
+   The MoE gate weighs each routed expert by the activation                                   /* Step-1: Get server gating responses. */
+QX ← G(X) ∈ RK . We combine all experts’ output such as                                       Q ← G(X) ∈ RK×1 // gating of Eq.(3)
+P̂X∗ = (1 − α) · P̂0 + α · P̂X as Eq.(1). The task cross-entropy                              /* Step-2: Get server-client correlation. */
+                                                                                              W r ← σ row (Q · Py⊤ ) ∈ RK×m
+loss is the negative log likelihood such as:                                                  /* Step-3: Update server experts by moving FedAvg. */
+                          1     X                                                             E0t+1 ← (1 − λ) · E0t + λ · M̄ ,
+               Lce
+                 G =−                 log P̄X∗ [y] .          (7)                             Eit+1 ← (1 − λ) · Eit + λ · W r M , ∀i ≥ 1 .
+                         |D|
+                               {X,y}∈D                                                        /* Step-4: Update server gating module. */
+                                                                                              Gt+1 ← Gt − η · ∆Lgate ,
+   Regularization. Intuitively, a sharply peaked gate activa-                                 αt+1 ← αt − η · ∇Lce  G . // Loss Eq.(9)
+tion Q implies assigning the data to a specific expert with high
+                                                                                     Stage-C: Synchronize model E back to clients.
+confidence. To encourage this desirable expertise diversifica-                           /* Get updated server gating. */
+tion, we introduce a novel Gating Entropy (GEnt) loss:                                   Q ← G(X) // G updated in Stage-B
+                                 K                                                       /* Get updated server-client correlation. */
+                     1 X X                                                               W c = σ col (cat(1 − α, α · (Q · Py⊤ )) ∈ RK ×m
+                                                                                                                                         ∗
+         Lent
+          G =−             QX [k] · log QX [k] ,                       (8)
+                    |D|                                                                  /* Update client experts by moving FedAvg. */
+                        X∈D k=1
+                                                                                         M = λ · M + (1 − λ) · (W c )⊤ · E // Eq.(13)
+in which QX [k] indicates the probability (priority) of assign-
+ing X to k-th routed expert. We take LentG as a regularization
+term that we seek to minimize.                                                   can guide each client expert Mj to gather parameters from
+                                                                                                                              c ⊤
+   The joint gating loss w.r.t. gate G and hyper-parameter α is                  server experts E with weights such as (W·,j    ) E.
+                                                                                    We formulate the update procedure of client experts M
+               Lgate (G, α) = Lce       ent
+                               G + β · LG ,                            (9)       with exponential moving FedAvg in matrix form as:
+                      −3
+where we set β = 10 and discuss in Ablation Table 5.                                         M ← λ · M + (1 − λ) · (W c )⊤ · E ,           (13)
+   During inference, we choose routed experts with top-L                         in which λ ∈ (0, 1) controls the moving average rate. Finally,
+gate activation with indices I ← arg TopL(QX ). Then we                          the server transmits the client experts to their corresponding
+integrate main expert and top routed experts’ predictions re-                    owners for next round of local training. The above process is
+weighted by the activation values after softmax, such as:                        shown in Fig. 2 (Stage-C) and Algo. 1 (Stage-C).
+
+      P̄X = (1 − α) · P0 + α · σ(Q⊤
+                                  X [I]) · P̂X [I] .                 (10)        5    Experiments
+The complete steps of Stage-B are summarized in Algo. 1.                        We verify our approach on the benchmark Federated Ex-
+                                                                                tended MNIST (FEMNIST) [Caldas et al., 2018], CIFAR-
+4.3   Stage-C: Client experts synchronization                                   10 [Krizhevsky, 2009] for image classification task, SENT-
+We update m participating client experts accordingly for next                   140 [Caldas et al., 2018] for textual sentiment classification
+round of local training. As shown in Stage-C of Fig. 2, we                      task and YELP [Zhang et al., 2015] for 5-way review star
+decompose this process as follows. We firstly refresh the                       classification task.
+server-client correlation matrix W ∈ RK×m with server MoE                       Vision data split. We follow the original Non-IID split of
+refined in Stage-B, by executing Eq.(3)-(4). We also synchro-                   FEMNIST according to different writing styles of 3500 users.
+nize the main expert from the server to the client based on the                 We choose 50 and 100 clients as two FL scenarios for FEM-
+present value of α, as demonstrated by the equation below:                      NIST, each having 6200 and 5650 data, respectively. On
+                                                                                CIFAR-10, we simulate highly Non-IID scenarios by distribut-
+                  W ′ = cat(1 − α, α · W ) ,                         (11)       ing data classes using a Dirichlet distribution (α=1.0) to ensure
+We subsequently apply a column-wise softmax operation to                        that each client gets a unique, proportionately varied subset
+correlation matrix W ′ , yielding a normalized server-to-client                 of classes. For 50 and 100 cases, each client has 750 and 375
+correspondence as:                                                              data, respectively.
+                                                                                   On the sentiment analysis benchmark SENT-140 [Caldas et
+                                               ∗
+                W c = σ col (W ′ ) ∈ RK ×m ,                         (12)       al., 2018], we follow Fan et al. 2022 to evaluate as a binary
+                       c
+                                                                                classification task. We reserve 100 clients, each having 190
+in which each column W·,j measures the normalized relevance                     sentences for each class. The server reserves |Dr | = 1000
+of all server experts with the j-th client expert. This relevance               sentences. We tokenize each sentence to a max of 64 words.
+
+
+
+                                                                          5483
+                         Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+   The Yelp 5-way classification task aims to predict the num-                 Communication cost and model complexity. We show the
+ber of stars for a review on a scale of 1 as most negative to                  FedAvg, FedMix and Fed-MoE parameters and FL commu-
+5 as most positive. We configured 100 clients, where each                      nication costs in Table 1. All MoE-based methods select m
+client gathers 5,000 data samples. The data is partitioned in                  active clients for each round of learning with cost of m model
+a Non-IID fashion, ensuring that one class predominates on                     parameters. FedMix and FedJETs have to upload the client
+each client. The server reserves |Dr | = 1000 samples. We                      gates to the server with additional costs.
+tokenize each sentence to a max of 64 words.                                      For Yelp task, FedAvg has about 0.36B parameters of a
+                                                                               single GPT-2 model at the server-side. Our Fed-MoE ap-
+5.1   Fed-MoE and Baselines for comparison                                     proach, on the other hand, has 1.59B parameters, comprising
+Model architectures. In our settings, each client model and                    a main expert, three routed experts, and a router. In terms of
+each server expert shares a same architecture. The difference                  inference workload, Fed-MoE is comparable to FedMix, as
+is that the server MoE includes a main expert and K = 5                        only the top-2 experts (including the main expert) are selected
+routed experts, thus having much more parameters than a                        for activation. Also, the communication cost for Fed-MoE
+single client model. Each single model is a 2-layer CNN for                    is only 1.02B, significantly less than that of FedMix, which
+FEMNIST, a ResNet-18 for CIFAR, BERT for SENT-140                              incurs a substantial 2.79B due to the transfer of additional
+sentiment analysis, and GPT-2-Medium for Yelp. Due to GPU                      MoE modules on the client-side.
+resource constraints, in the experiments on SENT140 and
+Yelp, we use a main expert and K = 3 routed experts on the                     5.3    Results with Various Datasets and Settings
+server side. Specifically, for the Yelp experiments, we employ                 Vision tasks. Table 2 first two columns (shaded in yellow)
+GPT-2 as the gate model for the MoE. The model size and                        present the classification results for FEMNIST and CIFAR-10
+communication costs are summarized in Table 2.                                 datasets under client configurations of (M = 10, 50, and 100).
+FL baselines. FedAvg [McMahan et al., 2017] uses standard                         On FEMNIST, Fed-MoE consistently outperforms baseline
+parameter averaging for model fusion. FedProx [Li et al.,                      methods across all client configurations. For instance, at M =
+2020] adds a proximal term to regularize the client update from                50 clients, Fed-MoE achieves over 10% higher accuracy than
+deviating too far from the global model. Both methods do not                   FedAvg and FedJETs, and approximately 4% and 9% higher
+possess MoE parameters and follow standard FL training.                        than FedMix and FedProx, respectively. We observe that as
+MoE baselines. Cent-MoE (Centralized MoE) trains a plain                       the number of clients increases and each client possesses less
+5-Exp MoE [Shazeer et al., 2017] only with the server reserved                 data,our Fed-MoE method gradually decreases, showcasing
+set, without using any client data. FedMix [Reisser et al.,                    a larger performance advantage compared to other methods
+2021] has a 2-Exp MoE which employs a direct FedAvg to                         (FedAvg and FedProx).
+aggregate both client experts and their gate modules. Thus its                    On CIFAR-10, a similar trend is observed. Fed-MoE
+server MoE is also a 2-Exp server MoE. FedJETs [Dun et al.,                    achieves 5–7% higher accuracy than FedMix and 1–8% higher
+2023] consists of m = 5 anchor clients and M − m ordinary                      accuracy than FedJETs as the number of clients increases from
+clients, each having a 2-Exp model. In each FL round, m                        M = 10 to M = 100. This indicates Fed-MoE’s robustness
+anchor clients as well as m randomly selected ordinary clients                 in large-scale federated learning scenarios where Non-IID data
+participate in learning.                                                       and limited per-client data pose significant challenges.
+                                                                                  FedMix and FedJETs rely on direct aggregation of gate
+  Dataset         FEMNIST (ResNet)               Yelp (GPT-2)                  and expert models, which does not sufficiently account for
+                                                                               each server’s expertise, leading to suboptimal performance in
+  MoE Params.       6.5 / 26 / 52 (M)       0.36 / 0.93 / 1.59 (B)
+                                                                               Non-IID settings. In contrast, our proposed Fed-MoE features
+  Comm. Cost        33 / 130 / 33 (M)       1.02 / 2.79 / 1.02 (B)             an effective expertise dispatching mechanism. It fuses client
+                                                                               models into relevant server experts and adaptively updates the
+Table 1: Server MoE parameters and FL communication costs for                  gating module to align with evolving expertise.
+FedAvg, FedMix, and our Fed-MoE.
+                                                                              Language tasks. We show SENT-140 and YELP results in
+                                                                              Table 2 columns shaded in yellow. On SENT140, having a
+5.2   Implementation details                                                  BERT [Devlin et al., 2018] for 2-way sentiment classification,
+Experimental Settings. We perform all experiments on a                        we observe that Fed-MoE averagely outperforms the 2nd-
+system with 3 Nvidia 4090 24G graphics cards, with M = 50                     place FedMix by 1.7%, FedProx by 2.5% and FedAvg by
+and 100 clients to build a large-scale FL system. We set a                    2.8%, while leading the weakest FedJETs by 7.45%. On
+K-expert server Fed-MoE framework, where a main expert                        YELP, having a GPT-2 [Devlin et al., 2018] for 5-way task,
+aggregates model parameters from the activated m-clients in                   we observe the Fed-MoE averagely outperforms the 2nd-place
+each iteration. For vision tasks, we set K = 5 and m = 5,                     FedProx with a 1.2% lead and 2.1% over FedMix. The plain
+applying a 2-layer CNN for FEMNIST and ResNet-18 for                          FedProx even surpasses FedMix and FedJETs, implying that
+CIFAR-10. For language modeling tasks, we set K = 3 and                       a simple average of MoE gate would harm the training in
+m = 3, using BERT-base for SENT-140 and GPT-2 for YELP                        experiments with large-scale models in Non-IID settings.
+which have billion of parameters. Details are in Table 1. The                  Fed-MoE outperforms at large-scale FL case. Our Fed-
+learned routed-experts importance α in Eq. 1 of FEMNIST,                       MoE consistently outperforms FedMix and FedJETs, achiev-
+CIFAR, SENT140 and Yelp are 0.56, 0.38, 0.48 and 0.50.                         ing 6–7% higher accuracy on vision tasks and 4–5% on lan-
+
+
+
+                                                                        5484
+                         Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+         Dateset               FEMNIST                       CIFAR10                       SENT140                         YELP             AVG
+          Model                   CNN                         ResNet                         BERT                          GPT-2
+                                                                                                                                            Acc
+       Client Num.        10       50        100       10        50        100       10        50        100       10        50      100
+       FedAvg 2017      91.89    75.84     74.02     62.30      28.37    24.63     75.90     75.38     73.98     51.44     52.53    50.50   61.39
+      FedProx 2020      91.66    77.88     76.01     61.88      35.04    32.13     76.06     76.89     75.38     52.88     52.68    52.58   63.42
+      CentMoE 2017      57.27    57.27     57.27     51.08      51.08    51.08     74.64     74.64     74.64     51.15     51.15    51.15   58.54
+       FedMix 2021      88.97    83.30     80.83     61.72      59.67    57.20     76.18     76.25     76.01     52.73     51.54    51.23   67.96
+      FedJETs 2023      89.54    76.96     79.71     66.65      57.81    55.84     71.90     69.83     69.55     50.12     47.97    48.97   65.40
+        Fed-MoE         92.11 86.03 82.58 67.62 65.52 60.73 77.56 77.96 78.10 54.11 54.12 53.46 70.83
+
+Table 2: Classification accuracy (%) on FEMNIST, CIFAR-10, SENT-140 and Yelp datasets with Non-IID settings. Vision tasks are shaded in
+yellow, and language tasks are in green.
+
+
+guage tasks in 100-client case. This shows the robustness of                   is that GEnt encourages specialization of each server expert,
+our proposed approach in Non-IID scenarios with numerous                       while Sync creates a unified data space across all clients. By
+clients. The key advantage lies in our expertise dispatching                   leveraging both, server experts can specialize appropriately
+mechanism, which dynamically considers the model capacity                      in tasks within the global data space, thereby improving their
+of each client to enable more effective aggregation. This con-                 effectiveness, particularly in Non-IID case.
+trasts with the direct aggregation of gate and expert models
+employed by FedMix and FedJETs.
+                                                                                    Fed-MoE variants                 FEMNIST          CIFAR
+Varying reserved data size. We vary the server reserved                             w/o GEnt & Sync                  78.04            61.27
+data size |Dr | and report the corresponding accuracy of Fed-
+                                                                                    +GEnt                            78.57 (+0.5)     62.07 (+0.8)
+MoE. For FEMNIST, the reserved data of sizes |Dr | =
+320/640/1280 yield accuracy of 82.86, 82.91, 86.03. For CI-                         +Sync                            81.48 (+3.4)     63.94 (+2.6)
+FAR, sizes |Dr | = 250/500/1000 yield 55.79, 63.31, 65.52.                          +GEnt+Sync (Fed-MoE)             86.03 (+8.0)     65.52 (+4.2)
+This indicates that a reasonably reserved dataset is necessary
+for training gating module.                                                                   Table 4: Ablation of multi-task training.
+
+5.4   Ablation Studies
+                                                                              Weight of Gating Entropy. We study how the weight β of
+Due to the time and computation budget, the following abla-                   GEnt loss of Eq.(9) affects accuracy and explanability. We
+tions are carried on with 50-client setting.                                  observe in Table 5 that a moderate weight β = 10−3 of GEnt
+Server MoE size. We further study how the number of                           achieves the best accuracy of 65.52% on CIFAR, better than
+routed-experts at server side affects the performance. Table 3                the model without using GEnt (63.94%) or with a tiny weight
+shows that Fed-MoE achieves the best performance (86.03%)                     10−4 (64.25%). Also, increasing weight to 10−2 and 10−1
+with a moderate 5-Exp MoE. In contrast, though Avg-MoE im-                    decreases the accuracy. This is because a larger GEnt increases
+proves as more experts participate in the training, the overall               the specificity of each expert, but reducing the versatility of
+improvement effect is very limited, and still under-performs                  the ensemble experts.
+5-Exp Fed-MoE. This indicates the effectiveness of expertise
+dispatching of Fed-MoE.
+                                                                                    GEnt weight        w/o       10−4       10−3    10−2     10−1
+      Server MoE     5-Exp      10-Exp     20-Exp       30-Exp                      Fed-MoE            63.94     64.25      65.52   63.14    62.60
+      Avg-MoE        82.78      82.83      83.01        82.92
+      Fed-MoE        86.03      84.77      85.46        85.07                        Table 5: Ablation of gating entropy weight β in Eq.(9).
+
+        Table 3: Ablation of the number of server experts.
+                                                                                 We visualize the gating distribution over each server expert
+                                                                              in Fig. 3. In left heat-map, setting a large gating entropy
+Multi-task training procedures. We examine the effective-                     weight of β = 10−1 obviously makes the gating sparse. Each
+ness of the proposed gating entropy (GEnt) loss in Eq.(8) in                  expert specifies to one certain digit, e.g., the gating module
+training objective, as well as client synchronization mecha-                  sends over 60% label “1” (2nd column) and label “2” (3nd
+nism in Eq.(13) in Table 4. We observe that the inclusion of                  column) to expert-4. With a smaller β = 10−3 as the right
+gating entropy (+GEnt) alone leads to a slight increase in per-               heat-map shows, the gating module assigns soft weights to
+formance (0.5% for FEMNIST and 0.8% for CIFAR), while                         more experts for a same class. It further illustrates that β =
+client synchronization (+Sync) alone results in a performance                 10−3 achieves a balance between specificity and versatility,
+boost of 3.4% and 2.6%. Combining Sync and GEnt together                      distributing the gating more evenly across multiple experts
+yields a huge improvement of 8.0% and 4.2%. The rationale                     while still maintaining strong accuracy.
+
+
+
+                                                                        5485
+                            Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+Exp 1                       Exp 1                                       0.6       than our Fed-MoE (60.73%). This demonstrates that even dy-
+Exp 2                       Exp 2                                                 namic subnetwork methods struggle under extreme non-IID
+                                                                        0.4
+Exp 3                       Exp 3
+Exp 4                       Exp 4                                       0.2
+                                                                                  and large-scale FL settings.
+Exp 5                       Exp 5                                                 Effect of main-expert. We study how the number of main-
+                                                                        0.0
+    Cls-0 1 2 3 4 5 6 7 8 9     Cls-0 1 2 3 4 5 6 7 8 9
+                                                                                  experts affects the performance. Table 8 shows that Fed-
+Figure 3: Gating heat-maps reveals each expert (row) specifies certain            MoE achieves the best performance on both FEMNIST and
+classes (col.), with left β = 10−1 and right β = 10−3 .                           SENT140 with just 1-Exp MoE, compared with using no main
+                                                                                  expert and 2/3-main experts.
+
+Inference with Top-L active routed experts. Table 6 shows                                                   0-Main       1-Main      2-Main     3-Main
+that on both FEMNIST and CIFAR, using Top-1 routed expert
+achieves the highest 86.03% and 65.52% accuracy, respec-                                    FEMNIST         81.05        86.03       80.61      83.29
+tively. In contrast, using Top-5 would lower the accuracy,                                  SENT140         75.11        77.96       77.11      76.88
+while costing 5 times computations. Since each expert special-
+izes in certain classes, activating more irrelevant experts can                               Table 8: Ablation of the number of server experts.
+lead to confusion in the final outcomes. This aligns with our
+practice of using gating entropy to diversify experts.
+                                                                                 Non-IID server reserved data Dr . We let 60% of the server
+                                                                                 data concentrate on one class, with the rest uniformly dis-
+            Top-L            1        2         3          5                     tributed. Fig. 4 shows an accuracy gap of about 2-3% between
+          FEMNIST          86.03    84.49     82.76      84.73                   IID and Non-IID scenarios for both Fed-MoE and FedMix,
+           CIFAR           65.52    65.50     65.16      64.98                   and less 1% in AUC. The F1 score reveals a gap of 6% on
+                                                                                 Yelp, whereas it is only 1.8% on SENT140, for our Fed-MoE.
+      Table 6: Ablation of Top-L routed experts in inference.                    Otherwise, Fed-MoE showed a slight advantage than FedMix
+                                                                                 in AUC metrics on both datasets.
+Comparison with MoE baselines w/o dynamic update.                                  100       FedMoE Non-IID (Yelp)          FedMix Non-IID (Yelp)
+We study the effectiveness of dynamic update of server ex-                                   FedMoE Non-IID (SENT140)       FedMix Non-IID (SENT140)
+                                                                                      90
+                                                                                                                                          +0.02     +0.18
+perts, as elaborated in Sec. 4.2. We build the following MoE                                                                                   +0.71     +0.47
+                                                                                      80             +2.35                   +2.85        84.92     86.42
+variants. Cent-MoE trains a centralized 5-Exp MoE only with                                               +2.55                   +3.05
+                                                                                                                                               82.46     83.67
+                                                                                 Scores
+
+
+
+
+the server reserved set. Avg-MoE [Reisser et al., 2021] (a.k.a                        70             75.61                   75.09
+                                                                                                          73.70                   73.16
+FedMix) has five clients, each equipped with a 2-Exp MoE.                             60
+Avg-MoE aggregates client models into a 5-Exp MoE server                                   +3.03                    +6.01
+                                                                                                +3.20                    +1.80
+model with FedAvg. Anchor-MoE adopts FedJETs [Dun et al.,                             50
+                                                                                            51.09
+                                                                                                                         49.06
+                                                                                                 48.34              47.51
+2023] by configuring a 1-Exp model for each of the 5 anchor                           40
+                                                                                                    Acc                     F1                    AUC
+clients. The server has a 5-Exp MoE. For each FL round, all 5
+anchor clients as well as 5 randomly chosen ordinary clients                      Figure 4: The comparison of Acc, F1, AUC of Fed-MoE and FedMix
+are used to update server MoE. We show results in Table 7.                        on SENT140 and Yelp.
+
+                Avg-MoE Cent-MoE Anchor-MoE Fed-MoE
+                 2-Exp    5-Exp    5-Exp     5-Exp
+    FEMNIST        82.60       57.27           75.88         86.03                6        Conclusion
+      CIFAR        59.67       51.08           57.81         65.52               We introduce an efficient asymmetric FL scheme that effi-
+                                                                                 ciently aggregates compact client models with a server-side
+     Table 7: Centralized MoE and parameter averaging MoE.                       MoE composed of main experts and routing experts, show-
+                                                                                 casing superior performance across visual and language tasks.
+   Fed-MoE outperforms other models due to its dynamic up-                       Our dynamical expert gating and updating mechanisms help
+date of the server gate instead of relying solely on aggregation                 establish diverse and capable server MoE from client experts.
+from clients. Cent-MoE performs the worst as it only uti-                        We validated our approach on billion-scale MoE systems with
+lizes server reserved data. Avg-MoE ranks the second, as it                      large models, extending its applicability to tasks like image
+aggregates all client MoEs but lacks client-to-server match-                     and text classification. Detailed ablation studies confirm its
+ing. Anchor-MoE ranks behind Fed-MoE, as it restricts itself                     efficiency in convergence and communication performance.
+to a fixed correspondence between client and server experts,
+thereby limiting its performance.                                                 Acknowledgments
+Comparison with heterogeneous method. We further                                  This work is supported by the GuangDong Basic and Applied
+compare with FedRolex [Alam et al., 2022], a dynamic                              Basic Research Foundation (2024A1515011650) and the Na-
+subnetwork-based FL method, under 100 clients setup. Fe-                          tional Natural Science Foundation of China (62106156). We
+dRolex achieves 45.50% accuracy, which is significantly lower                     thank all reviewers for constructive suggestions.
+
+
+
+                                                                           5486
+                         Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+Contribution Statement                                                         [Itahara et al., 2023] Sohei Itahara, Takayuki Nishio,
+                                                                                  Yusuke Koda, Masahiro Morikura, and Koji Yamamoto.
+This work was a collaborative effort by all authors. Jingang
+                                                                                  Distillation-based semi-supervised federated learning for
+Jiang† and Yanzhao Chen† contributed equally to this study
+                                                                                  communication-efficient collaborative training with non-iid
+and are designated as co-first authors. Chenyou Fan∗ served as
+                                                                                  private data. IEEE Transactions on Mobile Computing,
+the corresponding author and is responsible for all academic
+                                                                                  22(01):191–205, 2023.
+correspondence regarding this manuscript.
+                                                                               [Jacobs et al., 1991] Robert A Jacobs, Michael I Jordan,
+                                                                                  Steven J Nowlan, and Geoffrey E Hinton. Adaptive mix-
+References                                                                        tures of local experts. Neural computation, 3(1):79–87,
+[Alam et al., 2022] Samiul Alam, Luyang Liu, Ming Yan,                            1991.
+  and Mi Zhang. Fedrolex: Model-heterogeneous federated                        [Jiang et al., 2024a] Albert Q Jiang, Alexandre Sablayrolles,
+  learning with rolling sub-model extraction. In Advances in                      et al. Mixtral of experts. arXiv preprint arXiv:2401.04088,
+  Neural Information Processing Systems, volume 35, pages                         2024.
+  29677–29690, 2022.
+                                                                               [Jiang et al., 2024b] Jingang Jiang, Haiqi Jiang, Yuhan Ma,
+[Caldas et al., 2018] Sebastian Caldas, Peter Wu, Tian Li,                        Xiangyang Liu, and Chenyou Fan. Low-parameter feder-
+  Jakub Konecný, H. Brendan McMahan, Virginia Smith,                             ated learning with large language models. In Web Informa-
+  and Ameet Talwalkar. Leaf: A benchmark for federated                            tion Systems and Applications, pages 319–330, 2024.
+  settings. arXiv preprint arXiv:1812.01097, 2018.                             [Jordan and Jacobs, 1994] Michael I Jordan and Robert A Ja-
+[DeepSeek-AI, 2024] DeepSeek-AI. Deepseek-v2: A strong,                           cobs. Hierarchical mixtures of experts and the em algorithm.
+  economical, and efficient mixture-of-experts language                           Neural computation, 6(2):181–214, 1994.
+  model, 2024.                                                                 [Karimireddy and others, 2020] Sai Praneeth Karimireddy
+[Devlin et al., 2018] Jacob Devlin, Ming-Wei Chang, Ken-                          et al. Scaffold: stochastic controlled averaging for fed-
+  ton Lee, and Kristina Toutanova. Bert: Pre-training of                          erated learning. In ICML, 2020.
+  deep bidirectional transformers for language understanding.                  [Krizhevsky, 2009] Alex Krizhevsky. Learning multiple lay-
+  arXiv preprint arXiv:1810.04805, 2018.                                          ers of features from tiny images. 2009.
+[Diao et al., 2021] Enmao Diao, Jie Ding, and Vahid Tarokh.                    [Lepikhin et al., 2020] Dmitry Lepikhin, HyoukJoong Lee,
+  Heterofl: Computation and communication efficient feder-                        et al. Gshard: Scaling giant models with conditional
+  ated learning for heterogeneous clients, 2021.                                  computation and automatic sharding. arXiv preprint
+[Du and others, 2022] Nan Du et al. Glam: Efficient scaling                       arXiv:2006.16668, 2020.
+  of language models with mixture-of-experts. In ICML,                         [Li and others, 2019] Tian Li et al. Federated learning: Chal-
+  2022.                                                                           lenges, methods, and future directions. arXiv preprint
+                                                                                  arXiv:1908.07873, 2019.
+[Dun et al., 2023] Chen Dun, Dimitrios Dimitriadis, et al.
+  Fedjets: Efficient just-in-time personalization with feder-                  [Li et al., 2020] Tian Li, Anit Kumar Sahu, Manzil Zaheer,
+  ated mixture of experts. arXiv preprint arXiv:2306.08586,                       Maziar Sanjabi, Ameet Talwalkar, and Virginia Smith. Fed-
+  2023.                                                                           erated optimization in heterogeneous networks. Proceed-
+                                                                                  ings of Machine learning and systems, 2:429–450, 2020.
+[Fan et al., 2022] Chenyou Fan, Junjie Hu, and Jianwei
+                                                                               [Lin et al., 2024] Bin Lin, Li Yuan, et al. Moe-llava: Mixture
+   Huang. Private semi-supervised federated learning. In
+   IJCAI, pages 2009–2015, 2022.                                                  of experts for large vision-language models. arXiv preprint
+                                                                                  arXiv:2401.15947, 2024.
+[Fedus et al., 2022] William Fedus, Barret Zoph, and Noam                      [Liu et al., 2023] Xiangyang Liu, Tianqi Pang, and Chenyou
+   Shazeer. Switch transformers: Scaling to trillion param-                       Fan. Federated prompting and chain-of-thought reasoning
+   eter models with simple and efficient sparsity. JMLR,                          for improving llms answering. In International Confer-
+   23(1):5232–5270, 2022.                                                         ence on Knowledge Science, Engineering and Management,
+[Guo et al., 2021] Binbin Guo, Yuan Mei, Danyang Xiao, and                        pages 3–11. Springer, 2023.
+  Weigang Wu. Pfl-moe: personalized federated learning                         [McMahan et al., 2017] H. Brendan McMahan, Eider Moore,
+  based on mixture of experts. In Web and Big Data: 5th                           Daniel Ramage, Seth Hampson, and Blaise Agüera y Arcas.
+  International Joint Conference, 2021.                                           Communication-efficient learning of deep networks from
+[Hong et al., 2022] Junyuan Hong, Haotao Wang, Zhangyang                          decentralized data. In AISTATS, 2017.
+  Wang, and Jiayu Zhou. Efficient split-mix federated learn-                   [Mustafa et al., 2022] Basil Mustafa, Carlos Riquelme, Joan
+  ing for on-demand and in-situ customization. In ICLR,                           Puigcerver, Rodolphe Jenatton, and Neil Houlsby. Multi-
+  2022.                                                                           modal contrastive learning with limoe: the language-image
+[Isaksson et al., 2022] Martin Isaksson, Edvin Listo Zec,                         mixture of experts. NeurIPS, 35:9564–9576, 2022.
+   Rickard Cöster, Daniel Gillblad, and Šarūnas Girdzijauskas.              [Park and Ko, 2024] JaeYeon Park and JeongGil Ko. Fedhm:
+   Adaptive expert models for personalization in federated                        Practical federated learning for heterogeneous model de-
+   learning. arXiv preprint arXiv:2206.07832, 2022.                               ployments. ICT Express, 10(2):387–392, 2024.
+
+
+
+                                                                        5487
+                         Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+
+
+
+[Reisser et al., 2021] Matthias Reisser, Christos Louizos, Ef-
+   stratios Gavves, and Max Welling. Federated mixture of
+   experts. arXiv preprint arXiv:2107.06724, 2021.
+[Sattler et al., 2019] Felix Sattler, Simon Wiedemann, Klaus-
+   Robert Müller, and Wojciech Samek.              Robust and
+   communication-efficient federated learning from non-iid
+   data. IEEE TNNLS, 2019.
+[Shazeer et al., 2017] Noam Shazeer, Azalia Mirhoseini,
+   Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hin-
+   ton, and Jeff Dean. Outrageously large neural networks:
+   The sparsely-gated mixture-of-experts layer. arXiv preprint
+   arXiv:1701.06538, 2017.
+[Wei and others, 2020] Kang Wei et al. Federated learning
+   with differential privacy: Algorithms and performance anal-
+   ysis. IEEE Transactions on Information Forensics and
+   Security, 2020.
+[Wu et al., 2020] Qiong Wu, Kaiwen He, and Xu Chen. Per-
+   sonalized federated learning for intelligent iot applications:
+   A cloud-edge based framework. IEEE Computer Graphics
+   and Applications, 2020.
+[Xin et al., 2020] Bangzhou Xin, Wei Yang, Yangyang Geng,
+   Sheng Chen, Shaowei Wang, and Liusheng Huang. Private
+   fl-gan: Differential privacy synthetic data generation based
+   on federated learning. In ICASSP, 2020.
+[Zec et al., 2020] Edvin Listo Zec, John Martinsson, Olof
+   Mogren, Leon René Sütfeld, and Daniel Gillblad. Fed-
+   erated learning using mixture of experts. arXiv preprint
+   arXiv:2107.06724, 2020.
+[Zhang et al., 2015] Xiang Zhang, Junbo Zhao, and Yann Le-
+   Cun. Character-level convolutional networks for text clas-
+   sification. Advances in neural information processing sys-
+   tems, 28, 2015.
+[Zhao et al., 2018] Yue Zhao, Meng Li, Liangzhen Lai,
+   Naveen Suda, Damon Civin, and Vikas Chandra. Fed-
+   erated learning with non-iid data.           arXiv preprint
+   arXiv:1806.00582, 2018.
+[Zuo et al., 2021] Simiao Zuo, Jianfeng Gao, et al. Tam-
+   ing sparsely activated transformer with stochastic experts.
+   arXiv preprint arXiv:2110.04260, 2021.
+
+
+
+
+                                                                        5488
+

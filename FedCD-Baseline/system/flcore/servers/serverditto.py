@@ -24,6 +24,10 @@ class Ditto(Server):
         self.rs_train_loss_per = []
         self.rs_global_test_acc_per = []
 
+    def _on_dynamic_clients_activated(self, new_clients):
+        for client in new_clients:
+            client.set_parameters(self.global_model)
+            client.clone_model(self.global_model, client.model_per)
 
     def train(self):
         for i in range(self.global_rounds+1):
@@ -131,7 +135,7 @@ class Ditto(Server):
         acc_sum = 0.0
         valid_clients = 0
 
-        for client in self.clients:
+        for client in self._evaluation_clients():
             client.model_per.to(self.device)
             client.model_per.eval()
 
@@ -168,7 +172,8 @@ class Ditto(Server):
         num_samples = []
         tot_correct = []
         tot_auc = []
-        for c in self.clients:
+        eval_clients = self._evaluation_clients()
+        for c in eval_clients:
             ct, ns, auc = c.test_metrics_personalized()
             if not bool(getattr(self, "eval_common_global", True)) and ns > 0:
                 tot_correct.append(ct * 1.0 / ns)
@@ -179,7 +184,7 @@ class Ditto(Server):
                 tot_auc.append(auc*ns)
                 num_samples.append(ns)
 
-        ids = [c.id for c in self.clients]
+        ids = [c.id for c in eval_clients]
 
         return ids, num_samples, tot_correct, tot_auc
 
@@ -189,12 +194,13 @@ class Ditto(Server):
         
         num_samples = []
         losses = []
-        for c in self.clients:
+        eval_clients = self._evaluation_clients()
+        for c in eval_clients:
             cl, ns = c.train_metrics_personalized()
             num_samples.append(ns)
             losses.append(cl*1.0)
 
-        ids = [c.id for c in self.clients]
+        ids = [c.id for c in eval_clients]
 
         return ids, num_samples, losses
 
@@ -273,3 +279,4 @@ class Ditto(Server):
                 f"{personalized_metrics['local_test_acc']:.4f},{personal_global_acc},{personalized_metrics['train_loss']:.4f},"
                 f"{round_uplink:.2f},{round_downlink:.2f},{total_mb:.2f}\n"
             )
+        self._maybe_log_dynamic_client_metrics()

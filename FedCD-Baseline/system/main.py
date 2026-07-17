@@ -183,7 +183,8 @@ def run(args):
             # args.model = resnet18(num_classes=args.num_classes, has_bn=True, bn_block_num=4).to(args.device)
         
         elif model_str == "ResNet10":
-            args.model = resnet10(num_classes=args.num_classes) # .to(args.device)
+            in_channels = 1 if "MNIST" in args.dataset or "Fashion" in args.dataset or "EMNIST" in args.dataset else 3
+            args.model = resnet10(num_classes=args.num_classes, in_channels=in_channels) # .to(args.device)
         
         elif model_str == "ResNet34":
             args.model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes) # .to(args.device)

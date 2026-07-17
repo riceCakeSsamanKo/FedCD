@@ -1,0 +1,120 @@
+{
+  "dataset": "Cifar10_dir0.1_nc20",
+  "client_id": 0,
+  "device": "cuda",
+  "seed": 7,
+  "fext_fraction": 0.1,
+  "fext_train_samples": 5000,
+  "client_train_samples": 1649,
+  "client_class_counts": [
+    0,
+    5,
+    0,
+    51,
+    185,
+    0,
+    0,
+    350,
+    1058,
+    0
+  ],
+  "ood_threshold_max_softmax_p05": 0.4787619709968567,
+  "spearman_count_vs_lar_max_conf": 0.29696969696969694,
+  "spearman_count_vs_lar_true_prob": 0.9878787878787878,
+  "fext_history": [
+    {
+      "epoch": 1,
+      "loss": 2.17555025138855,
+      "train_acc": 0.2632,
+      "probe_acc": 0.1255
+    },
+    {
+      "epoch": 2,
+      "loss": 2.0266306203842164,
+      "train_acc": 0.3696,
+      "probe_acc": 0.3
+    },
+    {
+      "epoch": 3,
+      "loss": 1.9225637643814086,
+      "train_acc": 0.4368,
+      "probe_acc": 0.3665
+    },
+    {
+      "epoch": 4,
+      "loss": 1.8400092977523803,
+      "train_acc": 0.452,
+      "probe_acc": 0.414
+    },
+    {
+      "epoch": 5,
+      "loss": 1.74989579372406,
+      "train_acc": 0.502,
+      "probe_acc": 0.38
+    },
+    {
+      "epoch": 6,
+      "loss": 1.671549669456482,
+      "train_acc": 0.5188,
+      "probe_acc": 0.492
+    },
+    {
+      "epoch": 7,
+      "loss": 1.5999085058212281,
+      "train_acc": 0.5436,
+      "probe_acc": 0.414
+    },
+    {
+      "epoch": 8,
+      "loss": 1.5291511873245238,
+      "train_acc": 0.5454,
+      "probe_acc": 0.447
+    },
+    {
+      "epoch": 9,
+      "loss": 1.4627057006835937,
+      "train_acc": 0.575,
+      "probe_acc": 0.381
+    },
+    {
+      "epoch": 10,
+      "loss": 1.4056788034439087,
+      "train_acc": 0.5916,
+      "probe_acc": 0.4955
+    }
+  ],
+  "lar_history_tail": [
+    {
+      "epoch": 56,
+      "loss": 0.351673827422578,
+      "train_acc": 0.8764215314632298,
+      "val_acc": 0.8696969696969697
+    },
+    {
+      "epoch": 57,
+      "loss": 0.3507852734965389,
+      "train_acc": 0.8756633813495072,
+      "val_acc": 0.8666666666666667
+    },
+    {
+      "epoch": 58,
+      "loss": 0.3498814872623484,
+      "train_acc": 0.8786959818043972,
+      "val_acc": 0.8666666666666667
+    },
+    {
+      "epoch": 59,
+      "loss": 0.34930297843066915,
+      "train_acc": 0.8794541319181198,
+      "val_acc": 0.8696969696969697
+    },
+    {
+      "epoch": 60,
+      "loss": 0.34812936322358273,
+      "train_acc": 0.8786959818043972,
+      "val_acc": 0.8727272727272727
+    }
+  ],
+  "class_summary_csv": "outputs\\toy_lar_dir_overconfidence\\Cifar10_dir0.1_nc20_client0_seed7\\class_summary.csv",
+  "bin_summary_csv": "outputs\\toy_lar_dir_overconfidence\\Cifar10_dir0.1_nc20_client0_seed7\\bin_summary.csv"
+}

@@ -1,0 +1,656 @@
+                                         FedMoE: Personalized Federated Learning via Heterogeneous Mixture of Experts
+
+                                                             Hanzi Mei1 , Dongqi Cai1 , Ao Zhou1 , Shangguang Wang1 , Mengwei Xu1
+                                                                                  1
+                                                                                   Beijing University of Posts and Telecommunications
+                                                                                  {meihanzi, cdq, aozhou, sgwang, mwx}@bupt.edu.cn
+arXiv:2408.11304v1 [cs.LG] 21 Aug 2024
+
+
+
+
+                                                                     Abstract                                 tically distributed (non-IID) issue (Zhu et al. 2021). More
+                                                                                                              critically, when extended to cross-task scenarios with dif-
+                                           As Large Language Models (LLMs) push the boundaries of             ferent optimization objectives, the heterogeneity could be
+                                           AI capabilities, their demand for data is growing. Much of
+                                           this data is private and distributed across edge devices, mak-
+                                                                                                              further exacerbated. This difficult but more realistic setting
+                                           ing Federated Learning (FL) a de-facto alternative for fine-       has been researched as task level (Cai et al. 2023; Yao et al.
+                                           tuning (i.e., FedLLM). However, it faces significant chal-         2022). Therefore, personalized FL has emerged, with some
+                                           lenges due to the inherent heterogeneity among clients, in-        approaches aiming to train proprietary and heterogeneous
+                                           cluding varying data distributions and diverse task types.         local models for each client. Prior studies mainly focus
+                                           Towards a versatile FedLLM, we replace traditional dense           on model distillation or model pruning derived from dense
+                                           model with a sparsely-activated Mixture-of-Experts (MoE)           models (Zhu et al. 2022; Ilhan, Su, and Liu 2023).
+                                           architecture, whose parallel feed-forward networks enable
+                                                                                                                 Recently, Mixture-of-Experts (MoE) (Rajbhandari et al.
+                                           greater flexibility. To make it more practical in resource-
+                                           constrained environments, we present FedMoE, the efficient         2022; Jiang et al. 2024) has been widely explored to scale up
+                                           personalized FL framework to address data heterogeneity,           the model efficiently, with experts pretrained to be sparsely
+                                           constructing an optimal sub-MoE for each client and bringing       activated for various tokens. We thereby prototype FedMoE,
+                                           the knowledge back to global MoE. FedMoE is composed of            the personalized FL framework that integrates transformer-
+                                           two fine-tuning stages. In the first stage, FedMoE simplifies      based MoE into FL to address heterogeneity challenges. The
+                                           the problem by conducting a heuristic search based on ob-          impetus behind FedMoE stems from the unique and inherent
+                                           served activation patterns, which identifies a suboptimal sub-     features of MoE model. The expert-parallel structure along
+                                           model for each client. In the second stage, these submodels        with the sparsely-activated mechanism has the potential to
+                                           are distributed to clients for further training and returned for   facilitate personalization for different clients, as each client
+                                           server aggregating through a novel modular aggregation strat-
+                                                                                                              flexibly activates the most relevant parameters. Furthermore,
+                                           egy. Meanwhile, FedMoE progressively adjusts the submod-
+                                           els to optimal through global expert recommendation. Experi-       the MoE model supports on-demand scaling of model ca-
+                                           mental results demonstrate the superiority of our method over      pacity (Krajewski et al. 2024), enabling it to adapt to the
+                                           previous personalized FL methods.                                  increasing complexity of data and tasks in FL.
+                                                                                                                 While the idea is intriguing, deploying MoE models into
+                                                                                                              edge clients is not trivial. For example, training a Switch
+                                                                 Introduction                                 Transformers model (Fedus, Zoph, and Shazeer 2022) with
+                                         Emerging applications of Large Language Models (LLMs)                32 experts per layer demands at least 37GB of memory,
+                                         like ChatGPT and Sora are transforming the AI land-                  overly exceeding the capacity of many client devices. To fur-
+                                         scape (Wu et al. 2023; Liu et al. 2024). However, such mod-          ther facilitate the practical deployment of FedMoE, we pro-
+                                         els require increasing amounts of downstream data for fine-          pose an efficient FedMoE fine-tuning system to tackle data
+                                         tuning (Kaplan et al. 2020). Currently, the public cloud data        heterogeneity while considering resource constraints. The
+                                         is running out (Villalobos et al. 2022). A huge amount of            main idea is to construct a specific, optimal sub-MoE model
+                                         private data is still unexplored on distributed edge devices         for each client, and then aggregate the knowledge back to
+                                         such as smartphones and autonomous vehicles. To leverage             the global MoE model. The holistic system is composed of
+                                         such distributed and private data, Federated Learning (FL)           two stages. In the first stage, FedMoE efficiently reduces the
+                                         has become a de-facto approach (Bonawitz et al. 2019), al-           problem complexity by identifying an initial submodel close
+                                         lowing edge devices to process data on-device and collabo-           to optimal for each client. Specifically, it conducts a heuris-
+                                         ratively train stronger LLMs while preserving privacy, noted         tic search among all experts based on activation patterns ob-
+                                         as FedLLM (Xu et al. 2024).                                          served during preliminary fine-tuning. In the second stage,
+                                            Despite the promising vision, FedLLM remains challeng-            the initial submodels are sub-sampled from the global model
+                                         ing in heterogeneous reality. Generally, participants possess        and distributed to clients for edge training. After edge train-
+                                         data that varies in domain and quality due to varying en-            ing, FedMoE adopts a modular aggregation strategy in cloud
+                                         vironments, typically noted as non-independent and iden-             server, sharing the relevant knowledge across clients while
+                                                                                                                                                                                                                                                                                         
+  / D \ H U  , Q G H [                                                                                                                                                                                                                                                                  
+
+
+
+
+                                                                  / D \ H U  , Q G H [
+
+
+
+
+                                                                                                                                  / D \ H U  , Q G H [
+
+
+
+
+                                                                                                                                                                                                  / D \ H U  , Q G H [
+
+
+
+
+                                                                                                                                                                                                                                                                  / D \ H U  , Q G H [
+                                                                                                                                                                                                                                                                                         
+                                                                                                                                                                                                                                                                                         
+                                                                                                                                                                                                                                                                                         
+                                                                                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                                                
+                                       ( [ S H U W  , Q G H [                                         ( [ S H U W  , Q G H [                                         ( [ S H U W  , Q G H [                                         ( [ S H U W  , Q G H [                                         ( [ S H U W  , Q G H [
+                  (a) Pretrained model on (b) 5 Epochs fine-tuned on (c) 20 Epochs fine-tuned                                                                                                                 (d) 20 Epochs fine-tuned                                        (e) 20 Epochs fine-tuned
+                           XSUM                    XSUM                     on XSUM                                                                                                                                on AG NEWS                                                  on non-IID AG NEWS
+
+                                                 Figure 1: Heatmap of expert activation frequencies across different training stages and datasets.
+
+
+excluding negative interference. Additionally, FedMoE pro-                                                                                                                            Mixture of Experts
+gressively adjusts the edge model structures through expert                                                                                                                           Inspired by conditional computation, the MoE architecture
+recommendation from the global perspective, striking the                                                                                                                              breaks the principle of using the same set of parameters
+balance between efficiency and performance.                                                                                                                                           for all inputs (Shazeer et al. 2017). An MoE layer consists
+   In general, our contributions are highlighted as follows:                                                                                                                          of a trainable gating network and a pool of experts, each
+ • We conduct preliminary experiments to demonstrate the                                                                                                                              a feed-forward network (FFN). The gating networks within
+   characteristics of expert activation during heterogeneous                                                                                                                          the MoE determine the pathway of sequentially activated ex-
+   FedLLM fine-tuning.                                                                                                                                                                perts for each token. In the case of Switch Transformers, one
+                                                                                                                                                                                      of the most popular MoE-based models, the gating network
+ • We present FedMoE, an efficient FL system integrating                                                                                                                              is simplified to a top-1 router. Each token activates one ex-
+   transformer-based MoE models to address heterogene-                                                                                                                                pert per layer based on the probabilities computed by router,
+   ity issues. FedMoE dynamically searches and distributes                                                                                                                            leaving the other experts unupdated.
+   personalized experts for different clients and absorbs the                                                                                                                            MoE architecture scales up the model capacity in a com-
+   knowledge back into a generic global model.                                                                                                                                        putationally efficient manner, achieving significant perfor-
+ • We conduct extensive experiments to demonstrate the                                                                                                                                mance improvements across many downstream tasks (Fe-
+   empirical effectiveness of FedMoE. Owing to meticu-                                                                                                                                dus, Dean, and Zoph 2022). The effectiveness also extends
+   lously designed personalization, FedMoE achieves su-                                                                                                                               from individual tasks to multi-task learning scenarios, where
+   perior performance across all tasks, while reducing the                                                                                                                            multiple objectives are learned simultaneously (Gupta et al.
+   memory footprint and network traffic over existing base-                                                                                                                           2022; Kim et al. 2021). The advantage of MoE can be at-
+   lines.                                                                                                                                                                             tributed to the unique expert-parallel structure and sparsely-
+                                                                                                                                                                                      activated mechanism, rendering each expert capable of han-
+                                        Background and Motivation                                                                                                                     dling specific tasks or data subsets. Therefore, MoE model
+                                                                                                                                                                                      shows significant potential for adapting to multi-tasking and
+Federated Learning                                                                                                                                                                    heterogeneous data environments.
+The FL paradigm enables multiple edge devices to collabo-
+ratively train a shared model through rounds of edge-cloud                                                                                                                            Motivation and Preliminary Experiments
+communications, without sharing the local data (Kairouz                                                                                                                               Sharing all parameters across clients is not a silver-bullet ap-
+et al. 2021). In each round, the cloud server randomly selects                                                                                                                        proach in FL, especially when dealing with heterogeneous
+a set of edge devices (or clients) and distributes the latest                                                                                                                         data. Unlike previous FL studies, we aim to train an MoE-
+global model for edge fine-tuning. The server then collects                                                                                                                           architectured backbone. The parameter spaces in sparse lay-
+those edge models to update the global model through ag-                                                                                                                              ers are disentangled, allowing for a more flexible and on-
+gregation. FL serves as a privacy-friendly training paradigm                                                                                                                          demand parameter-sharing scheme. Specifically, a subset of
+to utilize decentralized data under legal regulation such as                                                                                                                          optimal experts can be sub-sampled from the global model,
+GDPR (Wikipedia 2024) and CCPA (Wikipedia contributors                                                                                                                                constructing a client-specific heterogeneous model for per-
+2024).                                                                                                                                                                                sonalized learning, and bringing the knowledge back to the
+   Despite FL’s effectiveness in building privacy-preserving                                                                                                                          global model during aggregation. This novel scheme allows
+LLMs, training a generic large model across multiple tasks                                                                                                                            clients to share the most relevant parameters, encouraging
+is still in its infancy. Given the divergent or even conflicting                                                                                                                      cooperation while preventing interference.
+update directions produced by different tasks, it is challeng-                                                                                                                           However, the main obstacle lies in identifying the optimal
+ing for global model to achieve optimal convergence (Tan                                                                                                                              experts for specific data under the resource constraints. To
+et al. 2022). Furthermore, the fine-tuning process in FL is                                                                                                                           gain insights for the design of FedMoE, we conduct a series
+bottlenecked by on-device resources and network transmis-                                                                                                                             of preliminary experiments based on Switch Transformers
+sion (Lim et al. 2020). The global model must be affordable                                                                                                                           to explore the characteristics of expert activation.
+for the weakest device, which restricts the model scale and                                                                                                                              Observation-1: Expert activation characteristics are
+overall performance. Meanwhile, the resources of other de-                                                                                                                            skewed and dynamic during fine-tuning. As illustrated in
+vices are underutilized.                                                                                                                                                              Figure 1, experts exhibit a distinct imbalance in activation
+                                                                                                                                                   H [ S H U W V                   as:
+                                                                                                                                            R S W L P D O  H [ S H U W V
+                                                                                                                                                   U D Q G R P  H [ S H U W V
+  5 R X J H    6 F R U H
+
+
+
+
+                                                                                             7 U D L Q L Q J  / R V V
+                                                                                                                                                                                       min Lk = E(x,y)∼Dk [LCE (y, ŷ(x; wk )) + αLLB ]
+                                                                                                                            
+                                                                                                                                                                                       wk
+                                                                                                                            
+                                                                                                                                                                                                     s.t.   mem(wk ) ≤ Mk                     (1)
+                                                          H [ S H U W V
+                                                      R S W L P D O  H [ S H U W V                                   
+                                                          U D Q G R P  H [ S H U W V                                                                                              The clients in FL collaboratively train a global model w to
+                                                                                                                                                                    
+                                                 ( S R F K                                                                              ( S R F K                                    minimize the global objective function, formulated as:
+                                                                                                                                                                                                                 n
+                                         (a) Accuracy                                                                             (b) Loss                                                                       X |Dk |
+                                                                                                                                                                                                      min L =                Lk (wk )             (2)
+                                                                                                                                                                                                       w               |D|
+Figure 2: Performance of full model (8 experts per layer) and                                                                                                                                                    k=1
+submodels (4 optimal experts per layer, 4 random experts
+per layer).                                                                                                                                                                          Overview
+                                                                                                                                                                                     Model Structure The cloud hosts a large MoE model with
+                                                                                                                                                                                     an equal number of experts at every layer, initialized by a
+frequencies, indicating that only certain experts (those fre-                                                                                                                        pre-trained MoE model. Global model’s extensive capacity
+quently activated) are of critical importance (Yi et al. 2023;                                                                                                                       enables it to provide a broad range of knowledge and store
+Lu et al. 2024). The comparison between Figure 1a and Fig-                                                                                                                           new information effectively. The clients host heterogeneous
+ure 1c further reveals that fine-tuning significantly alters the                                                                                                                     sub-MoEs, differing in both model architecture (i.e., differ-
+activation patterns, enabling the model to identify the opti-                                                                                                                        ent expert numbers per layer) and parameter space (e.g., dif-
+mal experts progressively. This observation suggests that the                                                                                                                        ferent pieces of the global model). These client-specific sub-
+importance of experts should be assessed dynamically dur-                                                                                                                            models are sub-sampled from the global model, retaining the
+ing training, rather than statically beforehand.                                                                                                                                     most relevant experts to flexibly adapt to data characteristics
+   Observation-2: Optimal experts converge quickly and                                                                                                                               under memory constraints.
+perform comparably. We monitor the activation character-                                                                                                                             Workflow FedMoE is structured into two stages, as illus-
+istics at every epoch during fine-tuning on a text summariza-                                                                                                                        trated in Figure 3. In the first stage, the server collects acti-
+tion task, whose evolution is shown in Figure 1a, Figure 1b                                                                                                                          vation information from clients after memory-efficient fine-
+and Figure 1c. The optimal experts quickly stabilize after                                                                                                                           tuning at the edge (steps ①–②). Based on this information,
+a certain epoch, exhibiting only minor fluctuations in their                                                                                                                         the server conducts coarse-grained submodel searches (step
+activation frequencies, which facilitates model pruning. As                                                                                                                          ③) to determine an approximate model architecture for each
+demonstrated in Figure 2, the submodel constructed by opti-                                                                                                                          client (i.e., an initial mapping of each client to its preferred
+mal experts shows a comparable performance to full model,                                                                                                                            expert subset). In the second stage, federated learning begins
+while the submodel built with randomly chosen experts falls                                                                                                                          with the submodels initialized in stage one (step ④). In each
+short.                                                                                                                                                                               round, fine-tuned submodels from different clients are inte-
+   Observation-3: Optimal experts differ across hetero-                                                                                                                              grated into the global model through modular aggregation
+geneous data, especially when heterogeneity reaches the                                                                                                                              (step ⑤–⑦), followed by fine-grained structural adjustments
+task level. As illustrated in Figure 1d and Figure 1e, within                                                                                                                        guided by real-time feedback (step ⑧).
+the same task, data of diverse distributions favor different
+subsets of experts, albeit with some overlap. The difference                                                                                                                         Stage One: Coarse-grained Submodel Initialization
+is exacerbated when it comes to different tasks that require
+distinct knowledge, as demonstrated by Figure 1c and Fig-                                                                                                                            To begin with, we employ expert activation probability as a
+ure 1e.                                                                                                                                                                              criterion to assess expert importance under specific data dis-
+                                                                                                                                                                                                                        n
+                                                                                                                                                                                     tributions, represented as pi,j = Ni,j , where ni,j is the acti-
+                                                                                                                                                                                     vation times of the j-th expert in i-th layer and N is the total
+                                                                             Method                                                                                                  token count. Experts with higher activation probabilities are
+Problem Formulation                                                                                                                                                                  more crucial for the downstream task. Stage one involves a
+                                                                                                                                                                                     large-scale problem, as it requires fairly evaluating the im-
+In personalized FL, there are n clients collaborating to learn
+                                                                                                                                                                                     portance of all experts across a vast number of clients. Con-
+m types of downstream tasks under varying memory con-
+                                                                                                                                                                                     ducting such evaluation within the memory limits of edge
+straints. Each client k = 1, 2, . . . , n executes edge train-
+                                                                                                                                                                                     devices exacerbates the complexity.
+ing based on a local dataset Dk := (X , Yk , pk (x)). The
+input space X is globally shared, while the input distribu-                                                                                                                          Activation Probability Collection The cloud sends a full-
+tion pk (x) can be either IID or non-IID across different                                                                                                                            scale MoE to clients with all experts working in paral-
+clients. The output space Yk corresponds  Sn to a target task                                                                                                                        lel. Clients with sufficient memory further equip each ex-
+Tk ∈ {1, 2, . . . , m}. The union D = k=1 Dk represents                                                                                                                              pert with LoRA structure and then perform Parameter-
+the overall dataset used for FL.                                                                                                                                                     Efficient Fine-Tuning (PEFT). PEFT is a well-established
+   The local objective of client k is to minimize the sum                                                                                                                            method for memory-efficient fine-tuning (Hu et al. 2021;
+of label-smoothed cross-entropy loss and the weighted load                                                                                                                           Sun et al. 2022). Since expert preferences converge quickly,
+balance loss for MoE, while keeping the memory usage of                                                                                                                              fine-tuning only lasts a few rounds (e.g., 5 rounds) to ob-
+the edge model wk within the memory limit Mk , formulated                                                                                                                            tain expert activation probabilities on validation datasets.
+ Server
+            Update                    Update
+                                                                    ④ Construct
+                                           …                                                                    …
+                 …                  …                               Edge Models
+           …                               …                                                                …
+                …                          …                                                                    …                        Similar Clients
+
+                             Client-expert Map              …             …               …
+                …
+                                                                                     …                          …                                  …
+                               ③ Heuristic
+      Global MoE                Search
+                                                                                                        ⑦ Modular                          ⑧ Expert
+                                                                  Personalized Sub-MoE                  Aggregation                     Recommendation
+
+ Clients                                                                                                                         Activation Information
+                                                                                                                      Model        Validation Score
+               Add LoRA                 Activation Information
+       ① Quick
+                              ② Inference                          ⑤ Fine-tuning                                      ⑥ Inference
+      Fine-tuning
+
+
+                                                                                                                                           Stage 1: ①②③
+      Training Set             Validation Set                         Training Set                                     Validation Set      Stage 2: ④⑤⑥⑦⑧
+
+
+                                                                 Figure 3: FedMoE workflow.
+
+
+After gathering activation information, the cloud server per-                            Since solving the NP-hard multi-dimensional knapsack
+forms a static prediction of expert activation probabilities                             problem directly is computationally prohibitive, we instead
+for memory-insufficient clients, based on the intuition that                             employ a heuristic algorithm based on binary search. In
+homogeneous data typically favor a similar set of experts.                               practice, the cloud searches for the optimal threshold θ
+Specifically, the cloud calculates the estimated probabilities                           within the range of [0, 1] by gradually adjusting the bounds
+for a given client by averaging the probabilities of other                               of feasible region. For a given threshold, FedMoE attempts
+clients with the same task, weighted by their data volume.                               to construct a smallest submodel with respect to the thresh-
+Ultimately, the cloud collects activation probabilities for all                          old and verify whether it exceeds the memory limit. If not
+experts across all clients in a rough yet efficient manner, lay-                         exceed, the lower bound of θ is adjusted upward to find a
+ing the foundation for constructing personalized models.                                 more effective submodel; otherwise, the upper bound of θ is
+                                                                                         adjusted downward to alleviate memory consumption. The
+Heuristic Submodel Search Based on the activation                                        efficient search initializes the client-expert map in the cloud,
+probabilities, the cloud strives to initialize a suboptimal sub-                         achieving an ideal balance between memory usage and per-
+model for each client under its memory constraint. The is-                               formance.
+sue is further modeled as an optimization problem. For each
+client, the cloud aims to find a maximum threshold θ, en-
+suring the combined activation probabilities of the experts                              Stage Two: Federated Training and Fine-grained
+retained in each layer are at least θ. The uniform thresh-                               Submodel Adjustment
+old across each layer guarantees the optimal performance
+of this model, as some layers only require a few skilled                                 In the second stage shown in Algorithm 1, federated train-
+experts, whereas others demand more to collaborate. Ad-                                  ing begins with the submodels initialized by the first stage.
+ditionally, the memory usage of the retained experts and                                 After fine-tuning on clients’ private data, the submodel is
+dense layers must not exceed α(0 < α ⩽ 1) of total avail-                                filled with personalized knowledge. The challenge lies in
+able memory. The reserved memory allows for fine-grained                                 how to encourage cooperation while reducing interference
+model structural adjustments in the second stage, which po-                              among heterogeneous submodels during aggregation. Addi-
+tentially requires more experts. Solving for the binary vari-                            tionally, initial submodels may prove suboptimal, either fail-
+able xi,j ∈ {0, 1} that indicates whether to retain the j-th                             ing to capture personalized knowledge (underfitting) or be-
+expert in the i-th layer, the problem is formulated as:                                  ing excessively redundant (overfitting). The cloud serves as
+                                                                                         a central node, crucial not only for managing model param-
+                                 max θ                                                   eters but also for structural model adjustments. Specifically,
+                                    xi,j
+                    Ei
+                                                                                         FedMoE incorporates clients with diverse data distributions
+           
+           
+           
+                     P
+                          xi,j pi,j ⩾ θ, ∀i = 1, . . . , L                               and various task types through modular model sub-sampling
+                    j=1                                                                 and aggregation. Afterwards, the cloud progressively adjusts
+   s.t.                   L P Ei
+                                                !                         (3)            the submodels based on the expert recommendation mech-
+                          P
+                                  xi,j wi,j + wd ⩽ α · M
+           
+            mem                                                                         anism from a global perspective, continually optimizing the
+           
+           
+                          i=1 j=1
+                                                                                         overall system.
+Algorithm 1: Federated training and submodel adjustments               corresponding dimensions of routers are updated in the same
+in the second stage.                                                   pattern. Module-granular updates allow for independent op-
+ 1: for each round r = 1, . . . , R do                                 timization of different parts within the global model, foster-
+ 2:   S ← sample subset of clients U = {u1 , . . . , un }              ing collaboration and mutual enhancement while preventing
+ 3:   Construct and send wk to each uk ∈ S                             conflicts across different clients.
+ 4:   for client uk ∈ S in parallel do                                 Expert Recommendation Besides updating the global
+ 5:      wk∗ ← TRAIN(wk , Dktrain )                                    model, the cloud precisely optimizes the submodel structure
+ 6:      pall experts , acc ← VALIDATE(wk∗ , Dkval )                   to ensure learning efficiency throughout the training cycle.
+ 7:      send wk∗ , pall experts , acc to server                       If a client shows no performance gains after several rounds,
+ 8:   end for                                                          its model is considered to have reached a bottleneck. The
+ 9:   wglobal ← modular aggregate wk∗ for uk in S                      cloud leverages insights provided by other clients from a
+10:   for client uk ∈ S do                                             global perspective, conducting expert-granular structural ad-
+11:      if acc not improved then                                      justments. Specifically, the cloud calculates the cosine sim-
+12:         for client ua ∈ U \ uk do                                  ilarity between the current client and other clients based on
+13:             Caculate sim (uk , ua ) // refer to equation (4)       their expert activation probabilities, formulated as:
+14:         end for
+15:         S ′ ← top K similar clients                                                            Ei 
+                                                                                                 L P
+                                                                                                 P                           
+                                                                                                       (pi,j )uk × (pi,j )ua
+16:         n = AVG(nexpert (S ′ )) − nexpert (uk )                                         i=1 j=1
+17:         if n > 0 then                                              sim (uk , ua ) = s                       s
+                                                                                          L PEi                   L P Ei
+18:             for expert out of wk do                                                   P               2
+                                                                                                 (pi,j )uk ×
+                                                                                                                  P
+                                                                                                                           (pi,j )ua
+                                                                                                                                     2
+19:                caculate p̂expert        // refer to equation (6)                         i=1 j=1                     i=1 j=1
+20:             end for                                                                                                             (4)
+21:             E ← top n experts ranked by highest p̂expert
+22:             add experts E to submodel wk                           The current client takes the top K clients ranked by similar-
+23:         else                                                       ity as reference, as indicated by:
+24:             for expert within wk do
+25:                caculate p̂expert        // refer to equation (6)         S (uk ) = { ua | rank sim (uk , ua ) ⩽ K, a ̸= k}      (5)
+26:             end for
+                                                                       If their number of experts exceeds that of the current client,
+27:             E ← top n experts ranked by lowest p̂expert
+                                                                       the cloud recommends incorporating more effective experts
+28:             remove experts E out of submodel wk
+                                                                       into its submodel; otherwise, it suggests pruning underper-
+29:         end if
+                                                                       forming experts. To fairly evaluate the effectiveness of all
+30:      end if
+                                                                       experts (including those within and outside the submodel),
+31:   end for
+                                                                       the cloud estimates their activation probabilities based on
+32: end for
+                                                                       those of top-k most similar clients, formulated as:
+                                                                                             P
+                                                                                                    sim (uk , ua ) × (pi,j )ua
+Submodel Deployment At the beginning of each round,                                          ua ∈S(uk )
+                                                                              (p̂i,j )uk =             P                            (6)
+a random selection of clients is chosen to participate in the                                                   sim (uk , ua )
+training. The cloud sub-samples the dense layers and opti-                                         ua ∈S(uk )
+mal expert subset from the global MoE based on the lat-
+est client-expert map, constructing a personalized submodel            Note that this is an exploratory adjustment. If the perfor-
+for each client. Deployed on edge devices, these submod-               mance of the adjusted submodel does not improve, its struc-
+els are fine-tuned on local training dataset. Subsequently,            ture will revert to the previous version and remain fixed
+clients perform inference on their validation dataset, collect-        thereafter.
+ing the up-to-date expert activation probabilities and vali-
+dation scores which are sent to cloud along with the edge                                      Experiments
+model parameters.                                                      Experimental Setups
+Modular Aggregation After receiving all edge models,                   FL Simulations We create four FL simulations based
+the cloud integrates newly-learned knowledge back into                 on three classic NLP downstream datasets, including AG
+the global model based on the modular aggregation strat-               News (Zhang, Zhao, and LeCun 2015) for text classifica-
+egy. For parameters of dense layers, the cloud conven-                 tion (task-TC), SQuAD (Rajpurkar et al. 2016) for reading
+tionally employs the Federated Averaging (FedAvg) strat-               comprehension (task-RC) and XSum (Narayan, Cohen, and
+egy. For parameters of sparse layers, aggregation becomes              Lapata 2018) for text summarization (task-TS). The evalu-
+more complicated due to the heterogeneous expert subsets               ation metrics are accuracy, F1 score and Rouge-2 score, re-
+across clients. In detail, unactivated experts in the global           spectively. Each simulation setting mimics a complex real-
+model remain unchanged, experts used by a single client                world scenario. (1) Standard-Hetero-T involves 30 clients
+are updated directly, and experts shared by multiple clients           with heterogeneous tasks, and 5 clients are randomly se-
+are aggregated based on the FedAvg strategy. The expert-               lected for training each round. (2) Standard-Hetero-TD
+                  Table 1: End-to-end performance of different personalized methods in various FL settings.
+
+                  (a) Setting: Standard-Hetero-T                               (b) Setting: Standard-Hetero-TD
+
+                       Performance                                                   Performance
+                                        Comm.      Mem.                                               Comm.      Mem.
+     Method          task- task- task-                              Method         task- task- task-
+                                       Vol. (GB) Usage (GB)                                          Vol. (GB) Usage (GB)
+                     TC RC TS                                                      TC RC TS
+  randomMoE          91.63 84.23 14.51      2.30       15.63      randomMoE        34.19 82.93 13.51     2.30        15.56
+    FedProx          92.92 87.99 11.94      2.30       24.71        FedProx        85.09 87.57 11.76     2.30        24.63
+  SCAFFOLD           85.98 69.44 5.86       4.61       17.29      SCAFFOLD         61.72 67.17 5.83      4.61        17.23
+ FedMoE (Ours)       94.76 86.64 16.92      1.76       13.44     FedMoE (Ours)     88.44 86.55 16.63     1.85        13.89
+                  (c) Setting: Enforced-Hetero-T                               (d) Setting: Enforced-Hetero-TD
+
+                       Performance                                                   Performance
+                                        Comm.      Mem.                                               Comm.      Mem.
+     Method          task- task- task-                              Method         task- task- task-
+                                       Vol. (GB) Usage (GB)                                          Vol. (GB) Usage (GB)
+                     TC RC TS                                                      TC RC TS
+  randomMoE          88.86 82.68 14.37      2.30       15.44      randomMoE        37.81 82.61 13.80     2.30        15.45
+    FedProx          92.51 86.69 11.88      2.30       24.55        FedProx        73.85 86.59 12.03     2.30        24.51
+  SCAFFOLD           36.17 72.51 6.78       4.61       17.21      SCAFFOLD         69.34 70.69 6.96      4.61        17.18
+ FedMoE (Ours)       94.85 85.79 17.19      1.89       13.78     FedMoE (Ours)     73.56 85.84 16.78     1.95        14.04
+
+
+further introduces data heterogeneity by assigning label-         in one of the settings. From the results, we draw four key
+skewed non-IID datasets to clients with identical tasks, fol-     observations as follows:
+lowing the methodology in FedNLP (Lin et al. 2021). (3)              FedMoE outperforms baselines in overall task per-
+Enforced-Hetero-T simulates a more conflicting scenario           formance. FedMoE typically demonstrates comparable or
+by forcibly selecting 3 clients with different task types in      superior performance across various tasks, achieving aver-
+each training round, using the same 30-client setup as in         age improvements of 7.63%, 15.50%, 10.00%, and 12.74%
+Standard-Hetero-T. (4) Enforced-Hetero-TD adopts con-             over the best-performing baseline in the four settings. No-
+flicting client selection scheme and uses the same 30-client      tably, for complex tasks such as task-TS, FedMoE beats
+setup as in Standard-Hetero-TD. The clients in the above set-     the best baseline non-trivially with improvements of up to
+tings are resource-heterogeneous, with memory capacities          23.09%, effectively avoiding the knowledge interference be-
+ranging from 18GB to 24GB, typical of high-performance            tween different tasks that occurs in FedProx and SCAF-
+smartphones and edge computing platforms.                         FOLD.
+Baselines We compare FedMoE with three personalized                  FedMoE achieves faster convergence. Figures 4a–4c il-
+FL methods: (1) randomMoE constructs personalized edge            lustrate the convergence process across various task types
+models by randomly selecting a subset of experts from             in Enforced-Hetero-T Setting. To achieve 99% of the rel-
+the global MoE, ensuring a degree of information isola-           ative target performance, FedMoE demonstrates a speedup
+tion among clients. (2) FedProx (Li et al. 2020) is a fed-        of 1.65×, 2.13×, and 1.64× compared to the three baselines,
+erated optimization algorithm that incorporates a regulariza-     and 1.35×, 2.06×, and 2.92× for 90% of the target perfor-
+tion term during local updates to mitigate the impacts of het-    mance.
+erogeneity. (3) SCAFFOLD (Karimireddy et al. 2020) em-               FedMoE reduces communication overhead and
+ploys control variates to correct the local update directions,    memory usage significantly, making personalized
+overcoming client-drift caused by heterogeneous data.             FL resource-efficient. The communication overhead of
+                                                                  FedMoE decreases by 19.11%, 19.11%, and 59.56% on
+Models The following experiments are conducted based              average compared to the three baselines, and memory
+on Switch Transformers architecture whose pre-trained             consumption decreases by 11.16%, 43.95%, and 19.97%,
+weights are downloaded directly from Hugging Face (Wolf           respectively. The optimization methods in FedProx and
+et al. 2019). The global models for FedMoE and random-            SCAFFOLD introduce additional memory and communica-
+MoE are configured with 32 experts per layer, whereas oth-        tion overheads, which are accumulated during long-term FL
+ers are configured with 8 experts per layer due to edge device    training. In contrast, the cost of FedMoE is negligible, with
+memory constraints.                                               only a one-time roundtrip communication of about 7.46GB
+                                                                  and a memory overhead of approximately 13.06GB that
+End-to-End Performance                                            lasts for only a few rounds in the first stage.
+Table 1 summarizes end-to-end performance of four meth-              FedMoE demonstrates strong robustness and stable
+ods in various FL settings, including task performance, com-      performance in complex scenarios. We calculate the Co-
+munication volume and peak memory usage. Figure 4 shows           efficient of Variation (CV), denoted as cv = σµ , across var-
+the end-to-end performance throughout the training process        ious settings for each task and use the average value as the
+                                                                                                                                                                                    
+                                                                                                                                                                                                                                                                                                                                                                 
+
+
+
+
+                                                                                                                                                                                                                                                                                                                               0 H P   8 V D J H   * % 
+                                                                                                                                                                                                                                       & R P P   9 R O    * % 
+                                                                                                                                                                                  
+
+
+
+
+                                                                                                                                                      5 R X J H    6 F R U H
+                                                                                                                                                                                  
+                                                       U D Q G R P 0 R (                                                                                                                                                                                                                               U D Q G R P 0 R (                                                                      U D Q G R P 0 R (
+                                                                                                                                                                                                                                                                                                        ) H G 3 U R [                                                                            ) H G 3 U R [
+  $ F F X U D F \
+                                                       ) H G 3 U R [                                                                                                              
+
+
+
+
+                                                                              )   6 F R U H
+                                                     6 & $ ) ) 2 / '                                                                                                                                                                                                                                  6 & $ ) ) 2 / '                                                                        6 & $ ) ) 2 / '
+                                                       ) H G 0 R (                                                                                                                                                                                                                                    ) H G 0 R (                                                                              ) H G 0 R (
+                                                                                                                                                                                                                                                                                                                                                           
+                                                                                                                                 U D Q G R P 0 R (                                                               U D Q G R P 0 R (
+                                                                                                                             ) H G 3 U R [                                                                   ) H G 3 U R [                                                                                                                                  
+                                                                                                                                 6 & $ ) ) 2 / '                                                                 6 & $ ) ) 2 / '                                       
+                                                                                                                               ) H G 0 R (                                                                     ) H G 0 R (                                                                                                                                    
+                                                                                                                                                                                                                                                                                                                                                        
+                                         5 R X Q G                                                                   5 R X Q G                                                                         5 R X Q G                                                                         5 R X Q G                                                                                 5 R X Q G
+                           (a) Performance on                                                          (b) Performance on                                                                (c) Performance on                                                             (d) Communication                                                              (e) Peak memory usage
+                                 task-TC                                                                     task-RC                                                                           task-TS                                                                        volume
+
+                    Figure 4: End-to-end performance of different personalized methods during training under Enforced-Hetero-T setting.
+
+
+  Table 2: Ablation study under Standard-Hetero-T setting.                                                                                                                                                    tillation (Ni, Shen, and Zhao 2022; Lin et al. 2020; Zhu
+                                                                                                                                                                                                              et al. 2022), pruning (Ilhan, Su, and Liu 2023), or quanti-
+                                                 Performance                                                                Expert Num                                                                        zation (Ozkara et al. 2021), allowing knowledge transfer be-
+                Method                         task- task- task-                                                                                                                                              tween global model and submodels. However, this approach
+                                                                                                                           Avg.                  Min/Max
+                                               TC RC TS                                                                                                                                                       depends on proxy data and may prolong the training pro-
+                                                                                                                                                                                                              cess. Parameter decoupling makes heterogeneous submod-
+        FedMoE                                 94.76 86.64 16.92 78 → 65                                                                                 52/92
+                                                                                                                                                                                                              els more structured by separating the model into shared and
+       w/o stage1                              92.68 83.90 14.50 96 → 104                                                                               94/118
+                                                                                                                                                                                                              personalized layers (Arivazhagan et al. 2019; Wu et al. 2021;
+       w/o stage2                              92.97 86.43 16.69    78                                                                                  50/114
+                                                                                                                                                                                                              Ma et al. 2022; Mei et al. 2021). However, designing the
+                                                                                                                                                                                                              optimal layer combination for each client is challenging.
+                                                                                                                                                                                                              Some studies allow clients to maintain their original hetero-
+Composite Variation Index (CVI) to assess the robustness of                                                                                                                                                   geneous models. The server then decomposes, groups, and
+each method. FedMoE with a notably small CVI of 0.0445                                                                                                                                                        aggregates these models based on module similarity (Wang
+and FedProx with a CVI of 0.0569 exhibit relatively stable                                                                                                                                                    et al. 2024, 2023). However, calculating modular similar-
+performance, whereas randomMoE with a CVI of 0.1827                                                                                                                                                           ity for large-scale models causes significant computational
+and SCAFFOLD with a CVI of 0.1430 exhibit erratic per-                                                                                                                                                        complexity.
+formance. FedMoE benefits significantly from selecting the                                                                                                                                                        FedMoE is one of the first PFL methods that supports
+most relevant subset of experts for different settings.                                                                                                                                                       LLMs with billion-scale parameters and can efficiently scale
+                                                                                                                                                                                                              up, while previous methods are impractical for LLMs due to
+Ablation Study                                                                                                                                                                                                their complexity.
+Table 2 compares FedMoE to variants without either the first
+or second stage, showing task performance, the evolution of                                                                                                                                                   Mixture of Experts (MoE) Optimizations. MoE has
+average expert numbers throughout training, and the maxi-                                                                                                                                                     demonstrated effectiveness in handling complex centralized
+mum and minimum expert numbers of clients after training.                                                                                                                                                     learning issues, including multi-task (Chen et al. 2023a,b),
+The results indicate that both stages are vital for achieving                                                                                                                                                 multi-domain (Zhang et al. 2024), and multi-scenario (Zou
+strong performance, particularly the first stage where expert-                                                                                                                                                et al. 2022). For example, AdaMV-MoE (Chen et al. 2023a)
+activated information is collected. The second stage plays a                                                                                                                                                  exhibits enhanced performance in multi-task vision recog-
+pivotal role in adjusting the number of experts. When built                                                                                                                                                   nition by automatically adjusting the number of experts for
+upon the solid starting point provided by the first stage, it                                                                                                                                                 each task. Although some FL studies draw inspiration from
+effectively prunes the redundant experts, thereby improving                                                                                                                                                   the MoE concept, they arbitrarily treat the global and local
+resource efficiency while maintaining strong performance.                                                                                                                                                     models as individual experts and simply combine their out-
+The two-stage training paradigm achieves an optimal bal-                                                                                                                                                      puts (Zec et al. 2020; Guo et al. 2021; Bai et al. 2022; Zhang
+ance between performance and resource consumption.                                                                                                                                                            et al. 2023). Experts at model granularity leads to limited
+                                                                                                                                                                                                              flexibility and inadequate personalization.
+                                                             Related Work                                                                                                                                        FedMoE is the first to integrate MoE into FL for a generic
+                                                                                                                                                                                                              and versatile FedLLM, while previous works involve man-
+Personalized Federated Learning (PFL). With the                                                                                                                                                               aging a collection of models.
+growing concern for data privacy and model efficiency, PFL
+has recently garnered extensive attention (Vanhaesebrouck,
+Bellet, and Tommasi 2017; Tan et al. 2022; Sabah et al.                                                                                                                                                                                                                                        Conclusions
+2023). A common strategy is regularization, which adds                                                                                                                                                        FedMoE addresses the challenges of data heterogeneity in
+penalty terms to the loss function or update direction to                                                                                                                                                     FL by employing models with MoE architecture. Through
+guide the training process (Li et al. 2020; Yao and Sun 2020;                                                                                                                                                 personalized sub-MoE construction, modular aggregation,
+Karimireddy et al. 2020). However, it is sensitive to regu-                                                                                                                                                   and dynamic model adjustments, FedMoE enhances overall
+larization parameters and difficult to generalize to complex                                                                                                                                                  performance across diverse tasks, while significantly reduc-
+scenarios. Another approach is to build heterogeneous sub-                                                                                                                                                    ing memory footprint and network traffic. Empirical experi-
+models for clients, utilizing techniques such as model dis-                                                                                                                                                   ments demonstrate its effectiveness in cross-task scenarios.
+                       References                               Kairouz, P.; McMahan, H. B.; Avent, B.; Bellet, A.; Bennis,
+Arivazhagan, M. G.; Aggarwal, V.; Singh, A. K.; and             M.; Bhagoji, A. N.; Bonawitz, K.; Charles, Z.; Cormode, G.;
+Choudhary, S. 2019. Federated learning with personaliza-        Cummings, R.; et al. 2021. Advances and open problems
+tion layers. arXiv preprint arXiv:1912.00818.                   in federated learning. Foundations and trends® in machine
+                                                                learning, 14(1–2): 1–210.
+Bai, T.; Zhang, Y.; Wang, Y.; Qin, Y.; and Zhang, F.
+2022. Multi-site MRI classification using Weighted feder-       Kaplan, J.; McCandlish, S.; Henighan, T.; Brown, T. B.;
+ated learning based on Mixture of Experts domain adapta-        Chess, B.; Child, R.; Gray, S.; Radford, A.; Wu, J.; and
+tion. In 2022 IEEE International Conference on Bioinfor-        Amodei, D. 2020. Scaling laws for neural language mod-
+matics and Biomedicine (BIBM), 916–921. IEEE.                   els. arXiv preprint arXiv:2001.08361.
+Bonawitz, K.; Eichner, H.; Grieskamp, W.; Huba, D.; Inger-      Karimireddy, S. P.; Kale, S.; Mohri, M.; Reddi, S.; Stich, S.;
+man, A.; Ivanov, V.; Kiddon, C.; Konečnỳ, J.; Mazzocchi,      and Suresh, A. T. 2020. Scaffold: Stochastic controlled av-
+S.; McMahan, B.; et al. 2019. Towards federated learning at     eraging for federated learning. In International conference
+scale: System design. Proceedings of machine learning and       on machine learning, 5132–5143. PMLR.
+systems, 1: 374–388.                                            Kim, Y. J.; Awan, A. A.; Muzio, A.; Salinas, A. F. C.; Lu,
+                                                                L.; Hendy, A.; Rajbhandari, S.; He, Y.; and Awadalla, H. H.
+Cai, R.; Chen, X.; Liu, S.; Srinivasa, J.; Lee, M.; Kompella,
+                                                                2021. Scalable and efficient moe training for multitask mul-
+R.; and Wang, Z. 2023. Many-task federated learning: A
+                                                                tilingual models. arXiv preprint arXiv:2109.10465.
+new problem setting and a simple baseline. In Proceedings
+of the IEEE/CVF Conference on Computer Vision and Pat-          Krajewski, J.; Ludziejewski, J.; Adamczewski, K.; Pióro,
+tern Recognition, 5037–5045.                                    M.; Krutul, M.; Antoniak, S.; Ciebiera, K.; Król, K.;
+                                                                Odrzygóźdź, T.; Sankowski, P.; et al. 2024.       Scaling
+Chen, T.; Chen, X.; Du, X.; Rashwan, A.; Yang, F.; Chen,
+                                                                laws for fine-grained mixture of experts. arXiv preprint
+H.; Wang, Z.; and Li, Y. 2023a. Adamv-moe: Adaptive
+                                                                arXiv:2402.07871.
+multi-task vision mixture-of-experts. In Proceedings of the
+IEEE/CVF International Conference on Computer Vision,           Li, T.; Sahu, A. K.; Zaheer, M.; Sanjabi, M.; Talwalkar, A.;
+17346–17357.                                                    and Smith, V. 2020. Federated optimization in heteroge-
+                                                                neous networks. Proceedings of Machine learning and sys-
+Chen, Z.; Shen, Y.; Ding, M.; Chen, Z.; Zhao, H.; Learned-      tems, 2: 429–450.
+Miller, E. G.; and Gan, C. 2023b. Mod-squad: Designing
+mixtures of experts as modular multi-task learners. In Pro-     Lim, W. Y. B.; Luong, N. C.; Hoang, D. T.; Jiao, Y.; Liang,
+ceedings of the IEEE/CVF Conference on Computer Vision          Y.-C.; Yang, Q.; Niyato, D.; and Miao, C. 2020. Feder-
+and Pattern Recognition, 11828–11837.                           ated learning in mobile edge networks: A comprehensive
+                                                                survey. IEEE communications surveys & tutorials, 22(3):
+Fedus, W.; Dean, J.; and Zoph, B. 2022. A review of             2031–2063.
+sparse expert models in deep learning. arXiv preprint
+                                                                Lin, B. Y.; He, C.; Zeng, Z.; Wang, H.; Huang, Y.; Dupuy,
+arXiv:2209.01667.
+                                                                C.; Gupta, R.; Soltanolkotabi, M.; Ren, X.; and Avestimehr,
+Fedus, W.; Zoph, B.; and Shazeer, N. 2022. Switch trans-        S. 2021. Fednlp: Benchmarking federated learning meth-
+formers: Scaling to trillion parameter models with simple       ods for natural language processing tasks. arXiv preprint
+and efficient sparsity. Journal of Machine Learning Re-         arXiv:2104.08815.
+search, 23(120): 1–39.
+                                                                Lin, T.; Kong, L.; Stich, S. U.; and Jaggi, M. 2020. Ensem-
+Guo, B.; Mei, Y.; Xiao, D.; and Wu, W. 2021. PFL-MoE:           ble distillation for robust model fusion in federated learn-
+personalized federated learning based on mixture of ex-         ing. Advances in neural information processing systems, 33:
+perts. In Web and Big Data: 5th International Joint Confer-     2351–2363.
+ence, APWeb-WAIM 2021, Guangzhou, China, August 23–             Liu, Y.; Zhang, K.; Li, Y.; Yan, Z.; Gao, C.; Chen, R.; Yuan,
+25, 2021, Proceedings, Part I 5, 480–486. Springer.             Z.; Huang, Y.; Sun, H.; Gao, J.; et al. 2024. Sora: A review
+Gupta, S.; Mukherjee, S.; Subudhi, K.; Gonzalez, E.; Jose,      on background, technology, limitations, and opportunities of
+D.; Awadallah, A. H.; and Gao, J. 2022. Sparsely activated      large vision models. arXiv preprint arXiv:2402.17177.
+mixture-of-experts are robust multi-task learners. arXiv        Lu, X.; Liu, Q.; Xu, Y.; Zhou, A.; Huang, S.; Zhang, B.; Yan,
+preprint arXiv:2204.07689.                                      J.; and Li, H. 2024. Not All Experts are Equal: Efficient
+Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang,   Expert Pruning and Skipping for Mixture-of-Experts Large
+S.; Wang, L.; and Chen, W. 2021. Lora: Low-rank adaptation      Language Models. arXiv preprint arXiv:2402.14800.
+of large language models. arXiv preprint arXiv:2106.09685.      Ma, X.; Zhang, J.; Guo, S.; and Xu, W. 2022. Layer-wised
+Ilhan, F.; Su, G.; and Liu, L. 2023. Scalefl: Resource-         model aggregation for personalized federated learning. In
+adaptive federated learning with heterogeneous clients. In      Proceedings of the IEEE/CVF conference on computer vi-
+Proceedings of the IEEE/CVF Conference on Computer Vi-          sion and pattern recognition, 10092–10101.
+sion and Pattern Recognition, 24532–24541.                      Mei, Y.; Guo, B.; Xiao, D.; and Wu, W. 2021. Fedvf: Per-
+Jiang, A. Q.; Sablayrolles, A.; Roux, A.; Mensch, A.;           sonalized federated learning based on layer-wise parameter
+Savary, B.; Bamford, C.; Chaplot, D. S.; Casas, D. d. l.;       updates with variable frequency. In 2021 IEEE International
+Hanna, E. B.; Bressand, F.; et al. 2024. Mixtral of experts.    Performance, Computing, and Communications Conference
+arXiv preprint arXiv:2401.04088.                                (IPCCC), 1–9. IEEE.
+Narayan, S.; Cohen, S. B.; and Lapata, M. 2018. Don’t give       Wolf, T.; Debut, L.; Sanh, V.; Chaumond, J.; Delangue, C.;
+me the details, just the summary! topic-aware convolutional      Moi, A.; Cistac, P.; Rault, T.; Louf, R.; Funtowicz, M.; et al.
+neural networks for extreme summarization. arXiv preprint        2019. Huggingface’s transformers: State-of-the-art natural
+arXiv:1808.08745.                                                language processing. arXiv preprint arXiv:1910.03771.
+Ni, X.; Shen, X.; and Zhao, H. 2022. Federated optimization      Wu, J.; Liu, Q.; Huang, Z.; Ning, Y.; Wang, H.; Chen, E.;
+via knowledge codistillation. Expert Systems with Applica-       Yi, J.; and Zhou, B. 2021. Hierarchical personalized feder-
+tions, 191: 116310.                                              ated learning for user modeling. In Proceedings of the Web
+Ozkara, K.; Singh, N.; Data, D.; and Diggavi, S. 2021.           Conference 2021, 957–968.
+Quped: Quantized personalization via distillation with ap-       Wu, T.; He, S.; Liu, J.; Sun, S.; Liu, K.; Han, Q.-L.; and
+plications to federated learning. Advances in Neural Infor-      Tang, Y. 2023. A brief overview of ChatGPT: The history,
+mation Processing Systems, 34: 3622–3634.                        status quo and potential future development. IEEE/CAA
+Rajbhandari, S.; Li, C.; Yao, Z.; Zhang, M.; Aminabadi,          Journal of Automatica Sinica, 10(5): 1122–1136.
+R. Y.; Awan, A. A.; Rasley, J.; and He, Y. 2022. Deepspeed-      Xu, M.; Cai, D.; Wu, Y.; Li, X.; and Wang, S. 2024.
+moe: Advancing mixture-of-experts inference and training         {FwdLLM}: Efficient Federated Finetuning of Large Lan-
+to power next-generation ai scale. In International confer-      guage Models with Perturbed Inferences. In 2024 USENIX
+ence on machine learning, 18332–18346. PMLR.                     Annual Technical Conference (USENIX ATC 24), 579–596.
+Rajpurkar, P.; Zhang, J.; Lopyrev, K.; and Liang, P. 2016.       Yao, L.; Gao, D.; Wang, Z.; Xie, Y.; Kuang, W.; Chen, D.;
+Squad: 100,000+ questions for machine comprehension of           Wang, H.; Dong, C.; Ding, B.; and Li, Y. 2022. A bench-
+text. arXiv preprint arXiv:1606.05250.                           mark for federated hetero-task learning. arXiv preprint
+                                                                 arXiv:2206.03436.
+Sabah, F.; Chen, Y.; Yang, Z.; Azam, M.; Ahmad, N.; and
+Sarwar, R. 2023. Model optimization techniques in person-        Yao, X.; and Sun, L. 2020. Continual local training for bet-
+alized federated learning: A survey. Expert Systems with         ter initialization of federated models. In 2020 IEEE Interna-
+Applications, 122874.                                            tional Conference on Image Processing (ICIP), 1736–1740.
+                                                                 IEEE.
+Shazeer, N.; Mirhoseini, A.; Maziarz, K.; Davis, A.; Le, Q.;
+Hinton, G.; and Dean, J. 2017. Outrageously large neu-           Yi, R.; Guo, L.; Wei, S.; Zhou, A.; Wang, S.; and Xu, M.
+ral networks: The sparsely-gated mixture-of-experts layer.       2023. Edgemoe: Fast on-device inference of moe-based
+arXiv preprint arXiv:1701.06538.                                 large language models. arXiv preprint arXiv:2308.14352.
+                                                                 Zec, E. L.; Mogren, O.; Martinsson, J.; Sütfeld, L. R.; and
+Sun, Z.; Yang, H.; Liu, K.; Yin, Z.; Li, Z.; and Xu, W. 2022.
+                                                                 Gillblad, D. 2020. Specialized federated learning using a
+Recent advances in LoRa: A comprehensive survey. ACM
+                                                                 mixture of experts. arXiv preprint arXiv:2010.02056.
+Transactions on Sensor Networks, 18(4): 1–44.
+                                                                 Zhang, C.; Meng, X.; Liu, Q.; Wu, S.; Wang, L.; and Ning,
+Tan, A. Z.; Yu, H.; Cui, L.; and Yang, Q. 2022. Towards per-     H. 2023. FedBrain: A robust multi-site brain network analy-
+sonalized federated learning. IEEE transactions on neural        sis framework based on federated learning for brain disease
+networks and learning systems, 34(12): 9587–9603.                diagnosis. Neurocomputing, 559: 126791.
+Vanhaesebrouck, P.; Bellet, A.; and Tommasi, M. 2017. De-        Zhang, X.; Zhao, J.; and LeCun, Y. 2015. Character-level
+centralized collaborative learning of personalized models        convolutional networks for text classification. Advances in
+over networks. In Artificial Intelligence and Statistics, 509–   neural information processing systems, 28.
+517. PMLR.
+                                                                 Zhang, Z.; Liu, S.; Yu, J.; Cai, Q.; Zhao, X.; Zhang, C.; Liu,
+Villalobos, P.; Sevilla, J.; Heim, L.; Besiroglu, T.; Hobb-      Z.; Liu, Q.; Zhao, H.; Hu, L.; et al. 2024. M3oE: Multi-
+hahn, M.; and Ho, A. 2022. Will we run out of data? an           Domain Multi-Task Mixture-of Experts Recommendation
+analysis of the limits of scaling datasets in machine learn-     Framework. arXiv preprint arXiv:2404.18465.
+ing. arXiv preprint arXiv:2211.04325.
+                                                                 Zhu, H.; Xu, J.; Liu, S.; and Jin, Y. 2021. Federated learning
+Wang, J.; Yang, X.; Cui, S.; Che, L.; Lyu, L.; Xu, D. D.;        on non-IID data: A survey. Neurocomputing, 465: 371–390.
+and Ma, F. 2024. Towards personalized federated learning         Zhu, Z.; Hong, J.; Drew, S.; and Zhou, J. 2022. Resilient
+via heterogeneous model reassembly. Advances in Neural           and communication efficient learning for heterogeneous fed-
+Information Processing Systems, 36.                              erated systems. Proceedings of machine learning research,
+Wang, K.; He, Q.; Chen, F.; Chen, C.; Huang, F.; Jin, H.;        162: 27504.
+and Yang, Y. 2023. Flexifed: Personalized federated learning     Zou, X.; Hu, Z.; Zhao, Y.; Ding, X.; Liu, Z.; Li, C.; and Sun,
+for edge clients with heterogeneous model architectures. In      A. 2022. Automatic expert selection for multi-scenario and
+Proceedings of the ACM Web Conference 2023, 2979–2990.           multi-task search. In Proceedings of the 45th International
+Wikipedia. 2024. General Data Protection Regulation —            ACM SIGIR Conference on Research and Development in
+Wikipedia, The Free Encyclopedia. [Online; accessed 27-          Information Retrieval, 1535–1544.
+June-2024].
+Wikipedia contributors. 2024. California Consumer Privacy
+Act — Wikipedia, The Free Encyclopedia. [Online; ac-
+cessed 27-June-2024].
+

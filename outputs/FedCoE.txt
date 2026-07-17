@@ -1,0 +1,992 @@
+                                                                                                                                                                                         1
+
+
+
+
+                                         FedCoE: Bridging Generalization and Personalization
+                                            via Federated Coordinated Dual-level MoEs
+                                                   Penglin Dai, Member, IEEE, Fulian Li, Xincao Xu, Member, IEEE, Junhua Wang, Member, IEEE,
+                                                                      Lixin Duan, Member, IEEE, Xiao Wu, Member, IEEE
+
+
+
+                                            Abstract—Federated Learning (FL) has emerged as a promising                fundamental dilemma under non-IID conditions. On one hand,
+                                         paradigm for privacy-preserving distributed learning. However,                the heterogeneity of distributed data is precisely what makes it
+                                         existing FL methods face a fundamental challenge. Traditional                 valuable, as diverse sources provide broader coverage and richer
+arXiv:2605.21264v1 [cs.LG] 20 May 2026
+
+
+
+
+                                         averaging-based approaches suffer from parameter divergence
+                                         under non-IID conditions, while personalized FL methods                       patterns. On the other hand, this same heterogeneity causes
+                                         overfit to local data and fail to generalize to new clients                   parameter divergence and unstable convergence, degrading
+                                         (cold-start problem). Mixture-of-Experts naturally addresses this             global model performance [7], [8]. In other words, the very
+                                         by routing heterogeneous data to specialized experts rather                   property that makes distributed data worth aggregating is also
+                                         than forcing uniform aggregation. In this paper, we propose                   what makes aggregation fail.
+                                         FedCoE, a Federated Coordinated dual-level mixture-of-Experts
+                                         framework that effectively balances global generalization with                   To ameliorate the restrictiveness of traditional FL, Per-
+                                         local personalization. FedCoE maintains multiple independent                  sonalized Federated Learning (pFL) has been introduced to
+                                         global expert models on the server and employs a shared                       reconcile global collaboration with local adaptation [9], [10].
+                                         gating network to dynamically model client-expert correlations                Conventional pFL strategies typically decouple the model
+                                         during aggregation, effectively mitigating expert drift and gating            into shared and personalized modules, allowing the former
+                                         inconsistency. To address the cold-start challenge, we introduce
+                                         an adaptive mechanism that enables new clients to immediately                 to capture universal features while the latter adapts to client-
+                                         leverage the global expert pool without extensive local training.             specific distributions. However, this localization comes at a
+                                         Extensive experiments demonstrate that FedCoE achieves 78.00%                 critical cost: by prioritizing client-specific optimization, these
+                                         global accuracy and 89.32% personalized accuracy on average,                  methods often induce severe overfitting to local distributions,
+                                         outperforming the baseline by 8.82% and 29.19%, respectively.                 thereby degrading the generalizability of the global model. A
+                                         In cold-start scenarios, FedCoE delivers 77.27% accuracy without
+                                         any local fine-tuning, outperforming baselines by over 12.54%.                common failure mode is that the aggregated model loses its
+                                                                                                                       ability to represent the broader data manifold, becoming a
+                                             Index Terms—Federated Learning, Mixture of Experts, Person-
+                                                                                                                       fragmented collection of specialized parameters rather than
+                                         alized Federated Learning, Non-IID Data, Gold-Start Problem
+                                                                                                                       a cohesive global learner. This deficiency is particularly pro-
+                                                                                                                       nounced in the cold-start scenario, where new clients entering
+                                                                                                                       the federation receive a biased initialization that is ill-suited to
+                                                                    I. I NTRODUCTION
+                                                                                                                       their unseen distributions, resulting in prohibitive fine-tuning
+                                             The unprecedented success of deep learning relies on the costs and poor initial performance. This reveals a fundamental
+                                         availability of large-scale data [1]. Yet in practice, data is frag- trilemma in federated learning, where global generalization,
+                                         mented across isolated institutions and devices, each bound by local personalization, and cold-start robustness appear mutually
+                                         privacy regulations such as GDPR [2], CCPA [3] that prohibit exclusive under existing frameworks. Addressing this trilemma
+                                         sharing. This has led to the emergence of “data silos,” where requires a new architectural paradigm.
+                                         valuable data remains locked in local storage, inaccessible for                  The Mixture of Experts (MoE) architecture offers a promis-
+                                         global model training [4]. Federated Learning (FL) [5] was ing solution to this dilemma [11]–[13]. By dynamically routing
+                                         introduced to resolve this tension, enabling collaborative model inputs to specialized experts rather than forcing uniform
+                                         training without exposing raw data. Although FL methods based aggregation, MoE naturally accommodates heterogeneous data
+                                         on averaging aggregation, such as FedAvg [5] and FedProx distributions while maintaining a unified model structure
+                                         [6], have achieved success in many scenarios, they face a [12], [14]. This conditional computation mechanism enables
+                                           This work was supported in part by the National Natural Science Foundation  individual experts to specialize in distinct domains while
+                                         of China under Grant 62172342; in part by the Guangdong Basic and Applied the gating network coordinates global knowledge sharing
+                                         Basic Research Foundation under Grant 2025A1515012825; in part by Yibin       [15], [16]. However, directly deploying MoE within FL
+                                         Science and Technology Program under Grant 2025JC014, and in part by
+                                         Science, Technology and Innovation Project of Shenzhen Longhua District       introduces three critical challenges. First, Expert Drift emerges
+                                         under Grant 20260309G23410662.                                                as a primary consequence of statistical heterogeneity. Since
+                                            P. Dai, F. Li, X. Wu are with the School of Computing and Artificial       clients optimize subsets of experts solely on disjoint local
+                                         Intelligence, Southwest Jiaotong University, Chengdu 611756, China. (email:
+                                         penglindai@swjtu.edu.cn; fulianli@my.swjtu.edu.cn; wuxiaohk@swjtu.edu.cn). distributions, the aggregated global experts often suffer from
+                                           X. Xu, L, Duan are with the Shenzhen Institute for Advanced Study, divergent semantic representations and functional redundancy,
+                                         University of Electronic Science and Technology of China, Shenzhen 518110, degrading the coherence of the global model [17], [18].
+                                         China. (email: xc.xu@uestc.edu.cn; lxduan@uestc.edu.cn.)
+                                            J. Wang is with the School of Computer Science and Engineering, Northeast- Second, Gating Inconsistency severely undermines convergence.
+                                         ern University, Shenyang 110819, China. (email: wangjunhua@cse.neu.edu.cn) Trained in isolation on local data manifolds, client-side gating
+                                                                                                                                  2
+
+
+
+networks inevitably develop discordant routing policies. This           global accuracy and 89.32% personalized accuracy across
+lack of consensus prevents the establishment of a unified               various non-IID settings, outperforming the baseline by
+expert selection strategy, thereby impairing the global model’s         8.82% and 29.19%, respectively. More importantly, new
+ability to generalise across diverse clients [19], [20]. Third,         clients can attain 77.27% accuracy through zero-shot
+Resource Constraints present a prohibitive bottleneck. The              expert assembly alone, surpassing the baseline by over
+naive exchange of full expert ensembles imposes substantial             12.54% and demonstrating the practical effectiveness of
+communication overhead and computational burdens, negating              our cold-start solution.
+the efficiency gains of sparse activation. Addressing these           The remainder of this paper is organized as follows. Section
+challenges requires rethinking how experts are coordinated II reviews the related literature. Section III outlines the
+across the federation, effectively reconciling personalized motivation and preliminary experiment. Section IV details
+adaptation with robust global generalization.                      the proposed FedCoE framework. Section V presents the
+   To surmount these impediments, we introduce FedCoE, a experimental results and analysis. Finally, Section VI concludes
+Federated Coordinated dual-level mixture-of-Experts frame- the paper.
+work designed to enforce semantic consistency across the
+federation. FedCoE fundamentally re-engineers the MoE-FL                                II. R ELATED W ORK
+paradigm through three targeted innovations corresponding
+to the aforementioned challenges. First, to counter Expert A. Federated Learning and Data Heterogeneity
+Drift, we develop a correlation-based aggregation mechanism           The foundational algorithm, FedAvg [5], aggregates a global
+that selectively updates global experts using only semanti- model by averaging local updates. However, it suffers from
+cally aligned client gradients, thereby preserving functional severe client drift under non-IID conditions. To mitigate this,
+specialization. Second, to resolve Gating Inconsistency, we FedProx [6] introduces a proximal term to the local objective,
+deploy a shared server-side gating network that acts as a global penalizing deviations from the global model to enforce stability.
+anchor, synchronizing routing policies across heterogeneous SCAFFOLD [21] further addresses drift by utilizing control
+clients to ensure coherent expert selection. Third, to alleviate variates to correct the direction of local gradients. Despite these
+Resource Constraints and Cold-Start latency, we introduce improvements, recent studies [7], [8] show that constraining
+an adaptive expert assembly strategy: new clients utilize the local updates often compromises the model’s ability to capture
+lightweight gating network to instantly pinpoint and retrieve diverse data distributions, leading to suboptimal generalization.
+a personalized expert subset, achieving robust initialization More advanced approaches employ weighted aggregation.
+without the communication burden of full model transfer or For instance, FedFomo [22] calculates aggregation weights
+the computational cost of iterative fine-tuning.                   based on the geometric similarity between local and global
+   In summary, the main contributions of this work are listed models. Similarly, FedKD [23] uses knowledge distillation
+as follows:                                                        to align client outputs. However, these methods rely heavily
+   • We propose FedCoE, a new federated coordinated dual- on superficial statistical or geometric metrics, lacking the
+      level mixture-of-experts framework that redefines the deep semantic modeling required to handle complex, highly
+      MoE-FL integration through a dual-level architecture heterogeneous data effectively.
+      where both server and clients share a homogeneous MoE
+      backbone. Unlike prior works that treat MoE primarily as B. Personalized Federated Learning
+      a compression or efficiency tool, our framework leverages       Personalized FL (pFL) tailors models to individual clients.
+      it as a semantic coordination mechanism for bridging A representative strategy is architectural splitting, as seen in
+      global generalization and local personalization.             FedPer [9] and LG-FedAvg [25], and recent architecture search
+   • We present a consistency-driven expert aggregation strat- approaches [26], where the model is decoupled into shared
+      egy driven by a shared semantic gating network that base layers (for global features) and private personalization
+      computes client-expert correlation matrices, enabling layers (for local adaptation). While effective for local tasks,
+      selective knowledge absorption from semantically aligned this decoupling often leads to a fragmented global model that
+      distributions. This design directly addresses the critical fails to generalize across clients. Another direction involves
+      issues of expert drift and gating inconsistency that under- meta-learning, such as Per-FedAvg [27]and PeFLL [28], which
+      mine existing MoE-FL methods.                                seeks an initialization point that can be quickly adapted to
+   • We propose an adaptive cold-start mechanism that enables local tasks via fine-tuning. However, these methods typically
+      new clients to immediately obtain personalized models by require computationally expensive local gradient steps for new
+      profiling their local distribution through the shared gating clients, making them unsuitable for rapid cold-start scenarios
+      network, completely bypassing expensive fine-tuning. To where data is scarce or instant inference is required.
+      the best of our knowledge, this is the first MoE-based
+      FL method to achieve genuine zero-shot initialization for
+      unseen clients.                                              C. Mixture-of-Experts in Federated Learning
+   • We conduct extensive experiments across IID and various          1) Global Federated MoE: Integrating Mixture-of-Experts
+      non-IID settings, demonstrating that FedCoE achieves (MoE) into FL leverages sparse activation for efficiency.
+      state-of-the-art performance in both global generalization FedMoE [18] allows clients to update only task-relevant experts,
+      and local personalization. Notably, FedCoE achieves 78% reducing communication costs. Fed-MoE [17] constructs a
+                                                                                                                                                                                                                    3
+
+
+
+TABLE I: Comparison of FedCoE with existing representative federated learning methods. (✓: Supported/Good, △: Partially
+Supported/Limited, ×: Not Supported/Poor)
+   Category                  Method                                Core Strategy                      Personalization                                         Semantic/Gating Consistency   Cold-Start Capability
+                             FedAvg [5]                        Parameter Averaging                                                         ×                              ×                          ×
+   Traditional FL            FedProx [6]                          Regularization                                                           ×                              ×                          ×
+                             SCAFFOLD [21]                       Control Variates                                                          ×                              ×                          ×
+                             FedPer [9]                          Layer Splitting                                                           ✓                              ×                          ×
+   Personalized FL           FedFomo [22]                      Similarity Weighting                                                        ✓                        △ (Geometric)                    ×
+                             FedKD [23]                       Knowledge Distillation                                                       ✓                        △ (Soft Labels)                  ×
+                             FedMoE [18]                    Task-Specific Update                                                          ×                               ×                          ×
+                             Fed-MoE [17]                    Pruning & Merging                                                            △                               △                          ×
+   MoE-based FL
+                             FedJETs [24]                     Dynamic Gating                                                              ✓                               ×                          ✓
+                             FedCoE (Ours)              Correlation-aware Dual-MoE                                                        ✓                               ✓                          ✓
+
+
+
+global expert pool via similarity-based pruning and merging.                                                   5 H V 1 H W                          5 H V 1 H W  0 R (
+While these methods improve training efficiency, they treat MoE
+primarily as a compression or resource-optimization tool rather              
+
+
+
+
+                                                                                                             * O R E D O  $ F F X U D F \
+than a mechanism for disentangling complex data distributions.                                              
+   2) MoE-Driven Personalization: Recent works exploit MoE                   
+for personalization. Fed-POE [29] and FedJETs [24] employs a                                                                                                             
+gating network to select experts for each client, but it aggregates          
+experts via simple averaging, which dilutes specialized knowl-                                                                                                                                   
+edge. PM-MoE [30] attempts to fuse personalized modules                       
+using gating weights but suffers from coarse granularity,                    
+operating at the client level rather than the sample level.                               ) H G $ Y J  ) H G 3 U R [                                        ) H G $ Y J  ) H G 3 U R [
+FedMoEKD [20] introduces distillation but relies on unstable                                   D   , , '  6 F H Q D U L R                             E   1 R Q  , , '  6 F H Q D U L R
+similarity metrics for expert weighting. Hetero-FedMoE [31]
+introduces a mixture of experts framework specifically designed Fig. 1: Performance comparison of ResNet and ResNet-MoE
+to mitigate client drift caused by non-IID data distributions.
+Crucially, these methods lack a mechanism to synchronize the
+routing logic across clients, leading to gating inconsistency
+                                                                             
+where different clients develop conflicting expert selection
+policies.                                                                                                                                                                           ) H G & R (
+                                                                                                                  3 H U V R Q D O L ] H G  $ F F X U D F \
+
+
+
+
+   Difference Summary: The proposed FedCoE distinguishes                                                                                                        3 0  0 R (
+itself from existing works through three key innovations.                                   S ) H G 0 R (
+First, unlike methods that rely on geometric similarity (e.g.,               
+FedFomo) or simple averaging (e.g., FedJETs), FedCoE
+introduces a correlation-aware aggregation mechanism that                                                                                                                  y=x
+updates experts based on deep semantic alignment, preserving                                                                                                                   ) H G $ Y J
+their functional specialization. Second, addressing the gating                                                                                 ) H G $ Y J                     6 & $ ) ) 2 / '
+inconsistency prevalent in prior arts (e.g., PM-MoE), FedCoE                                                             6 & $ ) ) 2 / '                                    S ) H G 0 R (
+enforces a unified routing policy via a shared server-side                                                                                                                     3 0  0 R (
+gating network, ensuring coherent expert selection across                                                                                                                   ) H G & R (
+the federation. Third, in contrast to meta-learning approaches                                                                                                                  
+requiring local fine-tuning (e.g., Per-FedAvg), FedCoE offers a                                                          * O R E D O  $ F F X U D F \
+genuine zero-shot cold-start solution by utilizing the shared                   1 R W H   * O R E D O  $ F F X U D F \  I R U  S ) H G 0 R (  L V  S O R W W H G  D V    D V  W K H \  O D F N  D
+gating network to instantly assemble a personalized expert Fig. 2: Global vs. Personalized                                               Accuracy Comparison. *Note:
+                                                                                                                         X Q L I L H G  J O R E D O  P R G H O 
+model for new clients, completely bypassing the need for local      Global       Accuracy                for     pFedMoE                  is plotted as 0 as they lack a
+gradient updates.                                                   unified      global          model.
+
+    III. M OTIVATION AND P RELIMINARY E XPERIMENT
+  To investigate whether MoE can bridge the generalization- to 78.93% for standard ResNet, a 2.58% improvement as
+personalization gap in federated learning, we conduct prelimi- shown in Fig.1(a). The sparse expert mechanism enables diverse
+nary experiments comparing ResNet-MoE [32] with standard pattern learning within a unified parameter space, effectively
+ResNet under both IID and non-IID settings as shown in Fig.1. enhancing representation power and convergence efficiency
+Three key observations emerge:                                 without incurring excessive computational costs, and validating
+  Observation 1: MoE Excels in IID Settings. Under IID MoE’s potential for federated scenarios.
+conditions, ResNet-MoE achieves 81.51% accuracy compared         Observation 2: Non-IID Distribution Severely Degrades
+                                                                                                                                                  4
+
+
+
+MoE Performance. In contrast, under non-IID conditions                            TABLE II: Summary of Key Notations
+(α = 0.1), ResNet-MoE accuracy drops to 50.60%, significantly          Notation    Description
+below ResNet’s 55.78%, a 5.18% degradation as shown in                    N        Total number of clients (i = 1, . . . , N )
+Fig.1(b). We attribute this failure to two key factors: (1) Expert        K        Total number of global experts (j = 1, . . . , K)
+Drift, where experts optimized on disjoint local datasets diverge         k        Number of active experts selected per input (i.e., top-k)
+semantically, leading to a fragmented global pool; and (2)               Di        Local private dataset held by client i
+Gating Inconsistency, where independently trained routers                Ds        Reserved public dataset maintained by the server
+                                                                        Ej (·)     The j-th global expert network
+develop conflicting selection policies, preventing coherent
+                                                                        G(·)       Shared semantic gating network
+expert utilization during aggregation.                                  sj (x)     Suitability score of expert j for input x
+   Observation 3: The Generalization-Personalization                       d       Dimension of the feature representation
+Dilemma. As illustrated in Fig.2, existing methods struggle            h ∈ Rd      Feature representation extracted by the backbone
+to satisfy both objectives simultaneously. Global aggrega-                 p       Routing probability distribution
+tion methods (e.g., FedAvg with 50.60% global but 30.87%                 Wg        Learnable weights of the gating network (Wg ∈ RK×d )
+personalized accuracy) sacrifice personalization for global               J        Set of indices of the top-k selected global experts
+stability, while personalized approaches (e.g., pFedMoE with             M         Client-Expert correlation matrix (M ∈ RK×N )
+74.96% personalized accuracy but losing global generalization           ai (x)     Client i’s confidence on the ground-truth class
+                                                                          θ        Model parameters (e.g., θ Ci for client i)
+capabilities) overfit to local distributions. No existing method
+                                                                        M(E)       Row-normalized correlation matrix for expert updates
+achieves strong performance on both metrics.                            M(C)       Column-normalized correlation matrix for client updates
+   Summary and Motivation: These observations reveal a                   Sj        Set of indices of the top relevant clients for expert j
+critical insight: the failure of MoE under non-IID stems not              τ        Smoothing factor controlling the model update strength
+from the architecture itself, but from the lack of coordination          Ntop      Number of selected clients per expert
+mechanisms during federated aggregation. This motivates our              Sj        Set of indices of the top-Ntop relevant clients for expert j
+design of FedCoE, which introduces: (1) a shared semantic               αnew       Semantic profile vector for a new client (αnew ∈ RK )
+gating network to synchronize routing policies across hetero-
+geneous clients and maintain global semantic alignment, (2) a
+consistency-driven expert aggregation strategy to selectively        level, the local ResNet-MoE models are trained on private local
+aggregate knowledge from semantically aligned clients into           datasets, allowing their internal experts to specialize in fine-
+each global expert while redistributing personalized expert          grained, personalized feature extraction. At the server level, the
+combinations back to clients for local adaptation, and (3) an        global expert pool comprises experts that are optimized using
+adaptive cold-start mechanism to enable instant personalized         category-specific samples from a reserved dataset, ensuring that
+initialization for new clients with unseen distribution. FedCoE      each global expert captures distinct semantic patterns across
+aims to resolve the generalization-personalization dilemma by        the federation.
+constructing a unified solution that bridges global generaliza-         These two levels are coordinated through two key mech-
+tion, local personalization, and cold-start adaptation.              anisms: a shared gating network residing on the server that
+                                                                     anchors the routing policy to ensure semantic consistency,
+                                                                     and a client-expert correlation matrix that quantifies the
+                  IV. A LGORITHM D ESIGN
+                                                                     alignment between client distributions and global experts to
+   In this section, we present the detailed design of FedCoE.        guide aggregation and mitigate expert drift. The framework
+We first provide an overview of the framework architecture,          operates in two complementary phases. In the pre-training
+followed by the two-phase learning pipeline that initializes         phase, the server utilizes a small reserved dataset to pre-train
+experts and performs federated optimization. We then introduce       both the global expert models and the shared gating network,
+the shared semantic gating network for routing consistency,          establishing diverse expert specializations and an initial routing
+the consistency-driven expert aggregation strategy for expert        policy. In the federated optimization phase, the framework
+updates, and the adaptive cold-start mechanism that enables          dynamically refines the relationships between clients and global
+instant personalization for new clients. To facilitate understand-   experts through the correlation matrix, continuously updating
+ing, the key notations are summarized in Table II.                   the expert pool and gating network. This design also naturally
+                                                                     addresses the cold-start problem: for a new client, the gating
+A. Overview of FedCoE Framework                                      network can immediately identify and retrieve the most relevant
+   Building on the above analysis, we propose FedCoE, a              experts, enabling high performance without extensive local
+Federated Coordinated dual-level mixture-of-Experts frame-           training.
+work. As illustrated in Fig. 3, FedCoE employs a hierarchical
+MoE structure where both the server and clients adopt ResNet-        B. Two-Phase FedCoE Learning Pipeline
+MoE [32] as the backbone architecture (see Fig. 4). This design        FedCoE employs a two-phase learning pipeline to establish
+integrates multiple lightweight convolutional experts within         and refine the expert-client alignment. The pre-training phase
+each residual block, managed by a router that activates only         addresses the challenge of initializing semantically meaningful
+the top-k most relevant experts. While sharing this unified          experts and a consistent routing policy before federation begins.
+architectural backbone, the server and client models operate         The subsequent federated optimization phase dynamically
+on distinct inputs to fulfill their specific roles. At the client    adapts the global expert pool and gating network based on
+                                                                                                                                         5
+
+
+
+
+                                                   Server
+       Pretrain experts and gate with reserved data                                    Gate output
+
+               Reserved data                            Gate                           [⊗]                              Update model
+   Category
+    subset                                                                                                                  Data flow
+                                                       Update gate
+                                                                                Correlation Matrix
+                             …             Experts Output:
+                                             [p1,p2,…,pK]                                 …
+                                                                                                            Clients output on
+                                                                                               …              reserved data
+   Expert-1      Expert-2    … Expert-K
+
+
+
+
+                                                                                                   …
+                                                                                      …
+                                                                                           …
+               Expert pool                                                                     …
+                                   Update experts with correlation matrix                                              Upload model
+                                   Update clients with correlation matrix
+
+
+
+           +                                           +                               …               +
+   Data              Training                  Data              Training                       Data             Training
+                Client-1                                   Client-2                                         Client-N
+
+                                                               Clients
+Fig. 3: Overview of the proposed FedCoE framework, showing the hierarchical dual-level MoE architecture where global
+experts and local client models are coordinated through a shared gating network, along with the two-phase learning pipeline
+comprising pre-training initialization and correlation-aware federated optimization.
+
+
+client feedback, ensuring continuous alignment under evolving          suitability distribution via Kullback–Leibler divergence:
+data distributions. We detail each phase below.                                                        K
+   1) Pre-training Phase: The pretraining phase aims to estab-
+                                                                                                    X               sj (x)
+                                                                             Lgate = KL s(x) ∥ G(x) =     sj (x) log        .           (2)
+lish a semantically initialization for both the expert and gating                                     j=1
+                                                                                                                     Gj (x)
+networks before federated optimization begins. This stage
+ensures that experts acquire diverse and complementary feature            After pretraining, the expert networks provide a diverse
+specializations, while the gating network learns an initial rout-      and well-structured knowledge base, while the gating network
+ing policy that reflects expert relevance. Specifically, the server    learns an initial semantic alignment between inputs and experts.
+maintains a small reserved dataset Ds = {(xm , ym )}m=1
+                                                               |Ds |      2) Federated Optimization Phase: In the federated optimiza-
+sampled from a representative global distribution. Each expert         tion stage, each communication round proceeds as follows: a)
+network {Ej }K                                                         Distribution: Clients receive a personalized combination of
+                j=1 is pretrained independently on a disjoint
+subset of the reserved dataset Ds . Specifically, Ds is partitioned    global expert models from the server based on the routing
+into class-wise subsets {Dsj }K                                        policy and perform local training on private data to update
+                               j=1 , and each expert Ej is trained
+on Dsj to specialize in distinct semantic regions of the data          their internal experts. b) Uploading: After local updates, clients
+distribution.                                                          upload their model parameters to the server. c) Aggregation:
+                                                                       The server constructs a client-expert correlation matrix based
+   After the experts are pretrained, the server trains the gating
+                                                                       on the gating outputs and prediction distributions. This matrix
+network G(·) to learn the mapping between inputs and the
+                                                                       quantitatively measures the semantic relevance between each
+most suitable experts. Unlike conventional supervised training,
+                                                                       client’s local distribution and the global experts. d) Updating:
+the gating network is not optimized using ground-truth labels
+                                                                       Using this correlation matrix, the server updates the global
+but rather through soft supervision derived from the pretrained
+                                                                       expert Pool through correlation-weighted aggregation and re-
+experts. For an input sample x, each expert Ej produces a
+                                                                       fines the shared gating network to maintain routing consistency
+prediction with confidence pj (x). These confidence values are
+                                                                       across clients.
+normalized to form an expert suitability distribution:
+
+                             exp(pj (x))                               C. Shared Semantic Gating Network
+                  sj (x) = PK               ,                   (1)
+                            l=1 exp(pl (x))                               The shared semantic gating network is the central coordina-
+                                                                       tion mechanism in FedCoE, serving to unify expert selection
+where sj (x) represents the relative confidence of expert Ej           policies across heterogeneous clients and eliminate gating
+for the given input.                                                   inconsistency. Unlike local routers that manage fine-grained
+   The gating network outputs a probability vector G(x) =              internal experts within each client’s network, this server-side
+[G1 (x), . . . , GK (x)], which is trained to align with the expert    gating network operates at a higher level to coordinate global
+                                                                                                                                                                  6
+
+
+
+
+                                        Inputs                                         L-th MoE layer                         Output
+                … … …          … … …          … … …          … … …
+
+                                                                                   Conv Block            C1 C2           C3 C4       C5 C6       C7 C8
+
+ Layer 1 Sub-Expert-1 Sub-Expert-2             Expert-4
+                        Expert-2 Sub-Expert-3 Sub-Expert-4                                                 S1                 S2            S3           S4
+
+                                                                                                         ⊗                            ⊗              ⊗
+ Layer 2      Expert-1 Sub-Expert-2
+            Sub-Expert-1 Expert-2     Expert-3
+                                    Sub-Expert-3  Expert-4
+                                                 Sub-Expert-4
+
+     …                                                                                                     0              1             0            0
+
+ Layer N Sub-Expert-1
+           Expert-1 Sub-Expert-2 Sub-Expert-3 Sub-Expert-4
+
+
+
+  Pathway
+                      Outputs         … … …
+                                                                                        Router                                       Input
+
+
+          Fig. 4: The detailed structure of ResNet-MoE [32], containing multiple internal experts within each layer.
+
+                                                                        计算相关性矩阵的模块
+
+expert models. It fulfills three critical functions: modeling client-                             𝑃𝑗 (𝑥) Expert pool
+expert correlations during federated optimization, enabling                                        0.1      Expert-1
+
+zero-shot expert assembly for cold-start clients, and supporting                                   0.5      Expert-2
+                                                                                         Output                                      Correlation Matrix
+                                                                              Gate                 0.2      Expert-3
+global model inference. We elaborate on each function below.                                        .
+                                                                                                               .
+                                                                                                                    .                 E1 E2 E3 … EK
+                                                                                                    .               .
+   Formally, let h ∈ Rd denote the feature representation                         x                0.1     Expert-K
+                                                                                                                                   C1 0.7, 0.05, 0.05, … , 0.1
+
+of an input sample extracted by the backbone network. The                                                                        C2 0.2, 0.6, 0.1, … , 0.05
+                                                                           Reserved data                                [⊗]
+gating network G(·), parameterized by weights Wg ∈ RK×d ,                                                  𝑎𝑖 (𝑥)                C3 0.08, 0.1, 0.1, … , 0.8
+                                                                                  x
+                                                                                                               0.2                 … …       …   …       …    …
+computes the routing probability distribution p ∈ RK as                   Uploaded local model                 0.5
+                                                                                                  Output                         CN 0.05, 0.1, 0.5, … , 0.05
+follows:                                                                                …
+                                                                                                               0.9
+                                                                                  C2        CN                  .
+                p = G(h) = Softmax(Wg · h),                       (3)        C1                                 .
+                                                                                                                .
+                                                                                                               0.1
+where each element pj represents the confidence score of
+assigning the input to the j-th global expert.                      Fig. 5: Process of Constructing the Correlation Matrix
+   In our framework, this gating network serves two distinct
+functions depending on the operational phase:
+   1) Correlation Modeling during Federated Optimization testing phase on the server, the gating network dynamically
+(Server-Side): During the standard federated training loop, computes routing weights for incoming test samples. The final
+the gating network resides exclusively on the server. It is prediction is generated by the weighted combination of outputs
+utilized to construct the client-expert correlation matrix. By from the selected top-k global
+                                                                                           X
+                                                                                                 experts:
+evaluating the semantic alignment between uploaded client                             y=       pj · Ej (h),                 (4)
+model updates and the global experts, the gating network guides                            j∈J
+the server in generating personalized aggregation weights. This
+                                                                 where J denotes the set of indices corresponding to the top-k
+centralized design ensures that expert selection criteria remain
+                                                                 probability values in p. This mechanism allows the server to
+consistent, preventing the divergence often seen when clients
+                                                                 evaluate global generalization performance directly.
+train independent routers.
+   2) Expert Initialization for Cold-Start Clients (Client-Side
+Deployment) : The only scenario where the gating network D. Consistency-driven Expert Aggregation Strategy
+is deployed to the client side is during the cold-start phase.     The consistency-driven expert aggregation strategy is de-
+When a new client joins the federation with no prior model signed to mitigate expert drift, a phenomenon where experts
+history, the server transmits the pre-trained gating network trained on disjoint client distributions diverge semantically
+to this client. The new client uses this network to perform and lose global coherence. By leveraging the gating network
+a one-time inference on its local data to identify the top-k outputs, we construct a client-expert correlation matrix that
+most relevant experts. This mechanism allows the new client quantifies semantic relevance, enabling selective aggregation
+to immediately retrieve a highly suitable subset of experts where each expert absorbs knowledge only from semantically
+from the global pool, thereby bypassing the slow convergence aligned clients. This subsection details the correlation matrix
+typically associated with random initialization.                 construction and the selective update mechanism.
+   3) Global Model Inference: Beyond its role in coordination,     1) Correlation Matrix Construction: To model the semantic
+the gating network and the global expert pool collectively relevance between experts and clients, FedCoE constructs a
+constitute the global MoE model. During the inference or correlation matrix that quantifies how each expert contributes
+                                                                                                                                                                7
+服务器端更新的模块（专家和门控网络）                 加权更新
+
+
+
+    Uploaded local model                                     Reserved data
+                                                                                 Updated Gate
+                                                                                                  experts, gating network, and client models via correlation-aware
+                      …              [⊗]
+                                                                    x                  Gate‘      aggregation and redistribution.
+       C1    C2           CN                       𝐸𝑛𝑒𝑤
+                                             Updated Expert Set                Interval              Specifically, the server utilizes the expert update matrix
+                  Normalization
+                                     M (𝐸)   Expert-1        Expert-2
+                                                                                update                                    (E)
+                                                                                                  M(E) , whose entry Mj,i measures the semantic correlation
+    Correlation Matrix                       Expert-3
+                                                         … Expert-K                    Gate       between expert Ej and client Ci . To prevent the ”dilution” of
+                                                                        Experts
+      E1 E2 E3 … EK                                                     Output
+   C1 0.7, 0.05, 0.05, … , 0.1                                                                    expert knowledge by irrelevant or noisy client updates, each
+                                                                        Uploaded local model
+                                                   [⊗]                                            expert Ej only aggregates a subset of the most relevant clients
+   C2 0.2, 0.6, 0.1, … , 0.05                                                           …
+
+   C3 0.08, 0.1, 0.1, … , 0.8      Normalization
+                                                   M   (C)               C1’     C2’        CN‘   Sj . The update rule is formulated as:
+    … …     …     …       …    …
+   CN 0.05, 0.1, 0.5, … , 0.05                                                                                 (t+1)            (t)
+                                                                                                                                        X (E) (t)
+                                                                                                             θ Ej = (1 − τ ) θ Ej + τ       M̄j,i θ Ci ,       (9)
+  Fig. 6: Process of Updating Local Model and Expert Set with                                                                          i∈Sj
+
+  Correlation Matrix                                                                                                                          (E)
+                                                                                                  where τ ∈ [0, 1] is a smoothing factor. M̄j,i represents the
+                                                                                                  locally re-normalized weight derived to ensure the aggregation
+  to each client’s prediction behavior. As shown in Fig.5, this                                   scale remains stable within the selected subset:
+  matrix serves as the foundation for correlation-weighted aggre-                                            (E)
+  gation and personalized expert redistribution in the subsequent                              (E)         Mj,i
+                                                                                           M̄j,i = P              (E)
+                                                                                                                      .              (10)
+  optimization phase.                                                                                    n∈Sj Mj,n
+     Concretely, the server evaluates all client models {Ci }N   i=1
+  and the global gating network G(·) on the reserved dataset Ds . This selective mechanism allows each expert to exclusively
+  For each input x ∈ Ds , the prediction confidence of client i absorb knowledge from semantically aligned clients, thereby
+  on the ground-truth class is denoted as:                            reinforcing its domain specialization while filtering out inter-
+                                                                      ference from disparate distributions.
+                           ai (x) = P (y|x; θCi ),                (5)    To adapt to the evolving expert representations, the server
+     and the gating probability of expert j for the same input is     periodically   fine-tunes the gating network on the reserved
+  given by the gating output defined in Sec. IV-C:                    dataset. This  fine-tuning step recalibrates the routing policy so
+                                                                      that the gating outputs remain aligned with the updated expert
+                             pj (x) = [G(x)]j ,                   (6) semantics.
+                                                                         After server-side aggregation, each client model is refreshed
+  where pj (x) corresponds to the j-th element of the probability
+                                                                      using the client update weighted matrix M(C) , which distributes
+  vector p.
+                                                                      the updated experts back to clients in a personalized manner:
+     The pairwise contribution between expert j and client i
+  is measured by the outer product of their respective gating                                                   K
+                                                                                   (t+1)               (t)              (C) (t)
+                                                                                                               X
+  weights and confidence scores over the dataset:                                θ Ci = (1 − τ ) θ Ci + τ           Mj,i θ Ej .      (11)
+                                  X                                                                            j=1
+                          M=          p(x) a(x)⊤ ,                (7)
+                                 x∈Ds                                 This allows each client i to flexibly combine knowledge from
+                                                                      multiple relevant experts (j = 1 . . . K) to serve its local data
+  where p(x) ∈ RK is the gating probability vector, a(x) = distribution.
+  [a1 (x), . . . , aN (x)]⊤ ∈ RN is the vector of client confidences,
+  and M ∈ RK×N encodes the semantic correlation between K
+  experts and N clients.                                              E. Adaptive Cold-Start Mechanism
+     To normalize the interaction strength and avoid scale bias,
+  FedCoE derives two normalized correlation matrices:                    The adaptive cold-start mechanism enables new clients to
+                                                                      obtain high-performance personalized models immediately
+                           M                          M
+           M(E) =                  ,     M(C) = ⊤           ,     (8) upon joining the federation, without any local gradient updates.
+                        M1N + ε                    1K M + ε           It addresses a critical limitation of existing methods that require
+  where 1N and 1K are all-one vectors of size N and K, extensive fine-tuning under data scarcity. The core idea is to
+  respectively. M(E) and M(C) denote the row-normalized and leverage the shared gating network as a semantic probe: new
+  column-normalized matrices used for expert aggregation and clients use it to profile their local data distribution and retrieve a
+  client redistribution, respectively. This correlation modeling tailored expert combination from the global pool. As illustrated
+  aligns experts with semantically similar clients, stabilizing in Fig. 7, the mechanism operates in four steps: gating network
+  aggregation and improving personalization.                          deployment, local semantic profiling, profile-guided expert
+     2) Selective Correlation-Guided Update: Building upon the assembly, and immediate inference.
+  constructed correlation matrices, the server performs a selective,     1) Gating Network Deployment: When a new client inew
+  consistency-driven update of the expert pool and client models joins the federation, instead of downloading the massive full
+  in each communication round. During each communication model or a randomly averaged global model, it requests only
+  round, as shown in Fig.6, the correlation matrix acts as a the lightweight shared gating network G(·) from the server.
+  weighting mechanism that directs the joint optimization of the This minimizes the initial communication overhead.
+                                                                                                                                      8
+
+
+
+
+                               Server                                local test data with competitive accuracy, even before any
+                                                                     local gradient updates occur. This capability enables zero-shot
+                    Expert pool
+                                                                     or few-shot adaptation, allowing the client to serve online
+                        Expert-1         ③Composite personalized     requests instantly. Furthermore, should the client participate
+                                         Expert Model  model
+                        Expert-2                                     in subsequent federated training rounds, this personalized
+     Gate                                  [⊗]                       model serves as a superior initialization point (“warm start”),
+                        Expert-3                                     significantly accelerating convergence compared to random or
+                           .
+                           .
+                           .                                         average initialization.
+    ①Download           Expert-K                        ④Download       Through this mechanism, the new client instantly acquires
+      Gate                                               Model       a high-performance model composed of the most relevant
+                                 ②Upload weight
+                                                                     capabilities from the global expert pool. Whether the client’s
+                                                                     distribution is similar to existing ones or completely unique, this
+                  Output                                             weighted combination provides a robust starting point without
+       Gate                     [E1,E2,…,EM]
+                                                                     requiring iterative training, effectively solving the cold-start
+   Input                                          ⑤Inference
+                Input                                                challenge.
+        Data       New Client                            Output
+
+                               Clients                                              V. P ERFORMANCE E VALUATION
+                                                                     A. Experimental Setup
+Fig. 7: The workflow of the adaptive cold-start mechanism for
+new clients corresponds to the algorithmic steps detailed in           1) Dataset: We evaluate our framework on three image
+Section IV-E: ⃝1 Downloading the shared gating network; ⃝   2       classification benchmarks: CIFAR-10 [34], CIFAR-100 [34],
+Uploading the local semantic profile derived from the gating        and Tiny-ImageNet [35]. CIFAR-10 serves as the primary
+network; ⃝3 Server-side expert assembly and ⃝4 Distribution of      benchmark, which consists of 60,000 32 × 32 color images
+the personalized model; ⃝5 Immediate local inference without        distributed across 10 distinct classes. The dataset is explicitly
+gradient updates.                                                   split into 50,000 training images and 10,000 test images.
+                                                                    To evaluate scalability under increased complexity, CIFAR-
+                                                                    100 comprises 100 classes, also following the standard split
+   2) Local Semantic Profiling: The new client utilizes the of 50,000 training and 10,000 test images. Tiny-ImageNet
+downloaded gating network to evaluate its local data distribution further increases the difficulty with 200 classes and a higher
+Dnew . Although Dnew may be small, it contains sufficient resolution of 64 × 64, containing 100,000 training images
+semantic information to identify task relevance. The client and 10,000 validation images used for testing. For the server-
+performs a forward pass on its local samples using G(·) side reserved dataset Ds , we randomly sample 20% of the
+to compute the routing probability for each sample. These global test set to form a representative subset. To support the
+probabilities are then averaged to form a global semantic profile disjoint expert initialization, Ds is strictly partitioned into class-
+vector αnew ∈ RK :                                                  wise subsets {Dsj }Kj=1 , where each expert Ej is pre-trained
+                               1      X                             on  a  corresponding  subset Dsj to acquire distinct semantic
+                   αnew =                   G(x),              (12) specializations.
+                             |Dnew |
+                                     x∈Dnew                            2) Federated Learning Configuration: To rigorously assess
+where the j-th element of αnew , denoted as αnew,j , quantifies the performance under statistical heterogeneity, we simulate non-
+relevance of the j-th global expert to the new client’s local task. IID data distributions using Dirichlet sampling. We partition
+This profile effectively maps the unknown local distribution the CIFAR-10 training data among N = 10 clients by sampling
+into the known semantic space of the global experts.                label distributions from a Dirichlet distribution Dir(α). The
+   3) Profile Upload and Expert Assembly: The client uploads concentration parameter α controls the degree of heterogeneity:
+the low-dimensional profile vector αnew to the server. Im- a smaller α (e.g., 0.1) induces extreme non-IID partitions where
+portantly, no raw data or gradient information is transmitted, clients possess data from only a few classes, whereas a larger
+preserving privacy. Upon receiving αnew , the server synthesizes α (e.g., 1.0) approaches an IID distribution. For evaluation, we
+a personalized initialization model θ init by aggregating the reserve 20% of each client’s local data as a hold-out test set
+parameters of global experts {Ej }K    j=1 according to the profile to measure personalized performance (Personalized Accuracy),
+weights:                                                            while the remaining 80% constitutes the training set. Global
+                               K
+                              X                                     Accuracy is evaluated on remaining 80% of the global test set
+                     θ init =     αnew,j · θ Ej .              (13) (excluding Ds ).
+                              j=1
+                                                                       3) Model Architecture: We adopt ResNet-MoE [32] as the
+This aggregated model is then transmitted back to the client. backbone architecture for all experiments, specifically using a
+   4) Immediate Inference and Integration: Upon receiving ResNet-18 variant with K = 2 experts per residual block by
+θinit , the new client loads these parameters into its local default. This model embeds multiple lightweight convolutional
+model structure. Since θinit is constructed from well-trained expert modules within the residual blocks. It employs a two-
+global experts specifically matched to the client’s semantic level gating mechanism: an internal router within each residual
+profile, the client can immediately perform inference on block dynamically selects experts based on sample features,
+                                                                                                                                                  9
+
+
+
+            TABLE III: Comparison of Global and Personalized Accuracy (%) Across Different Data Distributions.
+
+                                                                                    Dirichlet Distribution
+                                                     IID
+                      Methods
+                                                                       α=1                 α = 0.5              α = 0.1
+                                             Gacc          Pacc    Gacc      Pacc      Gacc       Pacc       Gacc     Pacc
+                      FedAvg [5]             82.34         81.51   81.26    67.72      75.69     81.81       50.60    30.87
+                      FedProx [6]            84.11         80.76   78.34    76.89      80.05     86.52       29.17    87.52
+                      SCAFFOLD [21]          61.80         58.36   73.68    71.29      44.41     35.84       33.40    23.48
+                      FedMoEKD [20]            –           42.40     –      45.00        –       42.40         –      77.67
+                      pFedMoE [33]             –           22.13     –      37.54        –       50.78         –      74.96
+                      PM-MoE [30]            79.67         80.40   74.57    80.92      68.71     82.34       66.38    90.10
+                      FedCoE (Ours)          85.30         84.48   85.10    85.86      85.55     90.26       63.35    91.84
+   Note: The symbol “-” indicates that Gacc is not evaluated for methods without a unified global model. Gacc denotes the accuracy of the aggregated
+   global model, and Pacc represents the average personalized accuracy across clients. The best/second-best are color coded.
+
+
+
+while our proposed shared gating network, a hybrid CNN-MLP                 B. Simulation Results
+module, manages the high-level routing to the global expert                   Table III summarizes the comparative performance of Fed-
+pool.                                                                      CoE against state-of-the-art baselines under varying degrees of
+   4) Baseline Methods for Comparison: To comprehensively                  data heterogeneity. Overall, FedCoE consistently demonstrates
+evaluate the effectiveness of FedCoE, we compare it with                   superior efficacy across all experimental settings, validating its
+representative federated learning baselines categorized as                 robustness and adaptability to diverse data distributions.
+follows:                                                                      1) Performance across Non-IID Settings: In scenarios char-
+                                                                           acterized by IID or moderate heterogeneity (α ∈ {1.0, 0.5}),
+  - Global Aggregation Methods: a) FedAvg [5] aggre-                       FedCoE achieves the highest accuracy in both global and
+    gates local model parameters by simple averaging to                    personalized evaluations. Under severe heterogeneity (α = 0.1),
+    build a shared global model, serving as a fundamental                  while PM-MoE exhibits a slight edge in global accuracy,
+    benchmark for global model performance. b) FedProx [6]                 FedCoE retains the highest personalized accuracy. These
+    introduces a proximal regularization term in local updates             findings reveal a distinct performance dichotomy: global
+    to mitigate model divergence under heterogeneous data.                 aggregation methods (e.g., FedAvg, FedProx) favor low-
+    c) SCAFFOLD [21] employs control variates to correct                   heterogeneity regimes, whereas personalized methods (e.g., PM-
+    local update directions, reducing client drift caused by               MoE, pFedMoE) excel in high-heterogeneity settings. FedCoE,
+    non-IID distributions.                                                 however, effectively bridges this gap, maintaining competitive
+  - Personalized Federated Method: FedMoEKD [20]                           performance across the full spectrum of distribution shifts and
+    adopts a dual-expert architecture, where global and local              achieving an optimal balance between global generalization
+    experts are collaboratively optimized through knowledge                and local personalization.
+    distillation.                                                             2) Comparison with ResNet Baselines: To further validate
+  - MoE-based Federated Methods: a) pFedMoE [33]                           the effectiveness of FedCoE, we compared its performance on
+    decomposes models into shared and private experts,                     ResNet series models under varying levels of data heterogeneity.
+    enabling adaptive expert selection via client-specific                 As shown in Table IV, models trained with global aggregation
+    gating networks. b) PM-MoE [30] aggregates client-                     methods (e.g., FedAvg, FedProx) exhibit unstable performance
+    specific parameters through a learnable gating network that            when combined with the ResNet-MoE backbone, showing
+    dynamically weights expert contributions from a global                 only marginal improvements under mild heterogeneity but
+    parameter pool.                                                        suffering sharp degradation at high heterogeneity (α = 0.1)
+                                                                           due to expert drift and gating inconsistency. In contrast,
+   5) Implementation Details: All experiments are imple-                   while personalized federated methods (e.g., PM-MoE) achieve
+mented using PyTorch [36] (version 2.0.1) on a server equipped             moderate improvements on ResNet-MoE, they still fail to
+with an Intel Xeon Gold 6330 CPU @ 2.00GHz, 512GB RAM,                     fully exploit the structure’s potential. Moreover, FedCoE
+and four NVIDIA GeForce RTX 4090 GPUs (24GB VRAM                           consistently improves the personalized accuracy on both
+each). Before federated training, we perform a warm-up phase               backbones, suggesting that the proposed correlation-weighted
+where both the global expert models and the shared gating                  aggregation effectively mitigates client drift. The improvement
+network are pre-trained on a small reserved public dataset for             is particularly pronounced on the MoE backbone, where
+30 epochs to initialize semantic representations. The federated            FedCoE not only restores model stability under highly non-IID
+training proceeds for 1,000 communication rounds. To ensure                conditions but also maintains steady gains across milder settings.
+the routing policy remains current, the shared gating network              These results confirm that FedCoE functions as a general
+is updated every 10 rounds involving the server. For local                 aggregation enhancement mechanism while simultaneously
+optimization, we use Stochastic Gradient Descent (SGD) with                stabilizing and strengthening MoE training, thereby unlocking
+a learning rate of 0.1, momentum of 0.9, and weight decay of               the full potential of modular expert architectures in federated
+5 × 10−4 .                                                                 learning.
+                                                                                                                                            10
+
+
+
+           TABLE IV: Comparison of Resnet and Resnet-MoE Performance (%) Across Different Data Distributions.
+
+                                                  α=1                             α = 0.5                    α = 0.1
+                   Methods
+                                              Ori/MoE            ∆          Ori/MoE           ∆        Ori/MoE           ∆
+                   FedAvg [5]            (76.19 / 67.72)        -8.47     (80.67 / 81.81)   +1.14    (88.92 / 30.87)   -58.05
+                   FedProx [6]           (76.70 / 76.89)        +0.19     (82.67 / 86.52)   +3.85    (88.70 / 87.52)    -1.18
+                   SCAFFOLD [21]         (73.47 / 71.29)        -2.18     (74.69 / 35.84)   -38.85   (85.39 / 23.48)   -61.91
+                   FedMoEKD [20]         (39.40 / 45.00)        +5.6      (50.93 / 42.40)    -8.53   (74.83 / 77.67)   +2.84
+                   pFedMoE [33]          (40.79 / 37.54)        -3.25     (50.97 / 50.78)    -0.19   (72.76 / 74.96)    +2.2
+                   PM-MoE [30]           (73.29 / 80.92)        +7.63     (71.05 / 82.34)   +11.29   (84.88 / 90.10)   +5.22
+                   FedCoE (Ours)         (79.02 / 85.86)        +6.84     (81.20 / 90.26)   +6.41    (90.53 / 91.84)   +1.13
+   Note:Ori/MoE reports “ResNet / ResNet-MoE” accuracy. The ∆ denotes the improvement of ResNet-MoE over ResNet across different α values.The
+   best/second-best are color coded.
+
+
+TABLE V: Performance Comparison on Different Datasets (%).                    evaluate performance under both moderate (α = 0.5) and
+The best results are highlighted in bold.                                     extreme (α = 0.1) heterogeneity. For baselines (FedAvg,
+                                                                              FedProx, Scaffold), we deploy the final aggregated global model
+                      CIFAR-10        CIFAR-100         Tiny-ImageNet
+ Methods                                                                      for direct inference. For FedCoE, we leverage the Adaptive
+                     Gacc     Pacc    Gacc     Pacc     Gacc       Pacc       Cold-Start Mechanism: new clients utilize the shared gating
+ FedAvg [5]          75.69   81.81    45.35    21.74    37.20     22.87       network to generate a semantic profile and retrieve a zero-shot
+ FedProx [6]         80.05   86.52    46.36    49.45    36.94     36.56       personalized expert assembly from the server. Crucially, no
+ SCAFFOLD [21]       44.41   35.84    41.47    28.05    30.00     23.35       local fine-tuning is performed, ensuring a strict evaluation of
+ FedMoEKD [20]         -     56.86      -      21.47      -       8.75        zero-shot generalization.
+ pFedMoE [33]          -     50.78      -      14.70      -       5.70           Table VI reports the classification accuracy, yielding two
+ PM-MoE [30]         68.71   82.34    35.47    45.61    33.11     28.56       critical insights:
+ FedCoE (Ours)       84.05 87.61 59.10 65.65 45.80                52.60          • Superior Zero-Shot Performance: FedCoE achieves
+                                                                                    the highest average accuracy across all settings. Notably,
+   Note: The symbol “-” indicates that Gacc is not evaluated for methods
+   without a unified global model. Gacc and Pacc denote Global and                  under extreme heterogeneity (α = 0.1), it attains 91.27%
+   Personalized accuracy, respectively.                                             accuracy, surpassing the strongest baseline (FedProx) by
+                                                                                    over 22%. This confirms that our correlation-aware expert
+                                                                                    assembly constructs highly tailored models for unseen
+   3) Performance on Different Datasets: To evaluate the                            distributions, overcoming the limitations of generic global
+scalability and generalization capability of FedCoE across                          models.
+varying levels of data complexity, we extended our experiments                   • Robustness to Heterogeneity: While baseline perfor-
+to include three benchmarks: CIFAR-10, CIFAR-100, and                               mance deteriorates as heterogeneity increases (e.g., Fe-
+Tiny-ImageNet.While CIFAR-10 serves as a standard base-                             dAvg drops from 64.73% to 56.13%), FedCoE displays
+line, CIFAR-100 presents a more challenging task with 100                           an inverse trend, with gains becoming more pronounced
+classes and fewer samples per class, requiring fine-grained                         at α = 0.1. This suggests that precise, correlation-based
+feature discrimination. Furthermore, Tiny-ImageNet, a subset                        expert selection is particularly critical and effective in
+of ImageNet containing 200 classes with higher-resolution                           highly distinct heterogeneous environments.
+images (64 × 64), introduces significantly higher dimensional                    • Stability: As evidenced by the standard deviation (σ), Fed-
+complexity and semantic diversity.                                                  CoE exhibits the lowest performance variance. Whether
+   Table V summarizes the performance comparison. As                                the new client’s distribution is balanced or skewed, our
+observed, while baseline methods like FedAvg and SCAFFOLD                           mechanism ensures a reliable initialization. In contrast,
+suffer substantial performance degradation on the more complex                      methods like SCAFFOLD show extreme instability (e.g.,
+CIFAR-100 and Tiny-ImageNet datasets, FedCoE maintains                              dropping to 7.6% accuracy), likely due to the misalignment
+robust performance. Specifically, on Tiny-ImageNet, FedCoE                          of historical control variates with the new client’s data.
+outperforms the classic baselines and other MoE-based methods                    5) Ablation Studies:
+by a significant margin. This superiority is attributed to the                   • Impact of Core Modules: We perform a module-
+specialized global expert pool, which effectively captures the                      level ablation study (Table VII) to quantify component
+diverse and complex semantic patterns inherent in large-scale                       contributions. A single-expert baseline yields 80.0%
+datasets, validating the effectiveness of our consistency-driven                    accuracy. Simply increasing expert count without a routing
+aggregation strategy in handling complex tasks.                                     mechanism degrades performance to 78.0%, indicating
+   4) Cold-Start Generalization Capabilities: To evaluate the                       that uncoordinated experts introduce noise. Integrating the
+practical applicability of FedCoE in dynamic environments,                          gating network leverages the multi-expert capacity, boost-
+we mimic a realistic ”cold-start” scenario involving the arrival                    ing accuracy to 89.0%. This confirms that adaptive routing
+of novel clients. Specifically, after convergence, three new                        is indispensable for coordinating expert specialization and
+clients with unseen data distributions are introduced. We                           unlocking the potential of the ensemble.
+                                                                                                                                                                                                                                                                                                             11
+
+
+
+TABLE VI: Test accuracy (%) on new clients (Cold-Start Scenario) under different non-IID settings (α = 0.5 and α = 0.1).
+“Mean ± Std” denotes the average performance across the three new clients. The best results are highlighted in bold.
+
+                                                                                                  α = 0.5                                                                                                       α = 0.1
+                           Methods
+                                                             Client 1              Client 2          Client 3                   µ+σ                                    Client 1                 Client 2                      Client 3                            µ+σ
+                           FedAvg [5]                          55.00                73.40              65.80                 64.73 ± 9.25                                 69.00                    46.60                             52.80                56.13 ± 11.57
+                           FedProx [6]                         75.00                79.00              74.20                 76.07 ± 2.57                                 73.60                    73.20                             60.60                 69.13 ± 7.39
+                           Scaffold [21]                       18.00                33.40              31.80                 27.73 ± 8.47                                 27.80                     7.60                              9.20                14.87 ± 11.23
+                           FedCoE (Ours)                       76.80                80.00              75.00                 77.27 ± 2.53                                 89.80                    90.60                             93.40                91.27 ± 1.89
+
+
+                                                                                                                                                   TABLE VII: Module-level ablation analysis of FedCoE.
+                                                   * O R E D O  $ F F X U D F \             & O L H Q W  $ F F X U D F \                                             Methods                                                                  Accuracy (%)
+                                                                                                                                                                       w/o Multiple Experts & Gate                                                      81.81
+                                                                                                                                                   w/o Gate                                                                         79.52
+                                                                                                                                                               FedMoE(ours)                                                                     88.57
+ $ F F X U D F \    
+
+
+
+
+                                                     
+                                                                                                                                                        & 
+
+
+
+
+                                                                                                                                                                                                                                                                                            5 R X W L Q J  $ F F X U D F \
+                                                                                                                                                        &                                                  
+                                                                                                                                        &                                                                                                                           
+
+
+                                                                                                                                     7 U X H  & O D V V
+
+
+
+
+                                                                                                                                                                                                                   $ F F X U D F \
+                                                                                                                                                        &                                                                                                                        
+                                                                                                                                                            & 
+                                                                                                                                                        &                                                                                                                        
+                                                                                                                                                            & 
+                                                                                                                                                        & 
+                                                                                                                                                            &                                                                                                                        
+                                                                                                                                                            &                                                                                                                           
+                                                                                                                                                                   (   (   (   (   (                                               (   (   (   (   ( 
+                                                                                                                                                               ( [ S H U W  0 R G H O                                                & K R V H Q  ( [ S H U W
+                                               1 X P E H U  R I  ( [ S H U W V  .
+                                                                                                                                                                    D   ( [ S H U W  6 S H F L D O W \                             E   6 H U Y H U  * D W H  5 R X W L Q J
+Fig. 8: The impact of the number of experts (K) on model                                                                            Fig. 9: Validation of the gate network’s selection effectiveness
+performance.
+
+                                                                                                                                                          VI. C ONCLUSION
+                                                                                                                                      In this paper, we presented FedCoE, a federated coordinated
+                                                                                                                                   dual-level mixture-of-experts framework that bridges the gap
+                • Sensitivity to Expert Count (K): We analyze the impact                                                           between global generalization and local personalization in
+                  of expert pool size, varying K from 2 to 10 (Fig 8).                                                             non-IID federated learning. The core innovation lies in the
+                  Accuracy improves significantly as K increases to 4,                                                             synergy of a shared semantic gating network and a consistency-
+                  reflecting enhanced capacity to model diverse patterns.                                                          driven expert aggregation strategy, which jointly address expert
+                  Beyond K = 4, performance saturates at ≈ 90.4% and                                                               drift and gating inconsistency that have limited prior MoE-
+                  remains stable up to K = 10, demonstrating the robustness                                                        based FL approaches. Extensive experiments demonstrate
+                  of our framework. However, larger K expands the opti-                                                            that FedCoE achieves 78.00% global accuracy and 89.32%
+                  mization search space, slowing convergence. Consequently,                                                        personalized accuracy, while delivering 77.27% accuracy in
+                  we identify K ∈ [4, 5] as the optimal range balancing                                                            cold-start scenarios without any local fine-tuning.
+                  model capacity and computational efficiency.                                                                        Looking forward, we identify several promising directions to
+                • Interpretability of Expert Specialization: To verify that
+                                                                                                                                   extend this work. a) Multi-task Federated Learning: We plan
+                  our correlation-aware framework is grounded in meaning-                                                          to adapt FedCoE for multi-task federated scenarios, exploring
+                  ful semantics, we visualize expert behavior for K = 5.                                                           how dynamic routing can facilitate positive knowledge transfer
+                  Fig. 9(a) depicts the validation accuracy of individual                                                          across distinct but related tasks. b) Resource-efficient Expert
+                  experts, revealing distinct specialization patterns. Fig. 9(b)                                                   Activation: We aim to develop lightweight expert activation
+                  shows the aggregate routing probabilities assigned by                                                            strategies that enable the deployment of large-scale MoE
+                  the gating network. A strong semantic alignment is                                                               models on edge devices with strict memory and computation
+                  evident: the gating network consistently routes samples                                                          constraints. (c) Privacy-preserving Mechanisms: Integrating
+                  to experts with the highest empirical performance for                                                            differential privacy into gating signal transmission remains
+                  their respective classes. This correlation confirms that the                                                     a critical direction to further protect client semantic profiles
+                  gating module captures genuine class-level semantics. It                                                         during the correlation modeling process.
+                  validates the reliability of our Client-Expert Correlation
+                  Matrix, ensuring that aggregation is driven by functional                                                                                                                            R EFERENCES
+                  competence rather than stochastic noise.                                                                            [1] Y. LeCun, Y. Bengio, and G. Hinton, “Deep learning,” Nature, vol. 521,
+                                                                                                                                          no. 7553, pp. 436–444, 2015.
+                                                                                                                                                                 12
+
+
+
+ [2] P. Regulation, “General data protection regulation,” Intouch, vol. 25, pp.     [24] Y. Farhat, H. E. Shili, F. Liao, C. Dun, M. H. Garcia, G. Zheng, A. H.
+     1–5, 2018.                                                                          Awadallah, R. Sim, D. Dimitriadis, and A. Kyrillidis, “Learning to
+ [3] S. L. Pardau, “The california consumer privacy act: towards a european-             specialize: Joint gating-expert training for adaptive moes in decentralized
+     style privacy regime in the united states,” J. Tech. L. & Pol’y, vol. 23,           settings,” arXiv preprint arXiv:2306.08586, 2025.
+     p. 68, 2018.                                                                   [25] P. P. Liang, T. Liu, L. Ziyin, N. B. Allen, R. P. Auerbach, D. Brent,
+ [4] P. Kairouz, H. B. McMahan, B. Avent, A. Bellet, M. Bennis, A. N.                    R. Salakhutdinov, and L.-P. Morency, “Think locally, act globally:
+     Bhagoji, K. Bonawitz, Z. Charles, G. Cormode, R. Cummings et al.,                   Federated learning with local and global representations,” arXiv preprint
+     “Advances and open problems in federated learning,” Foundations and                 arXiv:2001.01523, 2020.
+     trends® in machine learning, vol. 14, no. 1–2, pp. 1–210, 2021.                [26] D. Yao and B. Li, “PerFedRLNAS: One-for-all personalized federated
+ [5] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y Arcas,                     neural architecture search,” in Proceedings of AAAI Conference on
+     “Communication-efficient learning of deep networks from decentralized               Artificial Intelligence, vol. 38, no. 15, 2024, pp. 16 398–16 406.
+     data,” in Proceedings of International Conference on Artificial Intelligence   [27] A. Fallah, A. Mokhtari, and A. Ozdaglar, “Personalized federated learning:
+     and Statistics. PMLR, 2017, pp. 1273–1282.                                          a meta-learning approach,” arXiv preprint arXiv:2002.07948, 2020.
+ [6] T. Li, A. K. Sahu, M. Zaheer, M. Sanjabi, A. Talwalkar, and V. Smith,          [28] J. Scott, H. Zakerinia, and C. H. Lampert, “PeFLL: Personalized federated
+     “Federated optimization in heterogeneous networks,” in Proceedings of               learning by learning to learn,” in Proceedings of International Conference
+     Annual Conference on Machine Learning and System, vol. 2, 2020, pp.                 on Learning Representations, 2024.
+     429–450.                                                                       [29] P. M. Ghari and Y. Shen, “Personalized federated learning with mixture
+ [7] Q. Li, Y. Diao, Q. Chen, and B. He, “Federated learning on non-iid                  of models for adaptive prediction and model fine-tuning,” in Proceedings
+     data silos: an experimental study,” in Proceedings of IEEE International            of Advances in Neural Information Processing Systems, 2024, pp. 92 155–
+     Conference on Data Engineering. IEEE, 2022, pp. 965–978.                            92 183.
+ [8] Y. Xu, Y. Liao, L. Wang, H. Xu, Z. Jiang, and W. Zhang, “Overcom-              [30] Y. Feng, Y. ao Geng, Y. Zhu, Z. Han, X. Yu, K. Xue, H. Luo, M. Sun,
+     ing noisy labels and non-iid data in edge federated learning,” IEEE                 G. Zhang, and M. Song, “PM-MOE: Mixture of experts on private model
+     Transactions on Mobile Computing, vol. 23, no. 12, pp. 11 406–11 421,               parameters for personalized federated learning,” in Proceedings of ACM
+     2024.                                                                               on Web Conference, 2025, pp. 134–146.
+ [9] M. G. Arivazhagan, V. Aggarwal, A. K. Singh, and S. Choud-                     [31] J. Jiang, Y. Chen, X. Liu, H. Jiang, and C. Fan, “Heterogeneous federated
+     hary, “Federated learning with personalization layers,” arXiv preprint              learning with scalable server mixture-of-experts,” in Proceedings of
+     arXiv:1912.00818, 2019.                                                             International Joint Conference on Artificial Intelligence, 2025, pp. 5480–
+[10] J. Wang, X. Yang, S. Cui, L. Che, L. Lyu, D. D. Xu, and F. Ma, “Towards             5488.
+     personalized federated learning via heterogeneous model reassembly,”           [32] Y. Zhang, R. Cai, T. Chen, G. Zhang, H. Zhang, P.-Y. Chen, S. Chang,
+     in Proceedings of Advances in Neural Information Processing Systems,                Z. Wang, and S. Liu, “Robust mixture-of-expert training for convolutional
+     vol. 36, 2023, pp. 29 515–29 531.                                                   neural networks,” in Proceedings of IEEE/CVF International Conference
+[11] N. Shazeer, A. Mirhoseini, K. Maziarz, A. Davis, Q. Le, G. Hinton,                  on Computer Vision, 2023, pp. 90–101.
+     and J. Dean, “Outrageously large neural networks: the sparsely-gated           [33] L. Yi, H. Yu, C. Ren, H. Zhang, G. Wang, X. Liu, and X. Li,
+     mixture-of-experts layer,” arXiv preprint arXiv:1701.06538, 2017.                   “Pfedmoe: Data-level personalization with mixture of experts for
+[12] D. Lepikhin, H. Lee, Y. Xu, D. Chen, O. Firat, Y. Huang, M. Krikun,                 model-heterogeneous personalized federated learning,” arXiv preprint
+     N. Shazeer, and Z. Chen, “Gshard: Scaling giant models with conditional             arXiv:2402.01350, 2024.
+     computation and automatic sharding,” arXiv preprint arXiv:2006.16668,          [34] A. Krizhevsky, G. Hinton et al., “Learning multiple layers of features
+     2020.                                                                               from tiny images,” 2009.
+[13] S. Rajbhandari, C. Li, Z. Yao, M. Zhang, R. Y. Aminabadi, A. A. Awan,          [35] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “Imagenet:
+     J. Rasley, and Y. He, “Deepspeed-moe: Advancing mixture-of-experts                  a large-scale hierarchical image database,” in Proceedings of IEEE
+     inference and training to power next-generation ai scale,” in Proceedings           Conference on Computer Vision and Pattern Recognition, 2009, pp.
+     of International Conference on Machine Learning. PMLR, 2022, pp.                    248–255.
+     18 332–18 346.                                                                 [36] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury, G. Chanan,
+[14] B. Zoph, “Designing effective sparse expert models,” in Proceedings                 T. Killeen, Z. Lin, N. Gimelshein, L. Antiga et al., “Pytorch: An
+     of IEEE International Parallel and Distributed Processing Symposium                 imperative style, high-performance deep learning library,” in Proceedings
+     Workshops. IEEE, 2022, pp. 1044–1044.                                               of Advances in Neural Information Processing Systems, vol. 32, 2019.
+[15] W. Fedus, B. Zoph, and N. Shazeer, “Switch transformers: Scaling to
+     trillion parameter models with simple and efficient sparsity,” Journal of
+     Machine Learning Research, vol. 23, no. 120, pp. 1–39, 2022.
+[16] C. Riquelme, J. Puigcerver, B. Mustafa, M. Neumann, R. Jenatton, A. S.
+     Pinto, D. Keysers, and N. Houlsby, “Scaling vision with sparse mixture
+     of experts,” in Proceedings of Advances in Neural Information Processing                                Penglin Dai (S’15-M’17) received the B.S. degree
+     Systems, vol. 34, 2021, pp. 8583–8595.                                                                  in mathematics and applied mathematics and the
+[17] Y. Zou, S. Qi, Y. Yuan, D. Wang, S. Shen, L. Wu, S. Guo, and D. Yu,                                     Ph.D. degree in computer science from Chongqing
+     “Fed-MoE: Efficient federated learning for Mixture-of-Experts models                                    University, Chongqing, China, in 2012 and 2017,
+     via empirical pruning,” in Proceedings of International Conference on                                   respectively. He is currently an Associate Professor
+     Parallel and Distributed Computing: Applications and Technologies.                                      with the School of Computing and Artificial Intel-
+     Springer, 2024, pp. 128–139.                                                                            ligence, Southwest Jiaotong University, Chengdu,
+[18] H. Mei, D. Cai, A. Zhou, S. Wang, and M. Xu, “Fedmoe: Personalized                                      China. His research interests include internet of
+     federated learning via heterogeneous mixture of experts,” arXiv preprint                                vehicles, wireless networks and mobile computing.
+     arXiv:2408.11304, 2024.
+[19] C. Wu, “FedMoE-DA: Federated mixture of experts via domain aware
+     fine-grained aggregation,” in Proceedings of International Conference
+     on Mobility, Sensing and Networking, 2024.
+[20] T. Liang, M. Hu, and E. Sun, “Mixture of specialized experts for Model-
+     Heterogeneous personalized federated learning,” IEEE Networking Letters,
+     vol. 7, no. 3, pp. 224–228, 2025.                                                                        Fulian Li received the B.E. degree in Computer
+[21] S. P. Karimireddy, S. Kale, M. Mohri, S. Reddi, S. Stich, and A. T. Suresh,                              Science and Technology from Chengdu University
+     “Scaffold: Stochastic controlled averaging for federated learning,” in                                   of Technology, Chengdu, China, in 2024. She is
+     Proceedings of International Conference on Machine Learning. PMLR,                                       currently pursuing the master’s degree in Computer
+     2020, pp. 5132–5143.                                                                                     Science and Technology of Southwest Jiaotong
+[22] M. Zhang, K. Sapra, S. Fidler, S. Yeung, and J. M. Alvarez, “Personalized                                University. Her research interests include federated
+     federated learning with first order model optimization,” in Proceedings                                  learning in edge computing and mixture of experts.
+     of International Conference on Learning Representations, 2021.
+[23] C. Wu, F. Wu, L. Lyu, Y. Huang, and X. Xie, “Communication-efficient
+     federated learning via knowledge distillation,” Nature Communications,
+     vol. 13, no. 1, p. 2032, 2022.
+                                                                                     13
+
+
+
+                            Xincao Xu (Member, IEEE) received the B.E. degree
+                            from the North University of China, Taiyuan, China,
+                            in 2017, and the Ph.D. degree from the Chongqing
+                            University, Chongqing, China, in 2023. He is cur-
+                            rently an Associate Researcher in computer science
+                            with the Shenzhen Institute for Advanced Study,
+                            University of Electronic Science and Technology
+                            of China (UESTC), Shenzhen, China. From 2023 to
+                            2025, he was a Postdoctoral Research Fellow with the
+                            Shenzhen Institute for Advanced Study, UESTC. His
+                            research interests include edge intelligence, agentic
+artificial intelligence, and agentic reinforcement learning.
+
+
+
+
+                          Junhua Wang (Member, IEEE) received the BS
+                          degree and PhD degree in computer science from
+                          Chongqing University, in 2014, and 2019, respec-
+                          tively. From 2017 to 2018, she was a visiting
+                          scholar in University of Houston, USA. Now she
+                          is an associate professor of the school of computer
+                          science and engineering, Northeastern University. Her
+                          research interests include mobile computing, internet
+                          of vehicles, and wireless networks.
+
+
+
+
+                          Lixin Duan ((Member, IEEE) received the B.E. de-
+                          gree from the University of Science and Technology
+                          of China, Hefei, China, in 2008, and the Ph.D. degree
+                          from Nanyang Technological University, Singapore,
+                          in 2012. He is currently a Full Professor with the
+                          University of Electronic Science and Technology
+                          of China. His current research interests include
+                          transfer learning, multiple instance learning, and their
+                          applications in computer vision and data mining.
+
+
+
+
+                          Xiao Wu (S’05-M’08) received the B.Eng. and M.S.
+                          degrees in computer science from Yunnan University,
+                          Yunnan, China, in 1999 and 2002, respectively, and
+                          the Ph.D. degree in Computer Science from City
+                          University of Hong Kong, Hong Kong in 2008.
+                          Currently, he is a Professor and the Assistant Dean
+                          of School of Computing and Artificial Intelligence,
+                          Southwest Jiaotong University, Chengdu, China. He
+                          was with the Institute of Software, Chinese Academy
+                          of Sciences, Beijing, China, from 2001 to 2002. He
+                          was a Research Assistant and a Senior Research
+Associate at the City University of Hong Kong, Hong Kong, from 2003 to
+2004, and 2007 to 2009, respectively. He was with the School of Computer
+Science, Carnegie Mellon University, Pittsburgh, PA, USA, and at School of
+Information and Computer Science, University of California, Irvine, CA, USA
+as a Visiting Scholar during 2006 to 2007 and 2015 to 2016, respectively. He
+has authored or co-authored more than 100 research papers in well-respected
+journals, such as TIP, TMM, TMI and prestigious proceedings like CVPR,
+ICCV and ACM MM. He received the Second Prize of Natural Science Award
+of the Ministry of Education, China in 2016 and the Second Prize of Science
+and Technology Progress Award of Henan Province, China in 2017. His
+research interests include artificial intelligence, computer vision, multimedia
+information retrieval, and image/video computing.
+

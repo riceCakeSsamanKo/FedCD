@@ -1,0 +1,751 @@
+                                                                                                                                                           FedEXT: Differential Federated Learning with
+                                                                                                                                                            Complementary Extension of Edge Models
+                                                                                                                                                                                   Zhenyu Wang                                                           Shahriar Nirjon
+                                                                                                                                                                 University of North Carolina at Chapel Hill                            University of North Carolina at Chapel Hill
+                                                                                                                                                                           Chapel Hill, NC, USA                                                   Chapel Hill, NC, USA
+                                                                                                                                                                             zywang@cs.unc.edu                                                       nirjon@cs.unc.edu
+IEEE INFOCOM 2025 - IEEE Conference on Computer Communications | 979-8-3315-4305-1/25/$31.00 ©2025 IEEE | DOI: 10.1109/INFOCOM55648.2025.11044645
+
+
+
+
+                                                                                                                                                       Abstract—We introduce FedEXT, an innovative federated
+                                                                                                                                                    learning framework designed to address the challenges of plat-                                                                 Server
+                                                                                                                                                    forms with limited communication and computational resources.
+                                                                                                                                                                                                                                                        B1                                  BN
+                                                                                                                                                    FedEXT employs a unique factorization-based methodology com-                                                         B2
+                                                                                                                                                    plemented by a paired neural network extension to improve
+                                                                                                                                                    model transmission and local training efﬁciency. This approach
+                                                                                                                                                    enables FedEXT to achieve the accuracy of larger models, which
+                                                                                                                                                                                                                                           Client 1           Client 2
+                                                                                                                                                                                                                                                                                   …             Client N
+
+
+                                                                                                                                                                                                                                              E1                 E2                                 EN
+                                                                                                                                                    would otherwise be infeasible for federated learning on edge
+                                                                                                                                                    devices with stringent communication budgets. A key component                                                        Clients
+                                                                                                                                                    of FedEXT is its periodic scheduler, which works in conjunction                                           (a) Typical Methods
+                                                                                                                                                    with local and global controllers to effectively manage model
+                                                                                                                                                    transmission. This scheduler uses a distinct learning and ag-                                                                  Server
+                                                                                                                                                    gregation strategy to update the model parameters on local
+                                                                                                                                                    edge devices and the cloud server. The effectiveness of the                                         B1                                  BN
+                                                                                                                                                                                                                                                                         B2
+
+                                                                                                                                                                                                                                                                                   …
+                                                                                                                                                    framework is validated in both dataset-driven and real-world                           Client 1           Client 2                           Client N
+                                                                                                                                                    scenarios, demonstrating signiﬁcant efﬁcacy. FedEXT achieves
+                                                                                                                                                    improvements in accuracy ranging from 16% to 22% and a
+                                                                                                                                                                                                                                           E1 + C 1           E2 + C 2                           EN + C N
+                                                                                                                                                    reduction in energy consumption by 29% to 34% compared to
+                                                                                                                                                    several state-of-the-art methods.
+                                                                                                                                                                                                                                                                         Clients
+                                                                                                                                                       Index Terms—Federated Learning, Complementary Neural                                                     (b) Our Approach
+                                                                                                                                                    Network
+                                                                                                                                                                                                                                  Fig. 1: Traditional approaches use less-accurate edge models Ei for
+                                                                                                                                                                                                                                  training efﬁciency and to meet communication budgets. FedEXT
+                                                                                                                                                                            I. I NTRODUCTION
+                                                                                                                                                                                                                                  combines edge Ei and complement Ci models, achieving higher
+                                                                                                                                                       In recent years, driven by heightened privacy concerns,                    accuracy and training efﬁciency while staying within budget Bi .
+                                                                                                                                                    direct access to user data harvested by embedded and mobile
+                                                                                                                                                    devices from the cloud has become both undesirable and                           Recent research [9]–[11] has introduced innovative methods
+                                                                                                                                                    prohibitive [1]. In response to this pressing issue, federated                to improve federated learning efﬁciency by transmitting and
+                                                                                                                                                    learning [2]–[8] has surged to the forefront as a collaborative               training subgraphs or partial layers of smaller models. How-
+                                                                                                                                                    learning paradigm, harnessing the power of multiple clients to                ever, a major bottleneck remains: achieving both high global
+                                                                                                                                                    train a deep neural network. This approach fosters robust and                 accuracy and high local training efﬁciency simultaneously.
+                                                                                                                                                    effective learning by focusing on the transmission of local                   This difﬁculty is mainly due to the inﬂexibility and overly
+                                                                                                                                                    model parameters, thus expertly avoiding the exposure and                     specialized nature of these approaches [9], [11], [12], along
+                                                                                                                                                    transmission of sensitive data between the edge and the cloud.                with additional hardware-software requirements [13].
+                                                                                                                                                    Through the aggregation of parameters from locally trained                       To achieve superior global accuracy, one might consider
+                                                                                                                                                    models in an iterative process, this distributed learning frame-              using high-accuracy models. However, these models are typ-
+                                                                                                                                                    work ensures strong privacy capabilities while simultaneously                 ically larger and less computationally efﬁcient, exceeding the
+                                                                                                                                                    delivering superior model performance at the edge.                            transmission bandwidth and computational capacities of edge
+                                                                                                                                                       Unfortunately, achieving practical implementation of feder-                devices. This results in increased transmission costs and local
+                                                                                                                                                    ated learning systems poses signiﬁcant challenges in terms of                 training inefﬁciency. Thus, a new design paradigm is needed
+                                                                                                                                                    in-network communication efﬁciency, local training efﬁciency,                 to balance these conﬂicting optimization goals effectively.
+                                                                                                                                                    and overall model accuracy. These optimization goals often                       In this paper, we introduce FedEXT, a new federated
+                                                                                                                                                    conﬂict, making the development of federated learning sys-                    learning paradigm that achieves high global accuracy by
+                                                                                                                                                    tems difﬁcult, especially in resource-constrained settings. With              incorporating a complement network into the edge model.
+                                                                                                                                                    limited transmission bandwidth and computational power at                     The complement network is designed to complement the
+                                                                                                                                                    the edge, choosing the right model and designing an effective                 edge model’s feature representation while remaining compact
+                                                                                                                                                    communication scheme are critical decisions.                                  and efﬁcient for transmission and training. During inference,
+
+
+
+
+                                                                                                                                                             Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+the combined network (edge and complement) achieves the                         (GJH               7UDQVPLVVLRQ        (GJH
+                                                                                                                                  (GJH0RGHO6L]H
+                                                                                                                                                     &RPSOH
+                                                                                'HYLFH              0RGHO6L]H        'HYLFH                         PHQW
+accuracy of a state-of-the-art high-accuracy model. During                                                                                            0RGHO
+                                                                                                                                                      6L]H
+training, intelligent scheduling of edge and complement model
+transmissions ensures training efﬁciency and adherence to                              (a) Typical Methods                      (b) Our Approach
+communication budgets (e.g., energy cost). Figure 1 illustrates
+                                                                              Fig. 2: Transmission models used in different federated learning
+how the FedEXT model duo (edge and complement) meets                          methods.
+the accuracy, training efﬁciency, and transmission budget
+goals. Due to communication and training budget constraints,                                          Commu-        Model          Local         High
+traditional methods must rely on smaller edge models, which                          Method            nication     Hetero-      Training       Global
+results in lower accuracy.                                                                            Efﬁciency     geneity      Efﬁciency     Accuracy
+                                                                                   FedAvg [1]                                                  
+   The construction of FedEXT presents two major challenges                       pFedAtt [14]                                                 
+in achieving the desired overhead efﬁciency and global accu-                      pFedMe [15]                                                  
+racy performance. First, a strategic approach is needed to guide                 LG-FedAvg [11]                                                
+                                                                                   Hermes [9]                                                  
+the timing for transmitting edge and complement models. This                      FedMask [16]                                                 
+method should consider the learning progress of both models                       FedDST [10]                                                  
+to achieve high global accuracy during model aggregation on                      FedEXT (Ours)                                                 
+the server side while maintaining communication consumption                                    TABLE I: Framework Comparison.
+at an acceptable level. Second, a speciﬁc training policy is
+required to handle the fusion of the complementary extension
+                                                                                                          II. M OTIVATION
+module and the edge model. The complement network ﬁlls
+in the missing features that the edge model does not capture                  A. Feasibility Analysis
+in an efﬁcient and compact form. This relationship between
+the edge and complement models is maintained throughout the                      Federated learning, a scalable and privacy-preserving ap-
+local training process until the end of the learning phase.                   proach to model training, has garnered signiﬁcant attention in
+   To address these challenges, we propose an adaptive dy-                    recent years [17]–[23]. While the method is well-suited for
+namic scheduler and a specialized training policy. First, to                  collaborative learning across multiple client devices, it poses
+tackle the challenge of efﬁcient model transmission, we intro-                signiﬁcant challenges for resource-constrained edge devices.
+duce an adaptive scheduler that generates a cycle parameter                   In such environments, the periodic exchange of model param-
+to transmit the edge model based on the learning progress of                  eters incurs substantial time and energy overhead, impacting
+the edge and complement models. The scheduler determines                      the overall efﬁciency and practicality of the system. Common
+whether the server should send both models or only the                        practice [1], [14], [15] in these scenarios is to use low-
+complement model to the selected clients, with local training                 overhead, and thus relatively less accurate, weak models at
+behavior adjusted accordingly. This dynamic adjustment en-                    the edge devices to mitigate these issues.
+sures a manageable and efﬁcient design as the models evolve.                     We propose a new paradigm called differential federated
+   Second, to handle the fusion of the complementary exten-                   learning to address these challenges. Instead of relying on a
+sion module and the edge model, we employ an instance-wise                    single model, we use a pair of complementary models (edge
+negative correlation term to preserve their relationship, ensur-              and its complement) that together mimic the accuracy of a
+ing that the complement model effectively complements the                     larger, more accurate model while keeping the training and
+edge model’s feature representation capability. The objective                 transmission overhead low. The complement network, being
+function includes a regression term between the fused output                  compact and complementary in its capabilities, enables clients
+and the ground truth and a regularization term to force the                   to send this smaller network for most communication rounds
+complement model to focus on the relevant features. Addi-                     and occasionally send the full network when necessary. This
+tionally, we ensure ﬂexibility in transmitting and aggregating                strategy signiﬁcantly reduces the overall cost by carefully
+complement models of varying sizes to accommodate each                        scheduling the transmission of the two lower-overhead models,
+client’s transmission constraints.                                            thus optimizing the amortized cost of learning.
+   To demonstrate the efﬁcacy of FedEXT, we conduct com-                         We can derive the condition for differential federated learn-
+prehensive evaluations in both dataset-driven and real-world                  ing to be more cost-effective than state-of-the-art approaches
+deployment scenarios. The dataset-driven evaluation involves                  by controlling the fraction of time, 0 < f < 1, when only the
+multiple datasets and state-of-the-art baselines, encompassing                complement model is sent to the server. As shown in Figure 2,
+more than 106,000 images and 18 federated learning settings.                  we assume the costs of transmitting the complement and edge
+Additionally, real-world experiments are conducted with 10                    models are c and e, respectively. Additionally, let s be the size
+participants using over 1,000 user-collected images to assess                 of the edge network portion that is sent and received by the
+FedEXT’s performance in deployment settings. The evaluation                   state-of-the-art. The condition is formulated as follows:
+shows that FedEXT achieves 16%-22% higher accuracy and                                         f × c + (1 − f ) × (c + e) < s × 1
+29%-34% lower energy consumption compared to multiple                                                   s − c                                           (1)
+state-of-the-art approaches.                                                                   0< 1−             <f <1
+                                                                                                           e
+
+
+
+         Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+   For example, in a federated learning approach that ex-                                     Edge Device                                 Server
+changes an average of 50% of the parameters compared to the                       Private                                     Global             Model
+original edge model (i.e. s = 0.5e) in each communication                         Dataset                                    Controller        Aggregation
+                                                                                                                  Compl-
+round, we can ﬁnd a feasible f as long as the complement                                        Edge Feature
+                                                                                                                  mentary
+                                                                                                  Extractor
+network is less than 50% of the combined size of edge and                         Local                           Module
+                                                                                                                             Initialization
+                                                                                 Controller
+complement. Speciﬁcally, if the edge model is 10MB, then                                                                                      Complement
+                                                                                                                               Public
+s = 0.5e = 5MB for a typical transmission approach. By                            Reliable                                    Dataset
+                                                                                                                                                Network
+                                                                                                     Classifier                               Construction
+                                                                                 Prediction
+choosing a complement model with a size of 1MB, we achieve
+a 30% communication cost reduction with f = 0.75.
+                                                                                                      Fig. 3: Design of FedEXT.
+B. Qualitative Comparison with State-of-the-art
+   Federated learning methodologies designed for edge com-                    for aggregation. After the server aggregates the parameters,
+puting typically aim to optimize communication efﬁciency,                     the updated model is downloaded by the clients for further
+model heterogeneity, local training efﬁciency, and global ac-                 training. This process is repeated for several rounds until the
+curacy. In Table I, we compare our proposed FedEXT with                       model converges. FedEXT follows a similar process with a
+state-of-the-art federated learning baselines across these key                notable difference. In FedEXT, each client operates a fusion
+properties of efﬁcient federated learning. Among these, the                   of two complementary models (edge and complement). Dur-
+following three baselines are the closest compared to FedEXT.                 ing each round, only the complement model is sent to the
+• FedAvg [1]: The classical federated learning framework
+                                                                              central server, while the edge model is transmitted at a much
+   performs learning iteratively by conducting local training                 lower frequency. This approach leverages the complementary
+   on client devices and then transmitting the results to the                 strengths of the two models to achieve higher global accuracy
+   server. The server simply averages the collected weights                   while optimizing communication efﬁciency by heuristically
+   and re-distributes them back to each client.                               ﬁnding the optimal frequency of edge model transmissions.
+• Hermes [9]: A federated learning framework for personal-
+                                                                              This frequency scheduling not only guides the model trans-
+   ization involves performing local structured pruning during                mission but also manages the local training of complement
+   each communication round under certain conditions. The                     and edge models. As a result, the efﬁciency of local training
+   methodology identiﬁes a subnetwork, which is then trans-                   computations is also improved. Moreover, FedEXT considers
+   mitted to the server for aggregation. This method signiﬁ-                  the communication and computation constraints of each client
+   cantly improves communication and local training efﬁciency                 device to accommodate model heterogeneity. We also use a
+   while providing a desired personalization performance.                     mask-aware model aggregation method to handle the varying
+• FedDST [10]: The state-of-the-art federated learning frame-
+                                                                              sizes of weight parameters across different client devices. This
+   work employs dynamic sparse training with unstructured                     design offers substantial ﬂexibility and scalability, enabling it
+   pruning to improve client model sparsity. It introduces                    to effectively handle model heterogeneity.
+   strategic transmission for the pruned subnetwork and mask.                 B. System Design
+   However, its computational efﬁciency is limited by hard-
+   ware and software constraints due to the usage of unstruc-                    The entire system consists of multiple components cooper-
+   tured pruning technique.                                                   ating together to achieve a high global accuracy performance
+                                                                              as well as low communication and local training energy
+   FedAvg fails to be effective in all four key properties.
+                                                                              consumption. The system initialization, model aggregation,
+FedDST faces challenges in ﬂexible model heterogeneity and
+                                                                              and global control are executed on the server side, while the
+training efﬁciency, and Hermes fails to achieve high global
+                                                                              local control and training are performed on each client device.
+accuracy. Our proposed FedEXT excels in all four properties,
+                                                                              Figure 3 illustrates the interactions between a client and the
+as assessed in both dataset-driven evaluations and real-world
+                                                                              server in FedEXT. There are four major steps:
+deployment experiments (details are described in Section V
+and Section VI).                                                              • Step 1 – Initialization: At ﬁrst, a light-weight edge model,
+                                                                                 and a computationally heavy but relatively more accurate
+                     III. F ED EXT D ESIGN                                       base model are chosen or created, e.g., by utilizing pre-
+  We describe a new factorization-based federated learning                       trained models [24] for resource-constrained systems, or by
+approach — FedEXT that uses a pair of low-overhead models                        training such models from scratch. A complement model is
+(edge and its complement) to signiﬁcantly lower the cost of                      constructed at the server using base and edge models, as
+communication and local training while increasing the global                     well as a public dataset based on the given communication
+accuracy performance.                                                            budget. The fusion of edge and the complement models —
+                                                                                 which achieve equivalent feature representation capability
+A. Overview                                                                      to the base model when fused together — are pushed to all
+   In typical federated learning, two or more client devices                     clients. The base model is no longer required after this step.
+train their models locally on private datasets. These client                  • Step 2 – Local Training. Each client uses its own private
+devices then upload their model parameters to a central server                   dataset to locally train the complement model as well as
+
+
+
+
+         Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+                                                                                                         Input
+  a portion of the edge model that extracts features. The                                                                  Public Dataset
+  complement model is trained in every single communication
+  round; however, the training process of the edge model
+  is synchronized with the transmission scheduling strategy
+  handled by the local controller of each client device. To
+  achieve a proper learning behavior, the weight parame-
+  ter updates follow a specially designed objective function
+  that leverages their complementary properties. The detailed
+  training process is presented in Section IV-B.
+• Step 3 – Communication. When local training ends, the
+  loss values of the complement and the edge networks are
+  sent to the server. At the server, these values are summed                              Edge Feature     Complement Feature        Base Feature
+
+  and compared by a controller to determine whether to                        Fig. 4: The constructed complement network MC complements the
+  instruct the client to train only the complement model or                   feature representation of the edge model ME to achieve a similar
+                                                                              feature representation as the base model MB when they are fused
+  both (edge and complement) using the following criteria:                    (complement + edge).
+  ΔLC
+  ΔLE > Cthresh , where, ΔLE and ΔLC denote the per-
+  centage drop in loss since the edge and the complement                      to client devices. Both the base model and the edge model are
+  models were sent to the server, and Cthresh is a constant                   pretrained on this public dataset for initialization. The com-
+  that controls how frequently the edge model is sent along                   plement model is designed with the speciﬁc capability to learn
+  with the complement. As such, an adaptive periodic com-                     and capture the critical features that the initialized edge model
+  munication scheduler is constructed based on the learning                   misses but are successfully identiﬁed by the high-accuracy
+  progress of edge and complement model. More details are                     base model. This feature learning is accomplished in a highly
+  presented in Section IV-C.                                                  compact form, making the complement model lightweight to
+• Step 4 – Aggregation. The server aggregates the edge mod-
+                                                                              meet the communication budgets of model transmission. To
+  els by taking an weighted average following standard fed-                   achieve this, the complement model leverages a state-of-the-art
+  erated learning practices [1]. Since the architecture of com-               structured subgraph extraction technique [25], which enables
+  plement may vary across clients due to different overhead                   the complement model to partially distill the essential feature
+  constraints, their neurons are averaged by the overlapping                  representation capabilities of the base model into a much
+  frequency based on their masks. This aggregation technique                  smaller and computationally efﬁcient form with adjustable
+  ensures that the model preserves its learned knowledge                      sparsity for each layer. This design strategy ensures that the
+  while allowing for the manageable merging of these updated                  complement model enhances the prediction performance of the
+  weights, even when they vary in size. In the end, the                       edge model without imposing heavy computational demands,
+  aggregated models are distributed to the participating client               such that its lightweight nature is particularly beneﬁcial in fed-
+  devices.                                                                    erated learning settings with constrained transmission budgets.
+              IV. C ONSTRUCTION OF F ED EXT                                   Complement Network Construction. The mask used for
+   In this section, we present the detailed steps of FedEXT                   extracting the architecture of subgraph from base model is
+construction, including system initialization, local model train-             created by ﬁnding the appropriate corresponding sparsity rate
+ing, communication scheduler construction, and model aggre-                   of each layer after applying the optimization framework,
+gation. These methodologies form a cohesive framework for                     which utilizes the expanded graph derived from base model
+implementing FedEXT, balancing high accuracy with efﬁcient                    to learn the optimal layer-wise sparsity rate. This process is
+resource utilization.                                                         iteratively applied to create a lightweight subgraph backbone
+A. System Initialization                                                      that preserves essential feature representation capability for
+                                                                              complementing edge model. After determining the architecture
+Overview. Proper initialization sets a solid foundation for fur-              of complement model, we construct the complement feature
+ther communication scheduling and model learning to achieve                   extractor, which fuses features extracted by both the edge
+high global accuracy in FedEXT. At the heart of this process                  model and the base model’s subgraph to adhere to their com-
+is the construction of a compact complement network module,                   plementary behavior. The complement network is explicitly
+designed to support the edge model’s predictions while mini-                  ﬁne-tuned by using the following objective function to ensure
+mizing communication and computation resource consumption                     it complements the edge network’s capability to represent
+during the iterative cooperative learning. By using a carefully               input data:
+designed policy to complement the feature representation of
+the edge model, the fusion of complement and edge model                                Lcomplement = λ0 LM SE + λ1 LF N C + λ2 LSR                  (2)
+ensures efﬁcient and effective prediction performance.                        , where LM SE is the Mean Square Error (MSE) loss func-
+Design Proposition. The server hosts a public dataset used                    tion, ensuring that the quality of the fused feature (edge +
+for constructing the complement model before distributing it                  complement) closely matches the base model’s feature; LF N C
+
+
+
+
+         Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+is the feature-wise negative correlation term [25], [26], which               complement model using the l2 -norm between their output and
+enables complementarity between the edge and complement                       ground truth as criterion. Speciﬁcally, the parameter updating
+models; LSR is the sparsity regularization term to make the                   process is formulated as below:
+complement network focus on the relevant features [27]. The                                 WT +1 := WTclassiﬁer − η∇WTclassiﬁer +
+hyperparamters λ0 , λ1 and λ2 control the relative strength
+of corresponding terms. During the ﬁne-tuning of complement                                                 WTcomplement − η∇WTcomplement +        (3)
+model, edge and base models are frozen, only the complement                                                 1LC (WTedge − η∇WTedge )
+model’s weight parameters are learnable. Noting that the fused
+model (edge + complement) has a lower computational cost                      , where WT +1 is the learnable weight parameters updated at
+and smaller parameter size compared to the base model,                        round T + 1 in local device; WTedge and WTcomplement are the
+while achieving similar feature representation capability. In                 weight parameters of edge feature extractor and complement
+Figure 4, we present an example image contains a truck from a                 model including their measuring blocks in round T , respec-
+public CIFAR10 [28] dataset that is misclassiﬁed by the edge                  tively; WTclassiﬁer is the classiﬁer portion that generates the ﬁnal
+model ME but correctly predicted by the base model MB .                       output by taking the fused feature from edge and complement
+The complement network, denoted as MC , complements the                       model; η is the learning rate for updating the parameters;
+missing features (i.e., the windshield, headlights and bumper                 1LC (·) is the indicator function that is activated when signal
+of the truck) that the edge model ME fails to capture. As                     from local controller is released. Unlike the complement model
+a result, ME ’s error is corrected after adding these missing                 construction process, the edge model is learnable during the
+features, achieving a similar feature representation capability               training of FedEXT, which is included inside the optimization
+as MB when it is fused with MC .                                              scope for each client device accordingly. Noting that the
+                                                                              size of weight parameters of complement network is not the
+B. Local Model Training                                                       same across different devices. Due to varying communication
+                                                                              and device computation power constraints, we use different
+Overview. In this section, we delve into the details of local
+                                                                              sizes of complement models to adapt to various types of
+training in FedEXT. The models distributed to each client
+                                                                              devices and resource budget restrictions, incorporating model
+device need proper learning guidance to adapt to the pro-
+                                                                              heterogeneity for FedEXT.
+posed federated learning framework. The updating policy of
+                                                                                 The objective function for local training is similar to Equa-
+learnable parameters and objective functions are carefully
+                                                                              tion (2), however, the negative correlation term is adjusted as
+designed and coordinated with the communication scheduler to
+                                                                              follows due to the lack of base model’s feature representation
+achieve stable and synchronized behavior, while preserving the
+                                                                              during local training:
+complementary behavior between the edge and complement
+models. This scheduling-based design enables a more ﬂexible                                     LN C = λa Lcorr + λb LC + λc LE                    (4)
+and efﬁcient model training process, achieving high accuracy
+with limited communication and computation budgets.                           , where each loss term is presented in details as below
+
+                                                                                                 1   (i)                
+Design Proposition. After initialization, both the complement                                           N
+                                                                                                             (i)    (i) (i)
+and edge models are distributed to each client device, where                          Lcorr =          dE − dE||C dC − dE||C                       (5)
+they undergo training using the respective private datasets                                      N i=1
+collected by each user. Unlike traditional federated learning
+                                                                                                              1   (i)       2
+                                                                                                                  N
+approaches that update the edge model in every communi-                                                                   (i)
+                                                                                                   LC =             dC − dGT                       (6)
+cation round, we introduce a scheduler-based methodology                                                      N i=1
+aimed at optimizing efﬁciency. This methodology updates cor-
+                                                                                                              1   (i)       2
+responding model parameters only when necessary, effectively                                                      N
+                                                                                                                          (i)
+reducing communication costs and conserving local training                                         LE =             dE − dGT                       (7)
+energy (details of the scheduling process is presented in                                                     N i=1
+Section IV-C). A local controller guides the learning progress                        (i)         (i)
+                                                                              The dC and dE is the respective output of the measuring
+of the edge feature extractor and the complement network,                     blocks of edge feature extractor and complement network for
+enabling training either solely for the complement network                                                                   (i)
+                                                                              the i-th (1 ≤ i ≤ N ) local training example. dE||C is the fused
+or for both. The local training process is tightly integrated                 output after combining the outputs of measuring blocks from
+with the communication strategy between clients and server,                                                                 (i)
+                                                                              the edge and complement models together. dGT is the ground
+ensuring precise tracking of parameter updates and cohesive                   truth of the i-th local training example collected by the user.
+integration of model learning and communication.                              λa , λb and λc represents the contribution of each loss term to
+Objective of Local Training. To measure the learning                          negative correlation learning. Similarly, instead of measuring
+progress of the edge feature extractor and the complement                     from the perspective of feature representation, the MSE term
+model, we create a lightweight measuring block for each                       of Equation (2) is adjusted to instance-wise measurement using
+model, using Multi-Layer Perceptron. This block computes the                  cross-entropy due to the lack of base model in the local edge
+feature representation quality of the edge feature extractor and              device.
+
+
+
+
+         Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+C. Communication Scheduler                                                    for communication and local training. Similarly, a reduction
+                                                                              step rate hyperparameter τ is provided for smooth updates.
+Overview. In this section, we introduce a strategic method                       By utilizing the above deﬁnitions and the introduced pa-
+for transmitting two models (edge and complement). Given                      rameters, we construct a scheduler updating scheme for global
+the lightweight nature of the complement model in terms                       controller, as such, when the current cycle budget is consumed
+of parameter size and computational efﬁciency, our primary                    exhaustively, we follow below formula to compute the next cy-
+focus is to design an effective communication strategy for the                cle period p[T +1] to guide the subsequent model transmission
+edge model. This strategy aims to ensure that the edge model                  and local training behavior:
+matches the learning progress of the complement model while                                     
+maintaining relatively low resource consumption. It determines                                    p[T ] + φ × CT , if CT > Cthresh
+when to send both models or only the complement model.                             p[T + 1] =                                            (11)
+                                                                                                  p[T ] − τ × CR , otherwise
+This strategy is presented in a scheduler form that is easy
+to integrate into the federated learning scheme, enabling a                      In an extreme case, when LE is not changing and becomes
+manageable design.                                                            stable, training the edge model becomes less critical, making
+                                                                              more frequent transmission and local training unnecessary.
+Design Proposition. To ensure the correct transmission ar-                                                    p[T ]
+                                                                              Speciﬁcally, when we have ΔLE → 0, the corresponding
+rangement, we propose a communication scheduler based
+                                                                              CT → +∞, which leads to a fairly large p[T ]. However,
+on the learning progress of models running in the client
+                                                                              this may also occur during the middle of training due to the
+devices. An adaptive transmission cycle p[T ] is deﬁned, which
+                                                                              oscillation of the learning process. To avoid this potential
+evolves with respect to round T based on the current learning
+                                                                              inappropriate update, we set an upper bound for p[T ] to
+progress of edge and complement models. Brieﬂy speaking,
+                                                                              prevent the updating cycle from becoming too large.
+after determining the transmission cycle p[T ], edge model is
+transmitted in every p[T ] rounds, and complement model is                    D. Model Aggregation
+transmitted in every single round, thanks to its lightweight size
+and low computational cost. The calculation of p[T ] is only                  Overview. In this section, we describe the mask-aware model
+activated after consuming the current idling budget, as such, at              aggregation technique to handle the model heterogeneity dur-
+the end of p[T ] cycle period, edge model is updated once for                 ing the iterative training in FedEXT. As we have discussed
+both local training in client devices and server-client model                 in Section IV-A, a standard complement model is constructed
+transmission. Then p[T ] is re-computed again to prepare for                  during system initialization. This complement network can be
+the next cycle period.                                                        further pruned based on the l2 -norm criterion with adjustable
+                                                                              sparsity since a sparse regularization term is used during its
+Scheduler Construction. Our design goal is to enable a more
+                                                                              ﬁne-tuning. We assign different masks to each client model
+ﬂexible increment of p[T ] to optimize the communication
+                                                                              based on their communication and device computation con-
+costs and local training energy consumption, while keeping
+                                                                              straints. These masks are applied to the standard complement
+the decrease of p[T ] manageable and not over-reduced to avoid
+                                                                              network to generate specialized complement models for each
+potential unnecessary resource allocation. To achieve this, we
+                                                                              client. A model aggregation approach is used to transform the
+introduce a directional cycle updating unit for increasing the
+                                                                              various local models to a standard size without losing their
+p[T ] when it is needed:
+                                                                              preserved weight information.
+                                ΔL1C  ΔLE
+                                             p[T ]
+                     CT =                                              (8)    Design Proposition. The models that transmitted to server
+                                LTC−1 LTE−p[T ]                               needs an extra process before re-distributing them back to the
+                                                                              clients. A common approach [1] is to compute the average
+, where we have the following deﬁnitions:
+                                                                              weights across different models received from clients. This
+                        p[T ]              T −p[T ]
+                   ΔLE          = |LTE − LE           |                (9)    approach requires all models to have the same architecture
+                                                                              to ensure the weight parameters have the same shape. This
+                      ΔL1C = |LTC − LTC−1 |                          (10)     model aggregation approach is suitable for the unchanged
+                                                                              edge model; however, it requires a more sophisticated design
+Here, LTE and LTC represent the summation of loss values of
+                                                                              for the complement model, which can be adjusted in shape
+the edge and complement models at communication round T
+                                                                              and size to accommodate frequent transmissions and varying
+from all the selected clients, following Equations (6) and (7),
+                                                                              communication budgets for a more ﬂexible federated learning
+respectively. When the increment unit CT is greater than a
+                                                                              system. To handle this challenge, we use a mask-aware model
+predeﬁned threshold Cthresh , the new period cycle is increased
+                                                                              aggregation technique similar to [9] that considers the over-
+by φ × CT , where φ is the step rate only for increasing
+                                                                              lapping frequency of each weight element when performing
+the cycle p[T ]. For decreasing the p[T ], since we have less
+                                                                              the aggregation on the edge and complement models.
+tolerance for potential oscillation in reduction that leads to a
+much higher frequency for transmitting edge model, we use a                   Mask-Aware Aggregation. We deﬁne a function g(W, M ) =
+ﬁxed reduction unit CR to achieve balanced and controllable                   W  M , which takes the weight parameters as input and
+cycle updates, avoiding potential over-allocation of resources                applying the predeﬁned structured mask M to generate sparse
+
+
+
+
+         Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+                                                                                                                 Complement         Mixture       Enhancement
+                   0.5 0.4 -0.3          1.0 0.8               1.5
+                                                                                                                  (62.35%)         (15.56%)         (22.09%)
+             1.0       2.0 1.6     0.7        1.5 2.2    0.1         0.4 0.7
+
+
+
+
+                                                                                          Percentage
+             0.8 1.5 2.2 2.6       1.9 3.1 2.0          -0.3 0.2
+
+                   1.5 0.7 2.0           3.5 1.1 0.8           0.1 -0.6
+
+
+
+                   3.0 1.2 -0.3     0     3    2    1          1.0 0.6 -0.3
+
+             1.8       3.9 4.5      3     0    3    3   0.6          1.3 1.5                                                  Overlapping Score
+             2.4 4.8 4.2 2.6        3     3    2    1   0.8 1.6 2.1 2.6               Fig. 6: Distribution of overlapping score between complement and
+                   5.1 1.2 2.8      0     3    3    2          1.7 0.4 1.4            edge models. They are separated into three different categories, with
+                                                                                      the attached percentage that accounts for each.
+Fig. 5: Example of aggregating three weights with different masks:
+Wavg is obtained by summing the three sparse weight matrices —
+W1 , W2 , and W3 , dividing by the aggregated mask representing
+frequencies (M1 + M2 + M3 ). For each weight Wi , the dark gray
+cell is the empty element after applying corresponding mask Mi to
+the original weight matrix.                                                                            (a) Examples of model complement from CIFAR10.
+
+
+weights for the corresponding model or layers using element-
+wise multiplication . Noting that we use structured mask,
+which further allows us to reorganize the masked weight
+                                                                                                       (b) Examples of model enhancement from CIFAR10.
+parameters such that the ultimate weights W  are represented
+in a dense matrix form but with smaller size and computational                        Fig. 7: Different types of complement model behavior from the
+                                                                                      VGG16-VGG8 pair.
+cost. We further construct another function h(W  , M ) = W ,
+which converts the reorganized weight W  back to the sparse
+weight matrix W with its original shape based on the in-                                                  V. DATASET-D RIVEN E VALUATION
+formation from mask M . These functions ensure a smooth                                 We conduct dataset-driven experiments to compare FedEXT
+conversion between the various shapes of local complement                             with state-of-the-art federated learning approaches.
+model and a standard shape for complement model aggregation
+in the server without deteriorating the preserved information.                        A. Construction of Complement Model
+The updating process for complement model is:                                            We select VGG16 [29] as the base model and VGG8 [29]
+                             
+                             K                                                        as the edge model, with parameter sizes of 15.25M and
+                                  h(Wicomplement , Micomplement )                     4.44M, and FLOPS of 0.314G and 0.068G, respectively. The
+       complement
+      Wavg        := i=1                                                       (12)   complement network is constructed by extracting 3.07% of
+                                              
+                                              K
+                                    +              Micomplement                      parameters from the base model, which improves 9.45% of
+                                              i=1                                     accuracy to edge model after the model fusion. We use
+          Wicomplement := g(Wavg
+                             complement
+                                        , Micomplement )                       (13)   CIFAR10 as our public dataset to construct the complement
+                                                                                      network. We present the overlapping score distribution of
+The received model weight parameters Wicomplement from the                            the complement model to understand its behavior in com-
+i-th (1 ≤ i ≤ K) client are ﬁrst transformed back to the pre-                         plementing the features extracted by the edge model. As
+deﬁned shape based on the mask Micomplement . The computation                         shown in Figure 6, we plot the distribution of overlapping
+                              complement
+of neurons for the weight Wavg           involves calculating the                     scores across the samples that are incorrectly predicted by
+overlapping frequencies based on the masks. Consequently,                             the edge model solely but correctly predicted after adding
+each neuron of the averaged weights retains the information                           the complement model. The overlapping score is computed
+from the corresponding multiple devices’ private data distri-                         by using the intersection region between the complement and
+butions. We add , a small perturbation to denominator to                             edge models divided by the complement model’s focused
+avoid overﬂow during element-wise division. An illustration is                        region [25]. There are two peaks in the ﬁgure where the
+shown in Figure 5, given three weight matrices, the averaged                          overlapping score is close to 0 and close to 1. Instances
+result is computed by aggregating both mask and weight                                with a higher overlapping score indicate that the complement
+parameters. In the end, the averaged weights are fed into g(·)                        model enhances the edge model by suppressing noisy regions
+to generate dense weights that have the corresponding shape                           and strengthening critical regions, thereby correcting the edge
+with updated parameters. These newly generated weights are                            model’s predictions. Instances with a lower overlapping score
+transmitted to each client and prepared for the next round.                           show that the complement model complements regions missed
+For the edge model, we follow the traditional way [1] to                              by the edge model, leading to mispredictions. By adding these
+aggregate the models and re-distribute the models back to                             missed features, the fused features are able to provide correct
+the clients. In an ideal scenario, all the client devices use the                     predictions. The overlapping scores that lie in the middle of
+same complement model architecture, such that Equation (12)                           the plot indicate a mixture behavior, which is a combination
+becomes a vanilla averaging operation.                                                of enhancement and complement.
+
+
+
+
+         Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+          Datasets      Total Images     Usage      Test Images
+         CIFAR10           60,000        Public       10,000
+        CIFAR100-S          6,000        Private       1,000
+         EuroSAT           27,000        Private       2,000
+
+           TABLE II: Datasets used in evaluation.
+   Figure 7 presents several examples to illustrate the comple-
+                                                                                    (a) Intra-Domain Scenario              (b) Cross-Domain Scenario
+ment and enhancement behaviors from the CIFAR-10 dataset.
+The blue color highlights the region that the edge model                              Fig. 8: Comparison with federated learning baselines.
+focuses on, while the green color highlights the complement
+model’s activation region. The complement model comple-                                   Models         Param.(M)    FLOPS(M)       Accuracy(%)
+                                                                                        MobileNetV1         7.18         99.18          78.47
+ments the edge model’s feature representation by capturing                                VGG19            20.57        399.27          86.77
+the facial features (e.g., eyes, nose, forehead) of different ani-                       FedEXT             8.43        152.45          85.16
+mals. Additionally, the complement model enhances the edge                           TABLE III: Models used in FedEXT deployment.
+model’s existing features by highlighting the valid regions of
+the target objects when the edge model includes the noisy and                 in turn provides different effects to the model aggregation and
+less critical parts (e.g., background) in its considerations.                 accuracy. As we observe from Figure 8, FedEXT provides
+                                                                              the best trade-off between communication cost and accuracy.
+B. Baseline Conﬁguration
+                                                                              FedEXT can adjust both the scheduling behavior and the mask
+   We simulate 100 clients with four communication budget                     size of the complement model based on varying communi-
+constraints, each allocated to 25% of them. The simulation                    cation constraints. It achieves 78.4% and 85.9% accuracy in
+involves approximately 900 communication rounds to guaran-                    intra-domain and cross-domain tasks with 54.7% and 47.7%
+tee the convergence of the aggregated model at the server. 80                 of communication cost, respectively.
+clients are used per communication round to update the model.
+To achieve non-IID data distribution, each client uses data                                     VI. D EPLOYMENT E XPERIMENT
+from 3 out of 10 classes to assess the capability for handling                   In order to evaluate the performance of FedEXT in real-
+data heterogeneity. The learning rate is 0.001, batch size is 10,             world scenarios, we conduct a week-long deployment experi-
+local training epoch is 2.                                                    ment involving 10 participants who contribute pictures of their
+   We compare FedEXT against FedAvg [1] and two state-of-                     daily food intake using their smartphones. The goal is to train
+the-art approaches: Hermes [9] and FedDST [10]. We eval-                      an image classiﬁer that learns to classify foods in a federated
+uate their performance in two scenarios: intra-domain tasks                   learning setup.
+on similarly distributed public (CIFAR10 [28]) and private
+(CIFAR100-S [28]) datasets, and cross-domain tasks on differ-                 A. Models and Datasets
+ently distributed public (CIFAR10) and private (EuroSAT [30])                    We use VGG19 [29] and MobileNet-V1 [31] with mul-
+datasets. For each scenario, we show the accuracy and com-                    tiplier 1.5 as the base and the edge models, respectively.
+munication overhead of each federated learning technique.                     CINIC10 [32] is used as the public dataset, which contains
+All baselines use the same training conﬁguration as FedEXT                    270,000 images from 10 different categories. Table III shows
+for a fair comparison. Table II provides a summary of the                     the size, FLOPS, and accuracy of these models along with
+datasets. CIFAR100-S denotes a 10-class subset of the original                the fused model between edge and complement network
+CIFAR100 [28].                                                                on CINIC10. The corresponding complement model is con-
+                                                                              structed ofﬂine using one GeForce RTX 2080 Ti with 32GB
+C. Communication Cost and Accuracy                                            of RAM that takes roughly 158 hours to complete the task.
+   Figure 8 (a) and (b) presents a quantitative comparison                    Pictures taken by each participant constitute the private dataset
+of FedEXT with FedAvg, Hermes, and FedDST for intra-                          for that client. Total 1,009 images are taken by the participants
+domain and cross-domain tasks. Since the accuracy and com-                    over the course of the experiment.
+munication cost of these algorithms are related, we present
+their performance on accuracy vs. communication cost scatter                  B. Baseline Conﬁguration
+plots. The communication costs are normalized with respect                      Participants use a custom app on their Google Pixel 2XL
+to FedAvg’s.                                                                  phone which runs four federated learning algorithms (FedEXT,
+   FedDST employs an unstructured pruning-based mask to                       FedDST, Hermes, and FedAvg) in the background to train
+guide the subnetwork of the client model VGG8 but still does                  the local models (sequentially for each algorithm) on the
+not achieve high efﬁciency as FedEXT on either scenario.                      smartphone and to upload/download model parameters to/from
+Hermes employs different subnetworks in each client model                     the server. Each device performs one epoch of local training
+for personalization; however, since the uncommon parts adapt                  with a learning rate of 0.001. The accuracy of the models is
+to the local training data distribution, a biased tendency is                 periodically validated on the phone using ground truth labels
+observed in this case. The compactness of the given local                     obtained from the participants, and the results are averaged.
+client network also affects the subnetwork selection, which                   The total number of communication rounds is approximately
+
+
+
+
+         Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+                                                                                achieves the highest global accuracy. FedDST and Hermes
+                                                                                achieve higher accuracy than FedAvg with much sparser
+                                                                                models but fall short of FedEXT in all scenarios.
+                                                                                                         VII. RELATED WORK
+                                                                                A. Distributed Deep Learning and Federated Learning
+                                                                                   Distributed deep learning algorithms have ﬂourished in
+(a) Accuracy curves of different      (b) Break down of energy consump-         recent years. Signiﬁcant effort has been devoted to optimizing
+baselines.                            tion.
+                                                                                communication costs through various approaches, such as
+Fig. 9: Accuracy and energy consumption comparison with different               quantization [34]–[36] and sparsiﬁcation [37], [38], to enable
+federated learning baselines.                                                   more efﬁcient distributed model learning. As privacy and secu-
+                                                                  X             rity needs for real-world deployment grow, federated learning
+                                                                                has gained attention by keeping data decentralized on client
+                                                                                devices. This type of distributed machine learning paradigm
+                                                                                has been commercially deployed in real-world applications in
+                                                                                recent years [39]. In this decentralized learning framework that
+                                                                                protects user privacy, a server aggregates model parameters
+Fig. 10: Accuracy comparison with different baselines across various            from clients instead of raw data. Models are trained locally on
+number of participants.                                                         edge devices using private datasets. This aggregation of client
+                                                                                models, trained on heterogeneous data distributions, creates a
+100 and the local batch size is 10. The target pruning threshold                robust model capable of handling diverse data across devices.
+for Hermes is 0.3. The network sparsity for FedDST is 0.3.
+                                                                                B. Factorization-based Federated Learning
+C. Energy Consumption and Accuracy                                                 Many works have been proposed to achieve efﬁcient feder-
+   We present the comparison of their accuracy and energy                       ated learning, with one popular approach being model factor-
+consumption among four baselines. Figure 9 (a) shows the                        ization. Federated learning methods based on model factoriza-
+accuracy of each baseline after every four communication                        tion, such as those discussed in [9]–[12], [40], transmit only
+rounds. FedDST and Hermes achieve 3% - 6% higher accuracy                       a fraction of the local model to reduce the communication
+than FedAvg while maintaining higher model sparsity upon                        burden. Approaches that factorize models from a subnetwork
+convergence. A potential reason for FedDST occasionally                         perspective, such as those proposed in [9], [10], [40], require
+performing worse than Hermes is its lack of support for batch                   speciﬁc selection of the substructure of the transmission model
+normalization layers, which are skipped during unstructured                     to retain the desired local/global accuracy, and sometimes need
+pruning on MobileNetV1 in FedDST. FedEXT outperforms                            peculiar software [13] to optimize the local computation cost
+all three baselines, achieving over 15% higher accuracy with                    in edge device due to the unstructured mask type. Moreover,
+the lowest system overhead as training converges.                               a more straightforward layer-wise factorization methods [11],
+   Figure 9 (b) shows the energy consumption of each baseline                   [12] provide less ﬂexibility during the iterative federated
+for a randomly chosen client. The remaining clients show                        training due to the restricted conﬁguration. A similar attention-
+similar energy patterns. Energy is estimated by monitoring the                  based architecture is proposed in [41]; however, their design is
+battery percentage drop in a controlled environment, with the                   constrained to handle time-series tasks. In this paper, we pro-
+active percentage range constrained to avoid regions where the                  pose FedEXT, inspired by the work presented in [25]. FedEXT
+battery behavior exhibits notable nonlinearity. The total energy                excels in communication efﬁciency, local training efﬁciency,
+consumption is estimated from the battery capacity (calibrated                  and global accuracy, while maintaining model heterogeneity
+using AccuBattery [33]), which is broken down into cost                         without speciﬁc software conﬁguration.
+of local training, local validation, and communication. The
+energy spent on validation is sightly higher in FedEXT due                                                VIII. C ONCLUSION
+to the additional complement network, but is still comparable                      In this paper, we propose a novel model factorization-based
+to other baselines. Most of the energy is consumed during                       federated learning method, FedEXT, which provides state-of-
+local training, which is a critical optimization goal in federated              the-art efﬁciency in communication and local training while
+learning systems. FedEXT consumes the least energy for                          achieving high global accuracy. To achieve this, we propose
+communication and local training among all four baselines.                      a communication scheduler to guide the transmission of edge
+   Figure 10 presents the evaluation of different baselines with                and additional complementary extension module to optimize
+varying numbers of participants. As the number of clients                       the communication cost. We further introduce a learning
+involved in the training increases, FedEXT achieves higher                      policy for local and global model updates. Comprehensive
+accuracy due to the richer data distribution and the more                       evaluations against state-of-the-art baselines in both dataset-
+comprehensive learned model parameters. By comparing it                         driven and real-world deployment experiments are conducted
+with other baselines, we observe that FedEXT consistently                       to demonstrate the superiority of the proposed FedEXT.
+
+
+
+
+           Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+                              R EFERENCES                                        [19] Abdulrahman Alabbasi, Milad Ganjalizadeh, Konstantinos Vandikas, and
+                                                                                      Marina Petrova. On cascaded federated learning for multi-tier predictive
+ [1] Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and                   models. In 2021 IEEE International Conference on Communications
+     Blaise Aguera y Arcas. Communication-efﬁcient learning of deep                   Workshops (ICC Workshops), pages 1–7. IEEE, 2021.
+     networks from decentralized data. In AISTATS 2017.                          [20] Mingkun Yang, Ran Zhu, Qing Wang, and Jie Yang. Fedtrans: Client-
+ [2] Dongqi Cai, Yaozong Wu, Shangguang Wang, Felix Xiaozhu Lin,                      transparent utility estimation for robust federated learning. In The
+     and Mengwei Xu. Efﬁcient federated learning for modern nlp. In                   Twelfth International Conference on Learning Representations, 2023.
+     Proceedings of the 29th Annual International Conference on Mobile           [21] Jinhyun So, Kevin Hsieh, Behnaz Arzani, Shadi Noghabi, Salman
+     Computing and Networking, pages 1–16, 2023.                                      Avestimehr, and Ranveer Chandra. Fedspace: An efﬁcient federated
+ [3] Xiaomin Ouyang, Zhiyuan Xie, Heming Fu, Sitong Cheng, Li Pan,                    learning framework at satellites and ground stations. arXiv preprint
+     Neiwen Ling, Guoliang Xing, Jiayu Zhou, and Jianwei Huang. Har-                  arXiv:2202.01267, 2022.
+     mony: Heterogeneous multi-modal federated learning through disentan-        [22] Shenghong Dai, SM Iftekharul Alam, Ravikumar Balakrishnan, Kang-
+     gled model training. In Proceedings of the 21st Annual International             wook Lee, Suman Banerjee, and Nageen Himayat. Online federated
+     Conference on Mobile Systems, Applications and Services, pages 530–              learning based object detection across autonomous vehicles in a virtual
+     543, 2023.                                                                       world. In 2023 IEEE 20th Consumer Communications & Networking
+                                                                                      Conference (CCNC), pages 919–920. IEEE, 2023.
+ [4] Shuaijun Chen, Omid Tavallaie, Michael Henri Hambali, Seid Miad
+                                                                                 [23] Jaemin Shin, Yuanchun Li, Yunxin Liu, and Sung-Ju Lee. Fedbalancer:
+     Zandavi, Hamed Haddadi, Song Guo, and Albert Y Zomaya. Boosting
+                                                                                      Data and pace control for efﬁcient federated learning on heterogeneous
+     client selection of federated learning under device and data heterogene-
+                                                                                      clients. In Proceedings of the 20th Annual International Conference on
+     ity. arXiv preprint arXiv:2310.08147, 2023.
+                                                                                      Mobile Systems, Applications and Services, pages 436–449, 2022.
+ [5] Kunjal Panchal, Sunav Choudhary, Subrata Mitra, Koyel Mukherjee,
+                                                                                 [24] Pytorch ofﬁcial documentation. https://pytorch.org/.
+     Somdeb Sarkhel, Saayan Mitra, and Hui Guan. Flash: concept drift
+                                                                                 [25] Zhenyu Wang and Shahriar Nirjon. Characterizing disparity between
+     adaptation in federated learning. In International Conference on Ma-
+                                                                                      edge models and high-accuracy base models for vision tasks. arXiv
+     chine Learning, pages 26931–26962. PMLR, 2023.
+                                                                                      preprint arXiv:2407.10016, 2024.
+ [6] Meisam Hejazinia, Dzmitry Huba, Ilias Leontiadis, Kiwan Maeng, Mani         [26] Yong Liu and Xin Yao. Ensemble learning via negative correlation.
+     Malek, Luca Melis, Ilya Mironov, Milad Nasr, Kaikai Wang, and Carole-            Neural networks, 12(10):1399–1404, 1999.
+     Jean Wu. Fel: High capacity learning for recommendation and ranking         [27] Wei Wen, Chunpeng Wu, Yandan Wang, Yiran Chen, and Hai Li.
+     via federated ensemble learning. arXiv preprint arXiv:2206.03852, 2022.          Learning structured sparsity in deep neural networks. Advances in neural
+ [7] Hao Zhang, Tingting Wu, Siyao Cheng, and Jie Liu. Fedcos: A scene-               information processing systems, 29, 2016.
+     adaptive enhancement for federated learning. IEEE Internet of Things        [28] Alex Krizhevsky, Geoffrey Hinton, et al. Learning multiple layers of
+     Journal, 10(5):4545–4556, 2022.                                                  features from tiny images. 2009.
+ [8] Liangqi Yuan, Yunsheng Ma, Lu Su, and Ziran Wang. Peer-to-peer              [29] Simonyan Karen. Very deep convolutional networks for large-scale
+     federated continual learning for naturalistic driving action recognition.        image recognition. arXiv preprint arXiv: 1409.1556, 2014.
+     In Proceedings of the IEEE/CVF Conference on Computer Vision and            [30] Patrick Helber, Benjamin Bischke, Andreas Dengel, and Damian Borth.
+     Pattern Recognition, pages 5249–5258, 2023.                                      Eurosat: A novel dataset and deep learning benchmark for land use and
+ [9] Ang Li, Jingwei Sun, Pengcheng Li, Yu Pu, Hai Li, and Yiran Chen.                land cover classiﬁcation. IEEE J. Sel. Top. Appl. Earth Obs. Remote
+     Hermes: an efﬁcient federated learning framework for heterogeneous               Sens., 12(7):2217–2226, 2019.
+     mobile clients. In Proceedings of the 27th Annual International Con-        [31] Andrew G Howard, Menglong Zhu, Bo Chen, Dmitry Kalenichenko,
+     ference on Mobile Computing and Networking, pages 420–437, 2021.                 Weijun Wang, Tobias Weyand, Marco Andreetto, and Hartwig Adam.
+[10] Sameer Bibikar, Haris Vikalo, Zhangyang Wang, and Xiaohan Chen.                  Mobilenets: Efﬁcient convolutional neural networks for mobile vision
+     Federated dynamic sparse training: Computing less, communicating less,           applications. arXiv preprint arXiv:1704.04861, 2017.
+     yet learning better. In Proceedings of the AAAI Conference on Artiﬁcial     [32] Luke N Darlow, Elliot J Crowley, Antreas Antoniou, and Amos J
+     Intelligence, volume 36, pages 6080–6088, 2022.                                  Storkey.     Cinic-10 is not imagenet or cifar-10.         arXiv preprint
+[11] Paul Pu Liang, Terrance Liu, Liu Ziyin, Nicholas B Allen, Randy P                arXiv:1810.03505, 2018.
+     Auerbach, David Brent, Ruslan Salakhutdinov, and Louis-Philippe             [33] Accubattery. https://accubatteryapp.com/.
+     Morency. Think locally, act globally: Federated learning with local and     [34] Dan Alistarh, Demjan Grubic, Jerry Li, Ryota Tomioka, and Milan
+     global representations. arXiv preprint arXiv:2001.01523, 2020.                   Vojnovic. Qsgd: Communication-efﬁcient sgd via gradient quantization
+[12] Hongyi Wang, Mikhail Yurochkin, Yuekai Sun, Dimitris Papailiopoulos,             and encoding. NeurIPS, 30, 2017.
+     and Yasaman Khazaeni. Federated learning with matched averaging.            [35] Jeremy Bernstein, Yu-Xiang Wang, Kamyar Azizzadenesheli, and An-
+     arXiv preprint arXiv:2002.06440, 2020.                                           imashree Anandkumar. signsgd: Compressed optimisation for non-
+[13] Erich Elsen, Marat Dukhan, Trevor Gale, and Karen Simonyan. Fast                 convex problems. In International Conference on Machine Learning,
+     sparse convnets. In Proceedings of the IEEE/CVF conference on                    pages 560–569. PMLR, 2018.
+     computer vision and pattern recognition, pages 14629–14638, 2020.           [36] Frank Seide, Hao Fu, Jasha Droppo, Gang Li, and Dong Yu. 1-bit
+[14] Zichen Ma, Yu Lu, Wenye Li, Jinfeng Yi, and Shuguang Cui. Pfe-                   stochastic gradient descent and its application to data-parallel distributed
+     datt: Attention-based personalized federated learning on heterogeneous           training of speech dnns. In Interspeech, volume 2014, pages 1058–1062.
+     clients. In Asian Conference on Machine Learning, pages 1253–1268.               Singapore, 2014.
+     PMLR, 2021.                                                                 [37] Alham Fikri Aji and Kenneth Heaﬁeld. Sparse communication for
+[15] Canh T Dinh, Nguyen Tran, and Josh Nguyen. Personalized federated                distributed gradient descent. arXiv preprint arXiv:1704.05021, 2017.
+     learning with moreau envelopes. Advances in neural information              [38] Nikita Ivkin, Daniel Rothchild, Enayat Ullah, Ion Stoica, Raman Arora,
+     processing systems, 33:21394–21405, 2020.                                        et al. Communication-efﬁcient distributed sgd with sketching. Advances
+[16] Ang Li, Jingwei Sun, Xiao Zeng, Mi Zhang, Hai Li, and Yiran Chen.                in Neural Information Processing Systems, 32, 2019.
+     Fedmask: Joint computation and communication-efﬁcient personalized          [39] Andrew Hard, Kanishka Rao, Rajiv Mathews, Swaroop Ramaswamy,
+     federated learning via heterogeneous masking. In Proceedings of the              Françoise Beaufays, Sean Augenstein, Hubert Eichner, Chloé Kiddon,
+     19th ACM Conference on Embedded Networked Sensor Systems, pages                  and Daniel Ramage. Federated learning for mobile keyboard prediction.
+     42–55, 2021.                                                                     arXiv preprint arXiv:1811.03604, 2018.
+[17] Xiangyi Chen, Guangjie Han, Yuanguo Bi, Zimeng Yuan, Mahesh K Ma-           [40] Yuang Jiang, Shiqiang Wang, Victor Valls, Bong Jun Ko, Wei-Han
+     rina, Yufei Liu, and Hai Zhao. Trafﬁc prediction-assisted federated deep         Lee, Kin K Leung, and Leandros Tassiulas. Model pruning enables
+     reinforcement learning for service migration in digital twins-enabled            efﬁcient federated learning on edge devices. IEEE Transactions on
+     mec networks. IEEE Journal on Selected Areas in Communications,                  Neural Networks and Learning Systems, 2022.
+     2023.                                                                       [41] JaeYeon Park, Kichang Lee, Sungmin Lee, Mi Zhang, and JeongGil
+[18] Jingwei Sun, Ang Li, Lin Duan, Samiul Alam, Xuliang Deng, Xin Guo,               Ko. Attﬂ: A personalized federated learning framework for time-series
+     Haiming Wang, Maria Gorlatova, Mi Zhang, Hai Li, et al. Fedsea: A                mobile and embedded sensor data processing. Proceedings of the ACM
+     semi-asynchronous federated learning framework for extremely hetero-             on Interactive, Mobile, Wearable and Ubiquitous Technologies, 7(3):1–
+     geneous devices. In Sensys, pages 106–119, 2022.                                 31, 2023.
+
+
+
+
+           Authorized licensed use limited to: Chung-ang Univ. Downloaded on January 21,2026 at 03:29:09 UTC from IEEE Xplore. Restrictions apply.
+

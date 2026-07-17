@@ -1,0 +1,700 @@
+                          Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+
+    Dirichlet-based Uncertainty Quantification for Personalized Federated Learning
+                          with Improved Posterior Networks
+Nikita Kotelevskii2,1 , Samuel Horváth1 , Karthik Nandakumar1 , Martin Takáč1 , Maxim Panov1
+        1
+          Mohamed bin Zayed University of Artificial Intelligence (MBZUAI), Abu Dhabi, UAE
+              2
+                Skolkovo Institute of Science and Technology (Skoltech), Moscow, Russia
+                                       nikita.kotelevskii@skol.tech
+           {samuel.horvath,karthik.nandakumar,martin.takac,maxim.panov}@mbzuai.ac.ae
+
+                           Abstract                                               In this paper, we introduce a new framework to choose
+                                                                               whether to predict with a local or global model at a given
+      In modern federated learning, one of the main chal-                      point based on uncertainty quantification. The core idea is
+      lenges is to account for inherent heterogeneity and                      to apply the global model only if the local one has high
+      the diverse nature of data distributions for different                   epistemic (model) uncertainty [Hüllermeier and Waegeman,
+      clients. This problem is often addressed by intro-                       2021] about the prediction at a given point, i.e., the local
+      ducing personalization of the models towards the                         model doesn’t have enough information about the particu-
+      data distribution of the particular client. However,                     lar input point. In case the local model is confident (either
+      a personalized model might be unreliable when ap-                        in predicting a particular class or in the fact that it is ob-
+      plied to the data that is not typical for this client.                   serving an ambiguous object with high aleatoric (data) uncer-
+      Eventually, it may perform worse for these data                          tainty [Hüllermeier and Waegeman, 2021]), it should make
+      than the non-personalized global model trained in                        the decision itself without involving the global one.
+      a federated way on the data from all the clients.
+                                                                                  As a specific instance of our framework, we propose an
+      This paper presents a new approach to federated
+                                                                               approach inspired by Posterior Networks (PostNet; [Char-
+      learning that allows selecting a model from global
+                                                                               pentier et al., 2020]) and its modification, Natural Posterior
+      and personalized ones that would perform better
+                                                                               Networks (NatPN; [Charpentier et al., 2022]). This model is
+      for a particular input point. It is achieved through
+                                                                               particularly useful for our purposes, as it enables the estima-
+      a careful modeling of predictive uncertainties that
+                                                                               tion of aleatoric and epistemic uncertainties without incurring
+      helps to detect local and global in- and out-of-
+                                                                               additional inference costs. Thus, we can fully implement the
+      distribution data and use this information to select
+                                                                               switching between local and global models efficiently.
+      the model that is confident in a prediction. The
+      comprehensive experimental evaluation on the pop-                        Related work. The literature presents various approaches
+      ular real-world image datasets shows the superior                        to uncertainty quantification in FL settings. In [Linsner et
+      performance of the model in the presence of out-                         al., 2022], the authors suggest that training an ensemble of
+      of-distribution data while performing on par with                        K global models is the most effective for federated uncer-
+      state-of-the-art personalized federated learning al-                     tainty quantification. Despite its effectiveness, this approach
+      gorithms in the standard scenarios.                                      is K times more expensive compared to the classic FedAvg
+                                                                               method. Another proposal comes from [Kotelevskii et al.,
+                                                                               2022b], where the authors recommend using Markov Chain
+1    Introduction                                                              Monte Carlo (MCMC) to obtain samples from the posterior
+The widespread adoption of deep neural networks in vari-                       distribution. However, this method is computationally de-
+ous applications requires reliable predictions, which can be                   manding due to its significant computational complexity.
+achieved through rigorous uncertainty quantification. Al-                         Other works, such as [Chen and Chao, 2021; Kim and
+though uncertainty quantification has been extensively stud-                   Hospedales, 2023], also present methods that could poten-
+ied in different domains under centralized settings [Lee et                    tially estimate uncertainty in FL. However, these papers do
+al., 2018; Lakshminarayanan et al., 2017; Gal and Ghahra-                      not expressly address the opportunities and challenges of un-
+mani, 2016; Kotelevskii et al., 2022a], only a few works have                  certainty quantification in their discussion. It’s important to
+considered this area within the context of federated learning                  note that there are existing approaches of deferring classifi-
+(FL) [Linsner et al., 2022; Kotelevskii et al., 2022b]. Typi-                  cation to other models or experts in case of abstention, for
+cally, in FL papers, algorithms result in using either a person-               example [Keswani et al., 2021]. Despite this, none of these
+alized local model or a global model. However, both these                      approaches have been explored in a federated context, nor
+models could be useful in different cases by providing the                     have they considered the corresponding constraints.
+tradeoff between the personalization of a local model and the                     The central idea of PostNet and NatPN involves us-
+higher reliability of the global one [Hanzely and Richtárik,                  ing Dirichlet prior and posterior distributions over the cat-
+2020; Liang et al., 2019].                                                     egorical predictive distributions [Malinin and Gales, 2018;
+
+
+
+                                                                        7127
+                          Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+Malinin and Gales, 2019; Charpentier et al., 2020; Charpen-
+tier et al., 2022; Sensoy et al., 2018]. To parameterize the pa-
+rameters of these Dirichlet distributions, the authors suggest
+introducing a density model over the deep representations of
+input objects. In NatPN, a Normalizing Flow [Papamakarios
+et al., 2021; Kobyzev et al., 2020] is employed to estimate
+the density of embeddings extracted by a trained feature ex-
+tractor. This density is then used to calculate updates to the
+Dirichlet distribution.
+   Despite the success of the NatPN model [Charpentier et
+al., 2022], we identified certain issues with the loss func-
+tion employed in NatPN, which become particularly criti-
+cal when dealing with high aleatoric uncertainty regions. In-
+triguingly, the issue was not discovered in the authors’ recent
+work [Charpentier et al., 2023], which investigated potential
+issues in the training procedure. Recent works [Bengs et al.,
+2022; Bengs et al., 2023] has unveiled other potential issues                  Figure 1: The general scheme of the proposed approach. Each input
+                                                                               is first processed by a personalized local model. In case of high
+related to the training of Dirichlet models in general but have
+                                                                               epistemic uncertainty, the decision is delegated to the global model.
+not offered solutions to address these challenges.                             Otherwise, if epistemic uncertainty is low, the local model proceeds
+Contributions. Our paper stands out as one of the few stud-                    with the decision. Both models consider also aleatoric uncertainty
+ies that consider the usage of uncertainty quantification in FL                and may abstain from prediction.
+scenarios. We aim to use uncertainty estimates to improve the
+prediction quality in personalized FL. Our contributions:
+1. We present a new FL framework that is based on uncer-                       We suppose that local and global models share the same ar-
+    tainty quantification, which allows switching between us-                  chitecture, but were trained differently. The global model was
+    ing a personalized local or global model. To achieve that,                 trained using a FL algorithm (e.g. FedAvg [McMahan et al.,
+    we consider several types of uncertainties for local and                   2017]), hence using data (in a federated manner) from all the
+    global models and propose a procedure that ensures that                    clients. Local models were trained by each of the clients lo-
+    the model is confident in its prediction if the prediction is              cally, using only local data of a particular client. We assume
+    made. Otherwise, our framework rejects the prediction if                   both these models are available for each of the clients. The
+    we are confident that there is a high uncertainty in the pre-              global model is typically expected to perform reasonably well
+    dicted class. To the best of our knowledge, we are the first               on each client’s data. Assuming that we already have trained
+    who introduce the concept of switching between models                      global and local models, we consider a situation where clients
+    based on uncertainty quantification in FL.                                 have the option to use either the global model or their local
+2. We introduce a specific realization of our framework                        models to make predictions for a new incoming object x.
+    FedPN, using Dirichlet-based NatPN model. For this                            The choice between local and global models for prediction
+    particular model, we identify an issue in the loss func-                   depends on the multiple factors that contribute to their predic-
+    tion of NatPN (not known in literature before) that com-                   tion quality. First of all, a shift in the distribution between the
+    plicates disentanglement of aleatoric and epistemic uncer-                 local data of a particular client and the global population may
+    tainties, and propose a solution to rectify it.                            have a significant effect on the models’ performance. Possi-
+3. We conduct an extensive set of experiments that demon-                      ble shifts include covariate shift, label shift, or different types
+    strate the benefits of our approach for different input data               of label noise. If the shift is significant, the global model
+    scenarios. In particular, we show that the proposed model                  might be very biased in the prediction for the particular client,
+    outperforms state-of-the-art personalized FL algorithms in                 while normally the local model is unbiased.
+    the presence of out-of-distribution data while being on par                   The second part of the picture is the size of the available
+    with them in standard scenarios.                                           data. Generally, the global model has more data and poten-
+                                                                               tially, if no data shift is present, should outperform the local
+                                                                               ones. However, the global model is usually trained with no di-
+2     General Framework of Switching between                                   rect access to the data stored by clients, which might degrade
+      Global and Personal Models                                               its performance. Eventually, the best-performing model will
+                                                                               be the one that achieves a better bias-variance trade-off.
+In this section, we introduce our framework, discussing the
+                                                                                  In this work, we propose a framework to choose between
+general idea and potential nuances. In the subsequent section,
+                                                                               the pointwise usage of a local or global model for prediction.
+we will delve into a specific implementation.
+                                                                               This decision is based on the uncertainty scores provided by
+                                                                               the model. This approach aims to mitigate issues that arise
+2.1    Concept Overview                                                        when there is a distribution shift between a client’s distribu-
+We are going to consider a FL setting with multiple clients,                   tion and the global distribution, which can often hinder model
+each having its personalized local model. We additionally as-                  performance. By using uncertainty to guide the model selec-
+sume that a non-personalized global model is also available.                   tion, we can enhance the model’s ability to perform well even
+
+
+
+                                                                        7128
+                          Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+in the presence of such distribution shifts.                                             Known knowns                            Known unknowns
+   Both the local and global models can provide uncertainty                            Local Confident. This               Local Ambiguous. This is
+estimates. These estimates include not only the total predic-                      represents local in-distribution      local in-distribution data with
+tive uncertainty but also separate aleatoric and epistemic un-                     data for which the local model          high aleatoric uncertainty
+                                                                                     is confident in prediction.                (class ambiguity).
+certainties. This feature allows for a more refined decision-
+making process, ensuring the most suitable model is used for                           Unknown knowns                       Unknown unknowns
+                                                                                                                          Global Uncertain. These
+prediction or choosing to abstain from making a prediction
+                                                                                     Local OOD. This refers to                   input data are
+altogether in the face of high uncertainty. The resulting work-                     data that is locally unknown           out-of-distribution for the
+flow is summarized in Figure 1.                                                     (high epistemic uncertainty)         local model while the global
+   It is worth noting, that our work is not the first which con-                   but known to other clients. In            model is uncertain in
+siders a joint usage of global and local models. However,                            this case, it makes sense to            prediction (high total
+we are the first to consider switching strategies between them                        use the global model for           uncertainty). The best course
+that are based on uncertainty quantification. For example,                                   predictions.                 of action is to abstain from
+one of the prior works [Hanzely and Richtárik, 2020] em-                                                                    making a prediction.
+ploys the average distance of local models to their collec-
+tive mean as a regularization technique, linking local models.                 Table 1: Possible scenarios for the input data point in the introduced
+Conversely, our approach relies on either purely local training                setup. A particular input falls into one of the categories depend-
+                                                                               ing on the confidence in its prediction by local and global models.
+or the global model, depending on model uncertainty for each                   The disentanglement between aleatoric and epistemic uncertainties
+sample. Additionally, the “averaged model” in their research                   is crucial to optimally making the decision.
+is not akin to a global model in design; it does not guarantee
+universal performance across all data and is more similar to
+the MAML [Finn et al., 2017] approach.                                         the global model. When the local epistemic uncertainty is
+                                                                               high, it means that the client barely knows the input point,
+2.2   Optimal Choice of Model                                                  and thus we refer to the global model. For the global model,
+We start from the important fact that the local model is not                   we look at the total uncertainty as we only care about the error
+exposed to the data shift between the general population and                   of prediction which is determined by total uncertainty.
+the particular client. Thus, if this model is sufficiently confi-                 The particular implementation of the approach described
+dent in the prediction, there is no need to involve the global                 above would depend on the choice of the machine learning
+model at all. However, it is important to distinguish between                  model and the way to compute uncertainty estimates. The
+different types of uncertainty here. Usually, the total uncer-                 key feature required is the ability of the method to compute
+tainty of the model predicting at a particular data point can                  both aleatoric and epistemic uncertainties. In the next section,
+be split into two parts: aleatoric uncertainty and epistemic                   we propose the implementation of the method based on the
+uncertainty [Hüllermeier and Waegeman, 2021]. Aleatoric                       posterior networks framework [Charpentier et al., 2020].
+uncertainty is the one that reflects the inherent randomness in
+the data labels. The epistemic uncertainty is the one that re-                 3      Dirichlet-Based Deep Learning Models
+flects the lack of knowledge in the model choice because the
+model was trained on a data set of a limited size, or model                    We have chosen to showcase Dirichlet-based models [Ma-
+misspecification. In what follows we will refer to epistemic                   linin and Gales, 2018; Charpentier et al., 2020; Charpen-
+as to “lack of knowledge” uncertainty, as the models we are                    tier et al., 2022] as a specific instance of our general frame-
+using, neural networks, are known to be very flexible.                         work. The intuition behind this decision lies in the fact that
+   For our problem, it is extremely important to distinguish                   these models allow the distinction between various types of
+between aleatoric and epistemic uncertainties. Suppose the                     uncertainty and facilitate the computation of corresponding
+local model has low epistemic and high aleatoric uncertainty                   uncertainty estimates with minimal additional computational
+at some point. In that case, the model is confident that the pre-              overhead. Furthermore, unlike ensemble methods [Beluch
+dicted label is ambiguous, and the model should abstain from                   et al., 2018], there is no need to train multiple models.
+prediction. However, if the epistemic uncertainty is high,                     In comparison to approximate Bayesian techniques, such as
+it means that the model doesn’t have enough knowledge to                       MC Dropout [Gal and Ghahramani, 2016], Variational Infer-
+make the prediction (not enough data), and the global model                    ence [Graves, 2011] or MCMC [Izmailov et al., 2021], al-
+should make the decision. The global model, in its turn, may                   most all expectations of interest can be derived in closed form
+either proceed with the prediction if it is confident or abstain               and almost without computational overhead. This makes
+from prediction if there is high uncertainty associated with                   Dirichlet-based models an attractive and efficient option for
+the prediction. Thus, in this context, for a fixed client and an               implementing our proposed framework.
+unseen input, there are four interesting outcomes, see Table 1.
+   Note, that when local epistemic uncertainty is low, there is                3.1      Basics of Dirichlet-Based Models
+no need to refer to the global model. The assumption here is                   In this section, we introduce the basics of Dirichlet-based
+that the local model is better than the global one if it knows                 models for classification tasks. To ease the introduction, let
+the input point well. Thus we consider only two options for                    us start by considering a training dataset D = {xi , yi }N
+                                                                                                                                        i=1 ,
+the local model: low epistemic with low aleatoric and low                      where N denotes the total number of data points in the
+epistemic with high aleatoric regardless of the confidence of                  dataset. We assume that labels yi belong to one of the K
+
+
+
+                                                                        7129
+                            Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+classes. Typically, the Dirichlet-based approaches assume                        3.2      Uncertainty Measures for Dirichlet-Based
+that the model consists of two hierarchical random variables,                             Models
+µ and θ. The posterior predictive distribution for a given un-                   One of the advantages of using Dirichlet-based models is
+seen object x can be computed as follows:                                        their ability to easily disentangle and quantitatively estimate
+                Z           Z                         
+                                                                                 aleatoric and epistemic uncertainties.
+  p(y | x, D) = p(y | µ)       p(µ | x, θ) p(θ | D)dθ dµ,
+                                                                                 Epistemic uncertainty. We begin by discussing epistemic
+                                                                                 uncertainty, which can be estimated in multiple different
+where p(y | µ) is the distribution over class labels, given
+                                                                                 ways [Malinin and Gales, 2021]. In this work, following
+some probability vector (e.g., Categorical), p(µ | x, θ) is the
+                                                                                 the ideas from [Malinin and Gales, 2018], we quantify the
+distribution over a simplex (e.g., Dirichlet), and p(θ | D) is
+                                                                                 epistemic uncertainty as the entropy of a posterior Dirichlet
+the posterior distribution over parameters of the model. How-
+                                                                                 distribution, which can be analytically computed as follows
+ever, for practical neural networks, the posterior distribution
+p(θ | D) does not have an analytical form and is computa-                        H[Dir µ | αpost (x) ] =
+                                                                                                      
+
+tionally intractable. Following [Malinin and Gales, 2018], we                        QK
+                                                                                          Γ αpost (x)
+                                                                                                      
+                                                                                                        PK
+                                                                                   ln i=1 post i  − i=1 (αipost (x) − 1)(ψ̃ αipost (x) − ψ̃ α0post (x) ),
+                                                                                                                                                      
+suggest considering a “semi-Bayesian” scenario by looking                                  Γ α0 (x)
+at a point estimate of this distribution: p(θ | D) = δ(θ − θ̂),                                                                                 (3)
+                                                                                                                        post
+                                                                                 where αpost (x) = α1post (x), . . . , αK
+                                                                                                                               
+where θ̂ is some estimate of the parameters (e.g., MAP esti-                                                                 (x) , ψ̃ is a digamma
+                                                                                                          PK
+mate). Then the integral inside the brackets simplifies:                         function and α0post (x) = i=1 αipost (x).
+R                           R
+    p(µ | x, θ) p(θ | D)dθ = p(µ | x, θ) δ(θ − θ̂)dθ = p(µ | x, θ̂).             Aleatoric uncertainty. Aleatoric uncertainty can be mea-
+In the series of works [Malinin and Gales, 2018; Malinin                         sured using the average entropy [Kendall and Gal, 2017],
+and Gales, 2019; Charpentier et al., 2020; Charpentier et al.,                   which can be computed as follows:
+2022] the posterior distribution p(µ | x, θ̂) is chosen to be                      E                        H[p(y | µ)] =
+the Dirichlet distribution Dir µ | αpost (x) with the parame-                           µ∼Dir µ|αpost (x)
+
+ter vector αpost (x) = αpost (x | θ̂) that depends on the input
+                                                                                        PK     αpost
+                                                                                                i (x)
+                                                                                                               αipost (x) + 1 − ψ̃ α0post (x) + 1 ].
+                                                                                                                                                
+                                                                                    −      i=1 αpost (x) [ψ̃                                           (4)
+point x. In these models, the prior over probability vectors µ                                   0
+
+takes the form of a Dirichlet distribution, representing the dis-                This metric captures the inherent noise present in the data,
+tribution over our beliefs about the probability of each class                   thus providing an estimate of the aleatoric uncertainty.
+label. In other words, it is a distribution over distributions of
+class labels. This prior is parameterized by a parameter vector                  3.3      Loss Functions for Dirichlet-Based Models
+αprior , where each component αcprior corresponds to our belief                  The loss function used in [Charpentier et al., 2022; Charp-
+in a specific class. PostNet [Charpentier et al., 2020] and                      entier et al., 2020] is the expected Cross-Entropy (CE), also
+NatPN [Charpentier et al., 2022] propose the idea that the                       known as Uncertain Cross Entropy (UCE) [Biloš et al., 2019].
+posterior parameters αpost (x) can be computed in the form of                    This loss function is a strictly proper scoring rule, which im-
+pseudo-counts that are computed by a function:                                   plies that a learner is incentivized to learn the true conditional
+                                                                                 p(y | x). For a given input x, the loss can be written as:
+                     αpost (x) = αprior + α(x),                        (1)
+                                                                                 L(y, αpost (x)) = E                      PK − 1[y = i] log µi =
+where α(x) = α(x | θ̂) is a function of input object x that                                            µ∼Dir µ|αpost (x)    i=1
+maps it to positive values.                                                                               CE(µ, y) = ψ̃ αpost (x) − ψ̃ αpost (x) ,
+                                                                                                                                                
+                                                                                     E                                       0            y
+Parameterization of α(x). In NatPN it is proposed to use                               µ∼Dir µ|αpost (x)
+the following parameterization:                                                                                                            (5)
+                                                                                                    PK
+                                      
+                  α(x) = p g(x) f g(x) .                (2)                      where α0post (x) = i=1 αipost (x). Additionally, authors sug-
+                                                                                 gest penalizing too concentrated predictions, by adding the
+In this parameterization, g(x) represents a feature extrac-                      regularization term with some hyperparameter λ. The overall
+tion function that maps the input object x (usually high-                        loss function looks as follows:
+dimensional) to a lower-dimensional embedding. Subse-
+                                                                                           L(y, αpost (x)) − λH[Dir µ | αpost (x) ],
+                                                                                                                                  
+quently, p(·) is a “density” function (parameterized by nor-                                                                               (6)
+malizing flow in the case of [Charpentier et al., 2022; Char-                    where H denotes the entropy of a distribution. This overall
+pentier et al., 2020]), and f (·) is a function mapping the ex-                  loss function is referred to by authors as Bayesian loss [Char-
+tracted features to a vector of class probabilities.                             pentier et al., 2022; Charpentier et al., 2020].
+This parameterization offers several advantages. Firstly, since                  Issue with the loss function. Let us explore an asymptotic
+p(·) is expected to represent the density of training examples,                  form of (5). For all x > 0, the following inequality holds:
+it should be high for in-distribution data. Secondly, as the
+density is properly normalized, embeddings that lie far from                                                                      1
+                                                                                                     log x − x1 ≤ ψ̃(x) ≤ log x − 2x .
+the training ones will result in lower values of p g(x) , thus
+leading to lower α(x). This means that for such input x, we                      Recalling the update rule (1) and using the specific parameter-
+will not add any evidence, and consequently, αpost (x) will be                   ization of αcprior = 1 for all c, we conclude that    post
+                                                                                                                                            (x) >
+                                                                                                                                 all αc post
+                                                                                                                         post
+close to αprior .                                                                1. Hence, we can approximate ψ̃ αc (x) ≈ log αc (x).
+
+
+
+                                                                          7130
+                          Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+To simplify the notation, we will use z = g(x) and denote by                      It is essential to emphasize that addressing these issues is
+fy (z) predicted probability for the y-th (correct) class:                     critical for our framework, as we need to accurately differen-
+                                                                               tiate between aleatoric and epistemic uncertainties to select
+  L(y, αpost (x)) ≈ log(α0post (x)) − log(αypost (x)) =                        the appropriate model for a given situation. In the following
+                                               1                               section, we propose a simple but efficient technique to rectify
+                                        p(z)( −fy (z)) 
+                     log K + log 1 + prior K              ,          (7)       the aforementioned problem with the loss function, ensuring
+                                             αy +p(z)fy (z)
+                                                                               that our framework distinguishes between the different types
+see the full derivation in Appendix, Section A.2.                              of uncertainties and makes informed model choices.
+   We see from (7) that for an in-distribution case with high                  Proposed solution. We propose to still use the parametric
+aleatoric uncertainty (all classes are confused and equally                    model to estimate density, but now our goal is to ensure that
+probable), the last term is canceled. Note, that the presence                  p(z) accurately represents the density of our training embed-
+of entropy term (that is used in [Charpentier et al., 2022;                    dings z = g(x). To achieve this, we propose maximizing
+Charpentier et al., 2020] resulting in the final loss of equa-                 the likelihood of the embeddings explicitly by incorporating
+tion (6)), which incentivizes the learner to produce smooth                    a corresponding term into the loss function. Simultaneously,
+prediction will only amplify the effect. This implies that no                  we aim to prevent any potential impact of the Bayesian loss
+gradients concerning the parameters of the density model will                  on the density estimation parameters, maintaining their inde-
+be propagated. As a result, p(·), which is the density in the                  pendence. Thus, we suggest the following loss function:
+embedding space, may disregard regions in the embedding                                                                                        
+space that correspond to areas with a high concentration of                    L y, StopGradp(g(x)) αpost (x) − λH Dir µ | αpost (x) − γ log p g(x) ,
+ambiguous training examples. This violates the intuition of                                                                                (8)
+p(·) as a data density. Thus, uncertainty estimates based on                   where λ, γ > 0 are hyperparameters, and StopGradp(g(x))
+p(·) cannot be used to measure epistemic uncertainty, as it                    means that the gradient will be not propagated to the param-
+ignores the regions with high aleatoric uncertainty.                           eters of a density model, which parameterizes p g(x) .
+   In addition to the problem of confusing high-aleatoric and                     We should note that while the corrected loss function may
+high-epistemic regions, we discovered that the proposed loss                   look somewhat ad hoc, it is computationally simple to im-
+function defies intuition when confronted with “outliers.” We                  plement, which is very important for modern deep learn-
+define an “outlier” as an object with a predicted probability of               ing. Compared to the original loss function, our rectified loss
+                               1
+the correct class is less than K . From (7), we see that the last              does not introduce any additional computational overhead –
+term changes its sign precisely at the point where fy (z) =                    in both cases (for the old loss and the new one) the gradient
+ 1                                                                             will be computed only once for each of the parameters.
+K . This implies that to minimize the loss function, we must
+decrease p(z) at these points, which seems counterintuitive as
+these z values correspond to objects from our training data.
+   Although the issue concerning equation (5) arises primarily
+                                                                               4     FedPN: Specific Instance of the Framework
+in the asymptotic context, we can readily illustrate it through                In the section, we consider specific instances of our frame-
+the loss function profiles (see Figure 2-left) for a range of                  work. However, it is not limited to only one instance. Other
+fixed correct class prediction probabilities.                                  possible options are discussed in Appendix, Section B.2.
+   To further emphasize the problem, we examine the loss
+function landscape and provide a demonstrative example.                        4.1     Federated Setup
+Consider three two-dimensional Gaussian distributions, each
+with a standard deviation of 0.1 and centers at (−1, 0), (1, 0),               In this section, we show, how one can adapt NatPN for
+and (0, 1) (see Figure 2-center). Left and right clusters are set              FL. Suppose we are given an array of datasets Di for 1 ≤
+to include objects of only one class, while the middle distribu-               i ≤ b, where b represents the number of clients. Each
+                                                                                                      |D |
+tion contains uniformly distributed labels, representing a high                Di = {xij ∈ Rd , yji }j=1i consists of object-label pairs. We
+aleatoric region. Each Gaussian contains an equal amount                       construct our federated framework in such a way that all
+of data. We train the NatPN model using a centralized ap-                      clients share the feature extractor g parameters ϕ and main-
+proach, employing both the loss function from equation (5)                     tain personalized heads f i parameterized by θi . Furthermore,
+and the loss function with our fix; see equation (8). Subse-                   we retain a “global” head-model f , which is trained using
+quently, we evaluate the quality of the learned model by plot-                 the FedAvg [McMahan et al., 2017] method and which ulti-
+ting the density in the center of the middle Gaussian. Ideally,                mately has parameters θ.
+we would expect the density to be equal for different numbers                     Following the NatPN approach, we employ normalizing
+of classes K. However, we observe a different picture with                     flows to estimate the embedding density. As it is for head
+a “density” estimate at the central cluster decreasing when                    models, here we also learn two types of models – a local den-
+one increases the number of clusters, see Figure 2-right. In                   sity model pi (using local data) parameterized by ψi and a
+this Figure, we plot the median of the estimated density for                   global density model p (using data from other clients in a fed-
+different loss functions. In the next section, we introduce a                  erated fashion) parameterized by ψ. It is important to note
+simple trick, which rectifies the behavior of the loss function,               that both types of models are trained on the same domain
+while without the correction density vanishes with K. We re-                   since the feature extractor model is fixed for local and global
+fer the reader to an additional toy example on image data in                   models. We refer readers to Appendix, Section B.3. for the
+Appendix, Section B.6.                                                         discussion of computational overhead.
+
+
+
+                                                                        7131
+                               Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+
+         4                                                                                                                                     Uncertain CE
+                                                                                                                        40                     Our loss
+         3                           fy = 0.99
+                                     fy = 0.5
+  Loss
+
+
+
+
+                                                                                                                 p(z)
+         2                           fy = 0.01
+                                     fy = 1/K                                                                           20
+         1
+
+         0
+             0           50                 100                                                                          0
+                        p(z)                                                                                                 10 30 50 75 100              200
+
+
+Figure 2: Left: Image depicts the landscape of the loss function with K = 10 classes. The red line (representing high aleatoric regions)
+appears relatively flat. Even at this level, the density in corresponding points tends to be underestimated. As the number of classes increases,
+this effect is amplified. Center: This image depicts the training data, where the leftmost and rightmost Gaussians consist of only one class
+each. In contrast, the middle Gaussian contains all K labels, randomly permuted. Each Gaussian has an equal number of data points, implying
+that, if p(z) follows the intuition of density, all peaks should have the same height. Right: By altering the number of classes K, we change
+the aleatoric uncertainty. We train the model using the vanilla approach of NatPN and measure p(z) at the central peak. As the number of
+classes increases, the density for UCE decreases, violating the intuition that p(z) is the density of training data. While for our proposed trick
+it behaves as expected.
+
+
+4.2          Threshold Selection                                                    prediction quality. Additionally, we conducted an ablation
+Before discussing the results, it is essential to understand how                    study on threshold selection (see Appendix, Section B.5).
+we determine when to make predictions using a local model
+or a global one. This decision, resulting in a “switching”                          5     Experiments
+model, depends on a particular uncertainty score. This score
+can either be the logarithm of the density of embeddings, ob-                       For experiments, we employ seven diverse datasets:
+tained using the density model (normalizing flows), or the                          MNIST [LeCun et al., 1998b], FashionMNIST [Xiao et al.,
+entropy of predictive Dirichlet distribution (3). We found that                     2017], MedMNIST-A, MedMNIST-C, MedMNIST-S [Yang
+both measures provide comparable behavior, and in the ex-                           et al., 2021; Yang et al., 2023], CIFAR10 [Krizhevsky, 2009],
+periments for Table 2 we use the density of embeddings.                             and SVHN [Netzer et al., 2011]. The LeNet-5 [LeCun et
+                                                                                    al., 1998a] encoder architecture is applied to the first five
+   To apply this approach, we must establish a rule for how
+                                                                                    datasets, while ResNet-18 [He et al., 2016] is used for CI-
+a client decides whether to use its local model for predic-
+                                                                                    FAR10 and SVHN. Building on the ideas from [Charpen-
+tions on a previously unseen input object x or to delegate
+                                                                                    tier et al., 2020; Charpentier et al., 2022], we implemented
+the prediction to the global model. One approach is to select
+                                                                                    the Radial Flow [Rezende and Mohamed, 2015] normalizing
+some uncertainty values’ threshold. This threshold can be
+                                                                                    flow due to its lightweight nature and flexibility. In all our
+chosen based on an additional calibration dataset. In our ex-
+                                                                                    experiments, we focus on a heterogeneous data distribution
+periments, we split each client’s validation dataset in a 40/60
+                                                                                    across clients. We consider a scenario involving 20 clients,
+ratio, using the smaller part for calibration.
+                                                                                    each possessing a random subset of 2 or 3 classes. The overall
+   The choice of the threshold is arguably the most subjective                      amount of data each client possesses is approximately equal.
+part of the approach. Ideally, we would desire to have ac-                          The FL process is conducted using FedAvg algorithm.
+cess to explicit out-of-distribution data (either from another
+                                                                                       In the following sections, we present different experiments
+client “local OOD” or completely unrelated data “global
+                                                                                    that highlight the strengths of our approach. We should note
+OOD”). With this data, we could explicitly compute uncer-
+                                                                                    that we don’t have a dedicated experiment to illustrate how
+tainty scores for both types of data (in-distribution and out-
+                                                                                    the approach deals with local ambiguous data as the vision
+of-distribution) and select the threshold that maximizes ac-
+                                                                                    datasets we are considering have very few points of this type.
+curacy. However, we believe it is unfair to assume that we
+have this data in the problem statement. Therefore, we sug-
+gest a procedure for choosing the threshold based solely on
+                                                                                    5.1     Assessing Performance of the Switching Model
+available local data.                                                               In this section, we assess the performance of our method,
+   To choose the threshold, we assume that for all clients,                         where the prediction alternates between local and global
+there might be a chance that some p% (typically 10%) of                             models based on the uncertainty threshold.
+objects are considered outliers. We further compute the es-                            For each dataset, we have three types of models. First,
+timates of epistemic uncertainty (with either entropy or the                        a global model is trained as a result of the federated proce-
+logarithms of the density of embeddings) and select an ap-                          dure, following FedAvg procedure. Then, every client, after
+propriate threshold based on this assumption for each of the                        the federated procedure, retains the resulting encoder network
+clients. For the high epistemic uncertainty points of the global                    while the classifier and flow are retrained from scratch us-
+model, similar thresholding can be performed to optimize its                        ing only local data. The third type of model, the “switching”
+
+
+
+                                                                             7132
+                             Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+                    FedAvg            FedRep           PerFedAvg          FedBabu              FedPer            FedBN              APFL   FedPN
+    Dataset     InD OOD Mix InD OOD Mix InD OOD Mix InD OOD Mix InD OOD Mix InD OOD Mix InD OOD Mix InD OOD Mix
+     MNIST    87.6 82.3 84.8 99.3        0.0   50.0 99.3 50.0 74.7 99.6 61.8 80.5 99.5 29.4 64.1 74.2 65.0 69.4 77.9 58.9 68.4 98.4 98.3 98.3
+ FashionMNIST 66.4 55.2 60.8 95.3        0.0   47.7 95.1 22.9 59.0 95.8 22.4 59.1 95.8 15.2 55.5 56.3 51.8 54.1 77.0 34.0 55.5 84.3 78.2 81.3
+ MedMNIST-A 58.1 47.5 52.3 96.9          0.0   48.5 96.2 12.5 55.4 97.3 8.1 53.4 97.7 12.6 56.2 47.8 43.3 45.5 98.0 49.0 74.4 96.2 94.9 95.5
+ MedMNIST-C 49.5 45.5 43.6 93.0          0.0   46.5 91.7 2.4 47.5 95.0 13.6 54.1 95.2 10.9 54.0 50.0 43.3 44.3 95.4 53.3 73.3 94.4 88.7 91.2
+ MedMNIST-S 38.9 34.8 33.0 87.4          0.0   43.8 86.7 3.2 45.8 90.5 5.7 48.0 90.9 6.0 48.5 40.5 38.9 37.2 91.8 34.0 61.8 86.9 75.5 80.0
+    CIFAR10   27.6 23.3 25.6 81.2        0.0   40.6 73.3 0.0 36.8 84.1 1.4 42.7 84.1 0.6 42.4 35.2 28.6 32.0 62.4 15.0 38.7 59.1 28.8 44.1
+     SVHN     80.6 76.7 78.3 94.7        0.0   47.3 93.4 9.5 51.4 94.9 11.2 53.0 95.4 6.5 50.9 74.4 71.9 73.3 80.5 42.5 59.3 87.1 62.2 73.4
+
+Table 2: In the table, we report accuracy scores, obtained by different algorithms using different data splits. InD means that we use in-
+distribution data of all the clients and corresponding local models. OOD means that we use local models of different clients, but evaluate it
+on the classes not presented in the corresponding train splits. Mix means a random mixture of InD and OOD, where the share of InD is 50%
+and the same for OOD. Values in bold – best results on mixed data.
+
+                                               Local FedAvg FedRep PerFedAvg FedBabu FedPer FedBN APFL FedPN
+                                 MNIST          99.1    87.6     99.3       99.3        99.6      99.5    74.2     77.9    99.4
+                             FashionMNIST       95.3    66.4     95.3       95.1        95.8      95.8    56.3     77.0    95.7
+                             MedMNIST-A         96.2    58.1     96.9       96.2        97.3      97.7    47.8     98.0    99.0
+                             MedMNIST-C         93.3    49.5     93.0       91.7        95.0      95.2    50.0     95.4    96.6
+                             MedMNIST-S         87.8    38.9     87.4       86.7        90.5      90.9    40.5     91.8    90.7
+                                CIFAR10         88.6    27.6     81.2       73.3        84.1      84.1    35.2     62.4    75.1
+                                 SVHN           91.2    80.6     94.7       93.4        94.9      95.4    74.4     80.5    92.2
+
+Table 3: In this table we report the accuracy of the in-distribution data, using only local models. We can see, that for our approach if we know
+that the input data comes from in-distribution, we can safely use local models (without switching) and the results will be on par with others.
+Underlined values are the best for a given dataset.
+
+
+model, alternates between the first two models based on the                        However, due to the heterogeneous nature of the between-
+uncertainty threshold set for each client.                                         clients data distribution (covariate shift), local models cannot
+   Additionally, for each client, we consider the following                        learn the entire data manifold. Therefore, occasionally refer-
+three types of data: data from the same classes used during                        ring to global knowledge is beneficial while still preserving
+training (InD), data from all other classes (OOD), and data                        personalization when the local model is confident.
+from all classes (Mix). For each of these datasets and data                           Note, that for CIFAR10 all the methods are not working
+splits, we compute the average prediction accuracy (client-                        well. For our method, it means that either the learned den-
+wise). The results of this experiment are presented in Ta-                         sity model does not distinguish well between in- and out-of-
+ble 2. Separate results on InD and OOD data are shown in                           distribution data, or the threshold was not chosen accurately.
+Appendix, Section B.4.                                                             In Table 3 we present results for our model on InD data when
+   In this experiment, we compare the performance (accu-                           only local models were applied (so no “switching” is used,
+racy score) of different (personalized) FL algorithms: Fe-                         compared to Table 2). This might be useful in scenarios when
+dAvg [McMahan et al., 2017], FedRep [Collins et al., 2021],                        we know that data comes from the distribution of the local
+PerFedAvg [Fallah et al., 2020], FedBabu [Oh et al., 2022],                        data. In this case, there is no sense to switch to the global
+FedPer [Arivazhagan et al., 2019], FedBN [Li et al., 2021],                        model. We see, that despite it was not the purpose of the
+APFL [Deng et al., 2020]. Note, however, that our proposed                         work, our approach performs on par with other competitors,
+method is the only which allows natural criteria for switching                     slightly outperforming them on some datasets. An additional
+and selecting either the local or global models. For others,                       ablation study on the performance of each model on different
+incorporation of the logic is not straightforward and might be                     splits is in Appendix, Section B.7.
+a topic of further research.
+   Worth emphasising, that the state-of-the-art performance                        6    Conclusion
+on the in-distribution data is not the ultimate goal of our pa-                    We proposed a personalized FL framework that leverages
+per, our method performs on par with other popular personal-                       both a globally trained federated model and personalized lo-
+ized FL algorithms. The remarkable thing about our approach                        cal models to make final predictions. The selection between
+is that it can be reliably used on any type of input data.                         these models is based on the confidence in the prediction.
+   For our method, FedPN, we used the “switching” model.                           Empirical evaluation demonstrated that, under realistic sce-
+From Table 2, we observe that our model’s performance for                          narios with both InD and OOD data present, this approach
+InD data is typically comparable to the competitors. For                           outperforms both local and global models when used inde-
+“Mix” data, our approach is the winner by a large margin                           pendently. While the model’s capacity to handle OOD data is
+for almost all datasets. Note, that this data split is the most                    not perfect and depends on various factors, such as the qual-
+realistic practical scenario — all the clients aim to collabo-                     ity of the global model and the selection of the threshold, our
+ratively solve the same problem, given different local data.                       “switching” approach leads to improved performance.
+
+
+
+                                                                           7133
+                         Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+Acknowledgements                                                              [Fallah et al., 2020] Alireza Fallah, Aryan Mokhtari, and
+The methodological part of research (Sections 3 and 4) was                       Asuman Ozdaglar. Personalized federated learning with
+supported by the Russian Science Foundation grant 20-71-                         theoretical guarantees: A model-agnostic meta-learning
+10135.                                                                           approach. Advances in Neural Information Processing
+                                                                                 Systems, 33:3557–3568, 2020.
+References                                                                    [Finn et al., 2017] Chelsea Finn, Pieter Abbeel, and Sergey
+                                                                                 Levine. Model-agnostic meta-learning for fast adaptation
+[Arivazhagan et al., 2019] Manoj Ghuhan Arivazhagan,                             of deep networks. In International conference on machine
+   Vinay Aggarwal, Aaditya Kumar Singh, and Sunav                                learning, pages 1126–1135. PMLR, 2017.
+   Choudhary.        Federated learning with personalization
+                                                                              [Gal and Ghahramani, 2016] Yarin Gal and Zoubin Ghahra-
+   layers. arXiv preprint arXiv:1912.00818, 2019.
+                                                                                 mani. Dropout as a bayesian approximation: Representing
+[Beluch et al., 2018] William H Beluch, Tim Genewein, An-                        model uncertainty in deep learning. In International Con-
+   dreas Nürnberger, and Jan M Köhler. The power of en-                        ference on Machine Learning, pages 1050–1059. PMLR,
+   sembles for active learning in image classification. In Pro-                  2016.
+   ceedings of the IEEE conference on computer vision and                     [Graves, 2011] Alex Graves. Practical variational inference
+   pattern recognition, pages 9368–9377, 2018.
+                                                                                 for neural networks. Advances in neural information pro-
+[Bengs et al., 2022] Viktor Bengs, Eyke Hüllermeier, and                        cessing systems, 24, 2011.
+   Willem Waegeman. Pitfalls of epistemic uncertainty quan-                   [Hanzely and Richtárik, 2020] Filip Hanzely and Peter
+   tification through loss minimisation. In Advances in Neu-
+                                                                                 Richtárik. Federated learning of a mixture of global and
+   ral Information Processing Systems, 2022.
+                                                                                 local models. arXiv preprint arXiv:2002.05516, 2020.
+[Bengs et al., 2023] Viktor Bengs, Eyke Hüllermeier, and                     [He et al., 2016] Kaiming He, Xiangyu Zhang, Shaoqing
+   Willem Waegeman. On second-order scoring rules for                            Ren, and Jian Sun. Deep residual learning for image recog-
+   epistemic uncertainty quantification. In Proceedings of the                   nition. In Proceedings of the IEEE conference on computer
+   40th International Conference on Machine Learning, vol-                       vision and pattern recognition, pages 770–778, 2016.
+   ume 202, pages 2078–2091. PMLR, 2023.
+                                                                              [Hüllermeier and Waegeman, 2021] Eyke Hüllermeier and
+[Biloš et al., 2019] Marin Biloš, Bertrand Charpentier, and                    Willem Waegeman. Aleatoric and epistemic uncertainty in
+   Stephan Günnemann. Uncertainty on asynchronous time                          machine learning: An introduction to concepts and meth-
+   event prediction. Advances in Neural Information Process-                     ods. Machine Learning, 110:457–506, 2021.
+   ing Systems, 32, 2019.
+                                                                              [Izmailov et al., 2021] Pavel Izmailov, Sharad Vikram,
+[Charpentier et al., 2020] Bertrand Charpentier, Daniel                          Matthew D Hoffman, and Andrew Gordon Gordon Wil-
+   Zügner, and Stephan Günnemann. Posterior network:                           son. What are bayesian neural network posteriors really
+   Uncertainty estimation without ood samples via density-                       like? In International conference on machine learning,
+   based pseudo-counts. Advances in Neural Information                           pages 4629–4640. PMLR, 2021.
+   Processing Systems, 33:1356–1367, 2020.
+                                                                              [Kendall and Gal, 2017] Alex Kendall and Yarin Gal. What
+[Charpentier et al., 2022] Bertrand Charpentier,         Oliver                  uncertainties do we need in bayesian deep learning for
+   Borchert, Daniel Zügner, Simon Geisler, and Stephan                          computer vision? Advances in neural information pro-
+   Günnemann. Natural posterior network: Deep bayesian                          cessing systems, 30, 2017.
+   predictive uncertainty for exponential family distributions.
+                                                                              [Keswani et al., 2021] Vijay Keswani, Matthew Lease, and
+   In International Conference on Learning Representations,
+   2022.                                                                         Krishnaram Kenthapadi. Towards unbiased and accurate
+                                                                                 deferral to multiple experts. In Proceedings of the 2021
+[Charpentier et al., 2023] Bertrand Charpentier, Chenxiang                       AAAI/ACM Conference on AI, Ethics, and Society, pages
+   Zhang, and Stephan Günnemann. Training, architecture,                        154–165, 2021.
+   and prior for deterministic uncertainty methods. In ICLR                   [Kim and Hospedales, 2023] Minyoung Kim and Timothy
+   2023 Workshop on Pitfalls of limited data and computa-
+                                                                                 Hospedales. Fedhb: Hierarchical bayesian federated learn-
+   tion for Trustworthy ML, 2023.
+                                                                                 ing. arXiv preprint arXiv:2305.04979, 2023.
+[Chen and Chao, 2021] Hong-You Chen and Wei-Lun Chao.
+                                                                              [Kobyzev et al., 2020] Ivan Kobyzev, Simon JD Prince, and
+   Fedbe: Making bayesian model ensemble applicable to
+                                                                                 Marcus A Brubaker. Normalizing flows: An introduc-
+   federated learning. In ICLR, 2021.
+                                                                                 tion and review of current methods. IEEE transactions on
+[Collins et al., 2021] Liam Collins, Hamed Hassani, Aryan                        pattern analysis and machine intelligence, 43(11):3964–
+   Mokhtari, and Sanjay Shakkottai. Exploiting shared rep-                       3979, 2020.
+   resentations for personalized federated learning. In ICML,                 [Kotelevskii et al., 2022a] Nikita Kotelevskii, Aleksandr
+   pages 2089–2099. PMLR, 2021.                                                  Artemenkov, Kirill Fedyanin, Fedor Noskov, Alexander
+[Deng et al., 2020] Yuyang Deng, Mohammad Mahdi Ka-                              Fishkov, Artem Shelmanov, Artem Vazhentsev, Aleksandr
+   mani, and Mehrdad Mahdavi. Adaptive personalized fed-                         Petiushko, and Maxim Panov. Nonparametric uncertainty
+   erated learning. arXiv preprint arXiv:2003.13461, 2020.                       quantification for single deterministic neural network.
+
+
+
+                                                                       7134
+                         Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI-24)
+
+
+
+   Advances in Neural Information Processing Systems,                         [McMahan et al., 2017] Brendan McMahan, Eider Moore,
+   35:36308–36323, 2022.                                                         Daniel Ramage, Seth Hampson, and Blaise Aguera y Ar-
+[Kotelevskii et al., 2022b] Nikita Kotelevskii,        Maxime                    cas. Communication-efficient learning of deep networks
+   Vono, Alain Durmus, and Eric Moulines. Fedpop: A                              from decentralized data. In Artificial intelligence and
+   bayesian approach for personalised federated learning.                        statistics, pages 1273–1282. PMLR, 2017.
+   Advances in Neural Information Processing Systems,                         [Netzer et al., 2011] Yuval Netzer, Tao Wang, Adam Coates,
+   35:8687–8701, 2022.                                                           Alessandro Bissacco, Bo Wu, and Andrew Y Ng. Reading
+[Krizhevsky, 2009] A Krizhevsky. Learning multiple layers                        digits in natural images with unsupervised feature learn-
+                                                                                 ing. In NIPS Workshop on Deep Learning and Unsuper-
+   of features from tiny images. Master’s thesis, University
+                                                                                 vised Feature Learning, 2011.
+   of Toronto, 2009.
+                                                                              [Oh et al., 2022] Jaehoon Oh, Sangmook Kim, and Se-
+[Lakshminarayanan et al., 2017] Balaji Lakshminarayanan,
+                                                                                 Young Yun. Fedbabu: Towards enhanced representation
+   Alexander Pritzel, and Charles Blundell. Simple and scal-                     for federated image classification. ICLR, 2022.
+   able predictive uncertainty estimation using deep ensem-
+   bles. Advances in neural information processing systems,                   [Papamakarios et al., 2021] George Papamakarios, Eric T
+   30, 2017.                                                                     Nalisnick, Danilo Jimenez Rezende, Shakir Mohamed,
+                                                                                 and Balaji Lakshminarayanan. Normalizing flows for
+[LeCun et al., 1998a] Yann LeCun, Léon Bottou, Yoshua                           probabilistic modeling and inference. J. Mach. Learn.
+   Bengio, and Patrick Haffner. Gradient-based learning ap-                      Res., 22(57):1–64, 2021.
+   plied to document recognition. Proceedings of the IEEE,
+   86(11):2278–2324, 1998.                                                    [Rezende and Mohamed, 2015] Danilo Rezende and Shakir
+                                                                                 Mohamed. Variational inference with normalizing flows.
+[LeCun et al., 1998b] Yann LeCun, Corinna Cortes, and                            In International conference on machine learning, pages
+   Christopher Burges. The mnist database of handwritten                         1530–1538. PMLR, 2015.
+   digits. http://yann. lecun. com/exdb/mnist/, 1998.
+                                                                              [Sensoy et al., 2018] Murat Sensoy, Lance Kaplan, and
+[Lee et al., 2018] Kimin Lee, Kibok Lee, Honglak Lee, and                        Melih Kandemir. Evidential deep learning to quantify
+   Jinwoo Shin. A simple unified framework for detecting                         classification uncertainty. Advances in neural information
+   out-of-distribution samples and adversarial attacks. In Ad-                   processing systems, 31, 2018.
+   vances in Neural Information Processing Systems, vol-
+                                                                              [Xiao et al., 2017] Han Xiao, Kashif Rasul, and Roland
+   ume 31, 2018.
+                                                                                 Vollgraf. Fashion-mnist: a novel image dataset for bench-
+[Li et al., 2021] Xiaoxiao Li, Meirui JIANG, Xiaofei Zhang,                      marking machine learning algorithms. arXiv preprint
+   Michael Kamp, and Qi Dou. Fedbn: Federated learning                           arXiv:1708.07747, 2017.
+   on non-iid features via local batch normalization. In Inter-               [Yang et al., 2021] Jiancheng Yang, Rui Shi, and Bingbing
+   national Conference on Learning Representations, 2021.
+                                                                                 Ni. Medmnist classification decathlon: A lightweight au-
+[Liang et al., 2019] Paul Pu Liang, Terrance Liu, Liu Ziyin,                     toml benchmark for medical image analysis. In IEEE 18th
+   Nicholas B Allen, Randy P Auerbach, David Brent, Rus-                         International Symposium on Biomedical Imaging (ISBI),
+   lan Salakhutdinov, and Louis-Philippe Morency. Think                          pages 191–195, 2021.
+   locally, act globally: Federated learning with local and                   [Yang et al., 2023] Jiancheng Yang, Rui Shi, Donglai Wei,
+   global representations. 2019.                                                 Zequan Liu, Lin Zhao, Bilian Ke, Hanspeter Pfister, and
+[Linsner et al., 2022] Florian Linsner, Linara Adilova, Sina                     Bingbing Ni. Medmnist v2-a large-scale lightweight
+   Däubener, Michael Kamp, and Asja Fischer. Approaches                         benchmark for 2d and 3d biomedical image classification.
+   to uncertainty quantification in federated deep learning. In                  Scientific Data, 10(1):41, 2023.
+   Machine Learning and Principles and Practice of Knowl-
+   edge Discovery in Databases: International Workshops of
+   ECML PKDD 2021, pages 128–145, 2022.
+[Malinin and Gales, 2018] Andrey Malinin and Mark Gales.
+   Predictive uncertainty estimation via prior networks. Ad-
+   vances in neural information processing systems, 31,
+   2018.
+[Malinin and Gales, 2019] Andrey Malinin and Mark Gales.
+   Reverse kl-divergence training of prior networks: Im-
+   proved uncertainty and adversarial robustness. Advances
+   in Neural Information Processing Systems, 32, 2019.
+[Malinin and Gales, 2021] Andrey Malinin and Mark Gales.
+   Uncertainty estimation in autoregressive structured predic-
+   tion. In International Conference on Learning Represen-
+   tations, 2021.
+
+
+
+                                                                       7135
+
