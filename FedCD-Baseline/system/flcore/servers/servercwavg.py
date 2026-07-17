@@ -73,7 +73,8 @@ class cwFedAvg(Server):
             self.selected_clients = self.select_clients()
             assert len(self.clients) > 0
 
-            for client in self.clients:
+            active_clients = self._dynamic_client_active_clients()
+            for client in active_clients:
                 start_time = time.time()
                 if self.args.add_cw:
                     client.local_initializtion_cw(self.cw_global_model, self.global_model)
@@ -82,7 +83,7 @@ class cwFedAvg(Server):
 
                 client.send_time_cost["num_rounds"] += 1
                 client.send_time_cost["total_cost"] += 2 * (time.time() - start_time)
-            self.downlink_MB += len(self.clients) * self._cw_downlink_per_client_mb()
+            self.downlink_MB += len(active_clients) * self._cw_downlink_per_client_mb()
 
             if round_idx % self.eval_gap == 0:
                 print(f"\n-------------Round number: {round_idx}-------------")
@@ -149,7 +150,7 @@ class cwFedAvg(Server):
 
     def send_protos(self):
         assert len(self.clients) > 0
-        for client in self.clients:
+        for client in self._dynamic_client_active_clients():
             start_time = time.time()
             client.set_protos(self.global_protos)
             client.send_time_cost["num_rounds"] += 1

@@ -30,46 +30,80 @@ class FedCross(Server):
         for i in range(self.w_locals_num):
             self.w_locals.append(copy.deepcopy(self.global_model))
 
-    def train(self):
-        for i in range(self.global_rounds+1):
-            s_t = time.time()
+        self.w_locals_by_client = {}
+        if self.dynamic_client_enabled:
+            self.w_locals_by_client = {
+                int(client.id): copy.deepcopy(self.global_model)
+                for client in self.clients
+            }
 
-            if i%self.eval_gap == 0:
-                print(f"\n-------------Round number: {i}-------------")
-                print("\nEvaluate global model")
-                self.evaluate()
+    def _on_dynamic_clients_activated(self, new_clients):
+        for client in new_clients:
+            client.set_parameters(self.global_model)
+            self.w_locals_by_client[int(client.id)] = copy.deepcopy(self.global_model)
+
+    def train(self):
+        for round_idx in range(self.global_rounds+1):
+            s_t = time.time()
 
             self.selected_clients = self.select_clients()
 
-            for i, client in enumerate(self.selected_clients):
+            if round_idx%self.eval_gap == 0:
+                print(f"\n-------------Round number: {round_idx}-------------")
+                print("\nEvaluate global model")
+                self.evaluate()
+
+            selected_local_models = []
+            for local_idx, client in enumerate(self.selected_clients):
                 start_time = time.time()
-                client.set_parameters(self.w_locals[i])
+                if self.dynamic_client_enabled:
+                    local_model = self.w_locals_by_client[int(client.id)]
+                else:
+                    local_model = self.w_locals[local_idx]
+                client.set_parameters(local_model)
                 client.send_time_cost['num_rounds'] += 1
                 client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
                 client.train()
-                client.clone_model(client.model, self.w_locals[i])
+                client.clone_model(client.model, local_model)
+                selected_local_models.append(local_model)
 
             self.downlink_MB += len(self.selected_clients) * self.model_size_MB
 
             # Receive models from clients
             self.receive_models()
-            if self.dlg_eval and i%self.dlg_gap == 0:
-                self.call_dlg(i)
+            if self.dlg_eval and round_idx%self.dlg_gap == 0:
+                self.call_dlg(round_idx)
             ### args.client_drop_rate should be 0
             ### equal to aggregate with w_locals
             self.aggregate_parameters()
 
             # Calculate similarity between models
-            sim_tab, sim_value = self.calculate_similarity()
+            models_for_cross = (
+                selected_local_models
+                if self.dynamic_client_enabled
+                else self.w_locals
+            )
+            sim_tab, sim_value = self.calculate_similarity(models_for_cross)
 
             # Update global model
-            if i >= self.first_stage_bound:
+            if round_idx >= self.first_stage_bound and len(models_for_cross) > 1:
                 # Cross aggregation
-                self.w_locals = self.cross_aggregation(i, sim_tab)
+                updated_models = self.cross_aggregation(
+                    round_idx,
+                    sim_tab,
+                    models=models_for_cross,
+                )
             else:
-                for i in range(len(self.w_locals)):
-                    for param, global_param in zip(self.w_locals[i].parameters(), self.global_model.parameters()):
+                updated_models = models_for_cross
+                for local_model in updated_models:
+                    for param, global_param in zip(local_model.parameters(), self.global_model.parameters()):
                         param.data = global_param.data.clone()
+
+            if self.dynamic_client_enabled:
+                for client, local_model in zip(self.selected_clients, updated_models):
+                    self.w_locals_by_client[int(client.id)] = local_model
+            else:
+                self.w_locals = updated_models
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
@@ -94,12 +128,15 @@ class FedCross(Server):
             print("\nEvaluate new clients")
             self.evaluate()
 
-    def calculate_similarity(self):
-        model_num = len(self.w_locals)
+    def calculate_similarity(self, models=None):
+        models = self.w_locals if models is None else models
+        model_num = len(models)
+        if model_num <= 1:
+            return [[1.0]] if model_num == 1 else [], 0.0
         sim_tab = [[0 for _ in range(model_num)] for _ in range(model_num)]
         sum_sim = 0.0
 
-        w_locals_dict = [model.state_dict() for model in self.w_locals]
+        w_locals_dict = [model.state_dict() for model in models]
         
         for k in range(model_num):
             for j in range(k):
@@ -138,20 +175,24 @@ class FedCross(Server):
                 sum_sim += copy.deepcopy(s)
 
         l = int(len(w_locals_dict[0].keys()) / 5) + 1.0
-        sum_sim /= (l * self.num_clients * (self.num_clients - 1) / 2.0)
+        sum_sim /= (l * model_num * (model_num - 1) / 2.0)
         
         return sim_tab, sum_sim
 
-    def cross_aggregation(self, iter, sim_tab):
-        w_locals_new = copy.deepcopy(self.w_locals)
+    def cross_aggregation(self, iter, sim_tab, models=None):
+        source_models = self.w_locals if models is None else models
+        model_num = len(source_models)
+        if model_num <= 1:
+            return copy.deepcopy(source_models)
+        w_locals_new = copy.deepcopy(source_models)
         crosslist = []
 
-        for j in range(self.w_locals_num):
+        for j in range(model_num):
             maxtag = 0
             submax = 1
-            mintag = (j + 1) % self.w_locals_num
+            mintag = (j + 1) % model_num
             
-            for p in range(self.w_locals_num):
+            for p in range(model_num):
                 if sim_tab[j][p] > sim_tab[j][maxtag]:
                     submax = maxtag
                     maxtag = p
@@ -161,32 +202,32 @@ class FedCross(Server):
                     mintag = p
 
             rlist = []
-            offset = iter % (self.w_locals_num - 1) + 1
+            offset = iter % (model_num - 1) + 1
             sub_list = []
             
-            for k in range(self.w_locals_num):
+            for k in range(model_num):
                 if k == j:
                     rlist.append(self.cross_alpha)
-                    sub_list.append(copy.deepcopy(self.w_locals[j]))
+                    sub_list.append(copy.deepcopy(source_models[j]))
 
                 if self.collaberative_model_select_strategy == 0:
-                    if (j + offset) % self.w_locals_num == k:
+                    if (j + offset) % model_num == k:
                         rlist.append(1.0 - self.cross_alpha)
-                        sub_list.append(copy.deepcopy(self.w_locals[k]))
+                        sub_list.append(copy.deepcopy(source_models[k]))
                 elif self.collaberative_model_select_strategy == 1:
                     if mintag == k:
                         rlist.append(1.0 - self.cross_alpha)
-                        sub_list.append(copy.deepcopy(self.w_locals[mintag]))
+                        sub_list.append(copy.deepcopy(source_models[mintag]))
                 elif self.collaberative_model_select_strategy == 2:
                     if maxtag == k:
                         rlist.append(1.0 - self.cross_alpha)
-                        sub_list.append(copy.deepcopy(self.w_locals[maxtag]))
+                        sub_list.append(copy.deepcopy(source_models[maxtag]))
 
             # Aggregate selected models
             w_cc = self.aggregate_parameters_cross(sub_list, rlist)
             crosslist.append(w_cc)
 
-        for k in range(self.w_locals_num):
+        for k in range(model_num):
             w_locals_new[k] = crosslist[k]
 
         return w_locals_new

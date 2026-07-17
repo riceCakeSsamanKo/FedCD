@@ -50,6 +50,7 @@ class Client(object):
             gamma=args.learning_rate_decay_gamma
         )
         self.learning_rate_decay = args.learning_rate_decay
+        self.eval_class_filter = None
 
 
     def load_train_data(self, batch_size=None):
@@ -62,13 +63,31 @@ class Client(object):
         if batch_size == None:
             batch_size = self.batch_size
         test_data = read_client_data(self.dataset, self.id, is_train=False, few_shot=self.few_shot)
+        test_data = self.filter_eval_data(test_data)
         return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
+
+    def set_eval_class_filter(self, class_indices=None):
+        if class_indices is None:
+            self.eval_class_filter = None
+        else:
+            self.eval_class_filter = {int(class_idx) for class_idx in class_indices}
 
     @staticmethod
     def _label_to_int(label):
         if torch.is_tensor(label):
+            return int(label.detach().cpu().item())
+        if hasattr(label, "item"):
             return int(label.item())
         return int(label)
+
+    def filter_eval_data(self, data):
+        if self.eval_class_filter is None:
+            return data
+        return [
+            sample
+            for sample in data
+            if self._label_to_int(sample[1]) in self.eval_class_filter
+        ]
 
     def _train_label_set(self):
         train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)

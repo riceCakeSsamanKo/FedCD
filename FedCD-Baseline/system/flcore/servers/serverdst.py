@@ -61,6 +61,10 @@ class FedDST(Server):
             ratio *= 0.5 * (1.0 + math.cos(math.pi * server_round / end))
         return max(0.0, ratio)
 
+    def _on_dynamic_clients_activated(self, new_clients):
+        for client in new_clients:
+            client.set_sparse_parameters(self.global_model, self.masks)
+
     def _sparsity_for_round(self, server_round):
         end = max(1, self.rate_decay_end)
         if server_round <= end:
@@ -69,7 +73,11 @@ class FedDST(Server):
         return self.final_sparsity
 
     def _send_sparse_models(self):
-        clients = self.selected_clients if len(self.selected_clients) > 0 else self.clients
+        clients = (
+            self.selected_clients
+            if len(self.selected_clients) > 0
+            else self._dynamic_client_active_clients()
+        )
         for client in tqdm(clients, desc="Distributing sparse models", leave=False):
             start_time = time.time()
             mask_changed = not masks_equal(getattr(client, "_last_received_masks", None), self.masks)

@@ -27,6 +27,13 @@ class pFedMe(Server):
         print("Finished creating server and clients.")
         self.Budget = []
 
+    def _on_dynamic_clients_activated(self, new_clients):
+        for client in new_clients:
+            client.set_parameters(self.global_model)
+            client.personalized_params = client._clone_param_list(
+                self.global_model.parameters()
+            )
+
     def train(self):
         for i in range(self.global_rounds+1):
             s_t = time.time()
@@ -368,6 +375,7 @@ class pFedMe(Server):
             round_downlink,
         )
         self.log_multi_rho_eval_combined(global_metrics, personalized_metrics)
+        self._maybe_log_dynamic_client_metrics()
 
     def save_results(self):
         algo = self.dataset + "_" + self.algorithm

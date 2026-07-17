@@ -49,6 +49,10 @@ class DualFed(Server):
         for param in module.parameters():
             param.data.zero_()
 
+    def _on_dynamic_clients_activated(self, new_clients):
+        for client in new_clients:
+            client.set_shared_parameters(self.global_model, self.global_head)
+
     @staticmethod
     def _add_module_parameters(target, source, weight):
         for target_param, source_param in zip(target.parameters(), source.parameters()):
@@ -58,7 +62,11 @@ class DualFed(Server):
         assert self.clients
         recipients = clients
         if recipients is None:
-            recipients = self.selected_clients if self.selected_clients else self.clients
+            recipients = (
+                self.selected_clients
+                if self.selected_clients
+                else self._dynamic_client_active_clients()
+            )
         for client in tqdm(recipients, desc="Distributing DualFed shared modules", leave=False):
             start_time = time.time()
             client.set_shared_parameters(self.global_model, self.global_head)

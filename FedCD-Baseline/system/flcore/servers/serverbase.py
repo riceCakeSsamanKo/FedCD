@@ -9,9 +9,10 @@ import re
 from tqdm import tqdm
 from utils.data_utils import read_client_data
 from utils.dlg import DLG
+from utils.dynamic_clients import DynamicClientExperimentMixin
 
 
-class Server(object):
+class Server(DynamicClientExperimentMixin, object):
     def __init__(self, args, times):
         # Set up the main attributes
         self.args = args
@@ -36,6 +37,7 @@ class Server(object):
         self.save_folder_name = args.save_folder_name
         self.top_cnt = args.top_cnt
         self.auto_break = args.auto_break
+        self._init_dynamic_client_experiment(args)
 
         self.clients = []
         self.selected_clients = []
@@ -164,6 +166,7 @@ class Server(object):
                             train_slow=train_slow, 
                             send_slow=send_slow)
             self.clients.append(client)
+        self._ensure_dynamic_client_groups()
 
     # random select slow clients
     def select_slow_clients(self, slow_rate):
@@ -182,18 +185,32 @@ class Server(object):
             self.send_slow_rate)
 
     def select_clients(self):
+        self._advance_dynamic_client_round()
+        candidate_clients = self._dynamic_client_active_clients()
+        candidate_count = len(candidate_clients)
+        if candidate_count <= 0:
+            raise RuntimeError("No active clients are available for this round.")
+        base_join_count = max(1, int(candidate_count * self.join_ratio))
         if self.random_join_ratio:
-            self.current_num_join_clients = np.random.choice(range(self.num_join_clients, self.num_clients+1), 1, replace=False)[0]
+            self.current_num_join_clients = np.random.choice(
+                range(base_join_count, candidate_count + 1), 1, replace=False
+            )[0]
         else:
-            self.current_num_join_clients = self.num_join_clients
-        selected_clients = list(np.random.choice(self.clients, self.current_num_join_clients, replace=False))
+            self.current_num_join_clients = base_join_count
+        selected_clients = list(
+            np.random.choice(candidate_clients, self.current_num_join_clients, replace=False)
+        )
 
         return selected_clients
 
     def send_models(self):
         assert (len(self.clients) > 0)
 
-        clients = self.selected_clients if len(self.selected_clients) > 0 else self.clients
+        clients = (
+            self.selected_clients
+            if len(self.selected_clients) > 0
+            else self._dynamic_client_active_clients()
+        )
         for client in tqdm(clients, desc="Distributing models", leave=False):
             start_time = time.time()
             
@@ -305,7 +322,8 @@ class Server(object):
         num_samples = []
         tot_correct = []
         tot_auc = []
-        for c in tqdm(self.clients, desc="Testing clients", leave=False):
+        eval_clients = self._evaluation_clients()
+        for c in tqdm(eval_clients, desc="Testing clients", leave=False):
             ct, ns, auc = c.test_metrics()
             if not bool(getattr(self, "eval_common_global", True)) and ns > 0:
                 tot_correct.append(ct * 1.0 / ns)
@@ -316,7 +334,7 @@ class Server(object):
                 tot_auc.append(auc*ns)
                 num_samples.append(ns)
 
-        ids = [c.id for c in self.clients]
+        ids = [c.id for c in eval_clients]
 
         return ids, num_samples, tot_correct, tot_auc
 
@@ -409,7 +427,7 @@ class Server(object):
         acc_sum = 0.0
         valid_clients = 0
 
-        for client in self.clients:
+        for client in self._evaluation_clients():
             client.model.to(self.device)
             client.model.eval()
 
@@ -451,12 +469,13 @@ class Server(object):
         
         num_samples = []
         losses = []
-        for c in tqdm(self.clients, desc="Calculating train metrics", leave=False):
+        eval_clients = self._evaluation_clients()
+        for c in tqdm(eval_clients, desc="Calculating train metrics", leave=False):
             cl, ns = c.train_metrics()
             num_samples.append(ns)
             losses.append(cl*1.0)
 
-        ids = [c.id for c in self.clients]
+        ids = [c.id for c in eval_clients]
 
         return ids, num_samples, losses
 
@@ -582,6 +601,7 @@ class Server(object):
                 f"{id_acc},{ood_acc},{id_count},{ood_count},{id_std},{ood_std},"
                 f"{round_uplink:.2f},{round_downlink:.2f},{total_mb:.2f}\n"
             )
+        self._maybe_log_dynamic_client_metrics()
 
     def _evaluate_local_metrics_on_dataset(self, dataset):
         original_dataset = self.dataset

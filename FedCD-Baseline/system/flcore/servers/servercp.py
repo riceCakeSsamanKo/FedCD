@@ -51,14 +51,23 @@ class FedCP(Server):
     def _module_size_mb(module):
         return sum(param.numel() for param in module.parameters()) * 4 / (1024 * 1024)
 
+    def _on_dynamic_clients_activated(self, new_clients):
+        for client in new_clients:
+            client.set_parameters(self.global_modules)
+            if self.head is not None:
+                client.set_head_g(self.head)
+            if self.cs is not None:
+                client.set_cs(self.cs)
+
     def send_models(self):
         assert (len(self.clients) > 0)
-        for client in self.clients:
+        clients = self._dynamic_client_active_clients()
+        for client in clients:
             start_time = time.time()
             client.set_parameters(self.global_modules)
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
-        self.downlink_MB += len(self.clients) * self.base_size_MB
+        self.downlink_MB += len(clients) * self.base_size_MB
 
     def add_parameters(self, w, client_model):
         for server_param, client_param in zip(self.global_modules.parameters(), client_model.parameters()):

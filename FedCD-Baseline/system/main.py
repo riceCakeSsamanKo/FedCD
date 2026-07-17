@@ -491,6 +491,20 @@ if __name__ == "__main__":
                         help="Number of samples for shared global test evaluation (0 = full union).")
     parser.add_argument('--eval_rhos', '--eval-rhos', type=str, default='',
                         help='Comma/space-separated SplitGP rho test sets to evaluate in one training run.')
+    parser.add_argument('--dynamic_client_enabled', type=str2bool, default=False,
+                        help='Enable the two-phase dynamic client-arrival experiment.')
+    parser.add_argument('--dynamic_client_join_round', type=int, default=51,
+                        help='Global round at which the second client group becomes active.')
+    parser.add_argument('--dynamic_client_old_classes', type=str, default='0,1,2,3,4,5',
+                        help='Comma-separated classes assigned to phase-1 clients.')
+    parser.add_argument('--dynamic_client_new_classes', type=str, default='6,7,8,9',
+                        help='Comma-separated classes assigned to newly arriving clients.')
+    parser.add_argument('--dynamic_client_expected_existing_clients', type=int, default=30,
+                        help='Expected number of existing clients; 0 disables validation.')
+    parser.add_argument('--dynamic_client_expected_newcomer_clients', type=int, default=20,
+                        help='Expected number of newcomer clients; 0 disables validation.')
+    parser.add_argument('--dynamic_client_require_contiguous_ids', type=str2bool, default=True,
+                        help='Require existing IDs 0..M-1 and newcomer IDs M..N-1.')
     parser.add_argument('--common_eval_batch_size', type=int, default=256,
                         help="Batch size for common global test evaluation.")
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')

@@ -21,7 +21,12 @@ class FedAS(Server):
         self.Budget = []
 
     def all_clients(self):
-        return self.clients
+        return self._dynamic_client_active_clients()
+
+    def _on_dynamic_clients_activated(self, new_clients):
+        progress = max(0, self.dynamic_client_round) / max(1, self.global_rounds)
+        for client in new_clients:
+            client.set_parameters(copy.deepcopy(self.global_model), progress)
 
     def send_selected_models(self, selected_ids, epoch):
         assert (len(self.clients) > 0)
@@ -137,6 +142,12 @@ class FedAS(Server):
             formatted_history = [f"{value:.1f}" for value in client.fim_trace_history]
             print(f"Client{client.id} : {formatted_history}")
             avg_fim_histories.append(client.fim_trace_history)
+
+        if self.dynamic_client_enabled:
+            latest_values = [history[-1] for history in avg_fim_histories if history]
+            latest_avg = float(np.mean(latest_values)) if latest_values else 0.0
+            print(f"Avg Current Sum_T_FIM : {latest_avg:.1f}")
+            return
 
         # Calculate and print average FIM trace history across clients
         avg_fim_histories = np.mean(avg_fim_histories, axis=0)
