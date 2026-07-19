@@ -113,8 +113,8 @@ mode_tag="standard"
 if [[ "${DYNAMIC_CLIENT_ENABLED,,}" =~ ^(1|true|yes|y|on)$ ]]; then
   mode_tag="dynamic_clients"
 fi
-run_tag="splitgp_multirho_${model_tag}_${mode_tag}_trainrho${TRAIN_RHO}_${date_str}_${time_str}"
-queue_root="$SCRIPT_DIR/batch_runs/splitgp_multirho_${model_tag}_${mode_tag}/date_${date_str}/time_${time_str}"
+run_tag="splitgp_multirho_${model_tag}_${mode_tag}_trainrho${TRAIN_RHO}_${date_str}_${time_str}_pid$$"
+queue_root="$SCRIPT_DIR/batch_runs/splitgp_multirho_${model_tag}_${mode_tag}/date_${date_str}/time_${time_str}_pid$$"
 run_log_dir="$queue_root/run_logs"
 mkdir -p "$run_log_dir"
 status_csv="$queue_root/status.csv"

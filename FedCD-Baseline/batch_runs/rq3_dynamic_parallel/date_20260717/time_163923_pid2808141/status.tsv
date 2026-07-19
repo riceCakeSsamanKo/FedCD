@@ -1,0 +1,7 @@
+batch	method	dataset	seed	gpu	status	exit_code	start_utc	end_utc	wrapper_log
+1	FedBN	cifar10	1	0	ok	0	2026-07-17T16:39:23Z	2026-07-17T20:26:48Z	/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/rq3_dynamic_parallel/date_20260717/time_163923_pid2808141/wrapper_logs/batch1_FedBN_cifar10_seed1.log
+1	FedBN	fashionmnist	1	0	ok	0	2026-07-17T16:39:25Z	2026-07-17T20:26:48Z	/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/rq3_dynamic_parallel/date_20260717/time_163923_pid2808141/wrapper_logs/batch1_FedBN_fashionmnist_seed1.log
+2	FedALA	cifar10	1	0	ok	0	2026-07-17T20:26:48Z	2026-07-18T00:10:40Z	/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/rq3_dynamic_parallel/date_20260717/time_163923_pid2808141/wrapper_logs/batch2_FedALA_cifar10_seed1.log
+2	FedALA	fashionmnist	1	0	ok	0	2026-07-17T20:26:50Z	2026-07-18T00:10:40Z	/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/rq3_dynamic_parallel/date_20260717/time_163923_pid2808141/wrapper_logs/batch2_FedALA_fashionmnist_seed1.log
+3	FedAS	cifar10	1	0	ok	0	2026-07-18T00:10:40Z	2026-07-18T08:07:22Z	/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/rq3_dynamic_parallel/date_20260717/time_163923_pid2808141/wrapper_logs/batch3_FedAS_cifar10_seed1.log
+3	FedAS	fashionmnist	1	0	ok	0	2026-07-18T00:10:42Z	2026-07-18T08:07:22Z	/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/rq3_dynamic_parallel/date_20260717/time_163923_pid2808141/wrapper_logs/batch3_FedAS_fashionmnist_seed1.log

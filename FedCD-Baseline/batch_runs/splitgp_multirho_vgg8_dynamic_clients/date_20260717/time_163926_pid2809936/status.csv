@@ -1,0 +1,2 @@
+idx,total,dataset_base,algorithm,train_rho,eval_rhos,num_clients,seed,dynamic_clients,dynamic_join_round,dataset,status,exit_code,start_utc,end_utc,run_log
+1,1,Cifar10,pFedMe,0.0,0.0,0.2,0.4,0.6,0.8,50,1,true,51,Cifar10_dynamic_clients_nc50,ok,0,2026-07-17T16:39:27Z,2026-07-18T12:51:45Z,/home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/splitgp_multirho_vgg8_dynamic_clients/date_20260717/time_163926_pid2809936/run_logs/001_Cifar10_pFedMe_trainrho0p0_seed1.log

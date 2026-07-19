@@ -1,0 +1,282 @@
+{
+  "accuracy_aggregation": "macro mean of per-client accuracies",
+  "client_id_convention": "zero_based; paper clients 1-30 map to IDs 0-29",
+  "client_train_classes": {
+    "0": [
+      0,
+      1
+    ],
+    "1": [
+      0,
+      1
+    ],
+    "10": [
+      2,
+      3
+    ],
+    "11": [
+      2,
+      3
+    ],
+    "12": [
+      2,
+      3
+    ],
+    "13": [
+      2,
+      3
+    ],
+    "14": [
+      2,
+      3
+    ],
+    "15": [
+      2,
+      3
+    ],
+    "16": [
+      2,
+      3
+    ],
+    "17": [
+      2,
+      3
+    ],
+    "18": [
+      2,
+      3
+    ],
+    "19": [
+      2,
+      3
+    ],
+    "2": [
+      0,
+      1
+    ],
+    "20": [
+      4,
+      5
+    ],
+    "21": [
+      4,
+      5
+    ],
+    "22": [
+      4,
+      5
+    ],
+    "23": [
+      4,
+      5
+    ],
+    "24": [
+      4,
+      5
+    ],
+    "25": [
+      4,
+      5
+    ],
+    "26": [
+      4,
+      5
+    ],
+    "27": [
+      4,
+      5
+    ],
+    "28": [
+      4,
+      5
+    ],
+    "29": [
+      4,
+      5
+    ],
+    "3": [
+      0,
+      1
+    ],
+    "30": [
+      6,
+      7
+    ],
+    "31": [
+      6,
+      7
+    ],
+    "32": [
+      6,
+      7
+    ],
+    "33": [
+      6,
+      7
+    ],
+    "34": [
+      6,
+      7
+    ],
+    "35": [
+      6,
+      7
+    ],
+    "36": [
+      6,
+      7
+    ],
+    "37": [
+      6,
+      7
+    ],
+    "38": [
+      6,
+      7
+    ],
+    "39": [
+      6,
+      7
+    ],
+    "4": [
+      0,
+      1
+    ],
+    "40": [
+      8,
+      9
+    ],
+    "41": [
+      8,
+      9
+    ],
+    "42": [
+      8,
+      9
+    ],
+    "43": [
+      8,
+      9
+    ],
+    "44": [
+      8,
+      9
+    ],
+    "45": [
+      8,
+      9
+    ],
+    "46": [
+      8,
+      9
+    ],
+    "47": [
+      8,
+      9
+    ],
+    "48": [
+      8,
+      9
+    ],
+    "49": [
+      8,
+      9
+    ],
+    "5": [
+      0,
+      1
+    ],
+    "6": [
+      0,
+      1
+    ],
+    "7": [
+      0,
+      1
+    ],
+    "8": [
+      0,
+      1
+    ],
+    "9": [
+      0,
+      1
+    ]
+  },
+  "communication_unit": "MiB (column suffix retained as _mb for compatibility)",
+  "dataset": "FashionMNIST_dynamic_clients_nc50",
+  "enabled": true,
+  "existing_client_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "existing_id_definition": "each existing client's local training classes",
+  "existing_ood_definition": "all task classes except each existing client's local training classes",
+  "join_round": 51,
+  "new_classes": [
+    6,
+    7,
+    8,
+    9
+  ],
+  "newcomer_client_ids": [
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49
+  ],
+  "newcomer_id_definition": "each newcomer's local training classes",
+  "newcomer_ood_definition": "all task classes except each newcomer's local training classes",
+  "old_classes": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ]
+}

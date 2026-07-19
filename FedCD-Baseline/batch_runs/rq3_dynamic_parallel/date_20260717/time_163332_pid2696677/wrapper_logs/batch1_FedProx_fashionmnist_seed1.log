@@ -1,0 +1,16 @@
+[INFO] VGG8 SplitGP train-once multi-rho queue root: /home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/splitgp_multirho_vgg8_dynamic_clients/date_20260717/time_163338
+[INFO] Python: /home/irteam/.conda/envs/pfllib/bin/python
+[INFO] FL_DATA_ROOT: /home1/irteam/workspace/fl_data
+[INFO] Datasets: FashionMNIST
+[INFO] Algorithms: FedProx
+[INFO] Train rho: 0.0
+[INFO] Eval rhos: 0.0,0.2,0.4,0.6,0.8
+[INFO] Dynamic clients: true (join round: 51)
+[INFO] Max parallel jobs: 1
+[INFO] Stream logs: 1
+
+==========================================================
+[LAUNCH 1/1] dataset=FashionMNIST_dynamic_clients_nc50 algorithm=FedProx model=VGG8 seed=1
+[CONFIG] train_rho=0.0 eval_rhos=0.0,0.2,0.4,0.6,0.8 rounds=100 lr=0.005 lbs=128 ls=2 jr=1.0 nc=50
+[LOG] /home1/irteam/workspace/FedCD/FedCD-Baseline/batch_runs/splitgp_multirho_vgg8_dynamic_clients/date_20260717/time_163338/run_logs/001_FashionMNIST_FedProx_trainrho0p0_seed1.log
+==========================================================
