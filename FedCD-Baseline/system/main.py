@@ -492,6 +492,8 @@ if __name__ == "__main__":
                         help="Number of samples for shared global test evaluation (0 = full union).")
     parser.add_argument('--eval_rhos', '--eval-rhos', type=str, default='',
                         help='Comma/space-separated SplitGP rho test sets to evaluate in one training run.')
+    parser.add_argument('--eval_scenarios', '--eval-scenarios', type=str, default='',
+                        help='Comma/space-separated FedPRISM scenarios: id, ood, mix.')
     parser.add_argument('--fedprism_eval_match', type=str2bool, default=True,
                         help='Apply the FedPRISM held-out test protocol to SplitGP evaluation.')
     parser.add_argument('--fedprism_eval_reserved_fraction', type=float, default=0.2,
@@ -689,6 +691,11 @@ if __name__ == "__main__":
         try:
             with open(config_path, "r") as f:
                 cfg = json.load(f)
+            if cfg.get('schema') == 'fedprism_id_ood_mix_v1':
+                partition_info = 'fedprism_idoodmix'
+                alpha_info = ''
+                args.eval_common_global = False
+                break
             cfg_partition = cfg.get("partition", partition_info)
             if cfg.get("splitgp_rho", None) is not None:
                 partition_info = f"splitgp_rho{float(cfg.get('splitgp_rho')):.1f}"

@@ -51,6 +51,18 @@ class ModelStateTest(unittest.TestCase):
         self.assertEqual(int(averaged[1].num_batches_tracked.item()), 5)
 
 
+class FedPrismScenarioProtocolTest(unittest.TestCase):
+    def test_parses_and_deduplicates_scenarios(self):
+        self.assertEqual(
+            Server._parse_eval_scenarios('id, ood mix,id'),
+            ['id', 'ood', 'mix'],
+        )
+
+    def test_rejects_unknown_scenario(self):
+        with self.assertRaises(ValueError):
+            Server._parse_eval_scenarios('id,unknown')
+
+
 class FedPrismEvalProtocolTest(unittest.TestCase):
     @staticmethod
     def _fake_client_data(dataset, client_id, is_train=True, few_shot=0):

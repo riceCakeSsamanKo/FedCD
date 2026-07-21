@@ -261,6 +261,25 @@ class pFedMe(Server):
             "split_metrics": split_metrics,
         }
 
+    def _evaluate_personalized_local_acc_on_scenario(self, scenario):
+        original_eval_data = [client.eval_test_data for client in self.clients]
+        original_test_samples = [client.test_samples for client in self.clients]
+        try:
+            self._assign_fedprism_scenario_data(scenario)
+            stats = self.test_metrics_personalized()
+            total_test_samples = sum(stats[1])
+            if total_test_samples <= 0:
+                return 0.0
+            return sum(stats[2]) * 1.0 / total_test_samples
+        finally:
+            for client, eval_data, test_samples in zip(
+                self.clients,
+                original_eval_data,
+                original_test_samples,
+            ):
+                client.eval_test_data = eval_data
+                client.test_samples = test_samples
+
     def _evaluate_personalized_local_metrics_on_dataset(self, dataset):
         original_dataset = self.dataset
         original_client_datasets = [client.dataset for client in self.clients]
@@ -340,6 +359,42 @@ class pFedMe(Server):
                 f"{round_uplink:.2f},{round_downlink:.2f},{total_mb:.2f}\n"
             )
 
+    def log_multi_scenario_eval_combined(self, global_metrics, personalized_metrics):
+        if not self.multi_scenario_eval:
+            return
+        round_num = len(self.rs_test_acc_per)
+        round_uplink, round_downlink = self._last_eval_round_comm
+        for scenario in self.eval_scenarios:
+            for client in self.clients:
+                client.update_parameters(client.model, client.local_params)
+            global_acc = self._evaluate_local_acc_on_scenario(scenario)
+            personal_acc = self._evaluate_personalized_local_acc_on_scenario(scenario)
+            print(
+                f'[ID/OOD/Mix Eval] scenario={scenario} '
+                f'Global/Personalized Local Test Accuracy: '
+                f'{global_acc:.4f}/{personal_acc:.4f}'
+            )
+            file_path = self.eval_scenario_log_paths.get(scenario)
+            if file_path:
+                self._write_combined_usage_row(
+                    file_path,
+                    round_num,
+                    {
+                        'local_test_acc': global_acc,
+                        'global_test_acc': None,
+                        'train_loss': global_metrics['train_loss'],
+                        'split_metrics': None,
+                    },
+                    {
+                        'local_test_acc': personal_acc,
+                        'global_test_acc': None,
+                        'train_loss': personalized_metrics['train_loss'],
+                        'split_metrics': None,
+                    },
+                    round_uplink,
+                    round_downlink,
+                )
+
     def log_multi_rho_eval_combined(self, global_metrics, personalized_metrics):
         if not self.multi_rho_eval:
             return
@@ -391,6 +446,7 @@ class pFedMe(Server):
             round_uplink,
             round_downlink,
         )
+        self.log_multi_scenario_eval_combined(global_metrics, personalized_metrics)
         self.log_multi_rho_eval_combined(global_metrics, personalized_metrics)
         self._maybe_log_dynamic_client_metrics()
 

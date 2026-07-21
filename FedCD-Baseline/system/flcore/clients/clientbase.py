@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import os
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
 from utils.data_utils import read_client_data
@@ -72,7 +72,10 @@ class Client(object):
         return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
 
     def set_eval_test_data(self, eval_test_data):
-        self.eval_test_data = None if eval_test_data is None else list(eval_test_data)
+        if eval_test_data is None or isinstance(eval_test_data, Dataset):
+            self.eval_test_data = eval_test_data
+        else:
+            self.eval_test_data = list(eval_test_data)
         if self.eval_test_data is not None:
             self.test_samples = len(self.eval_test_data)
 

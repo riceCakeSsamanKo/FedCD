@@ -7,7 +7,13 @@ import time
 import random
 import re
 from tqdm import tqdm
-from utils.data_utils import has_reserved_data, read_client_data
+from utils.data_utils import (
+    FEDPRISM_SCENARIOS,
+    has_reserved_data,
+    is_fedprism_scenario_dataset,
+    read_client_data,
+    read_fedprism_scenario_data,
+)
 from utils.dlg import DLG
 from utils.dynamic_clients import DynamicClientExperimentMixin
 from utils.model_state import average_module_states
@@ -117,6 +123,49 @@ class Server(DynamicClientExperimentMixin, object):
                 "[Multi-Rho Eval] One training run will evaluate test rho(s): "
                 + ", ".join(f"{item['rho']:.1f}" for item in self.eval_rho_items)
             )
+
+        self.eval_scenarios = self._parse_eval_scenarios(
+            getattr(args, 'eval_scenarios', '')
+        )
+        self.multi_scenario_eval = (
+            bool(self.eval_scenarios)
+            and is_fedprism_scenario_dataset(self.dataset)
+        )
+        self.eval_scenario_log_paths = {}
+        if self.eval_scenarios and not self.multi_scenario_eval:
+            raise ValueError(
+                f'--eval-scenarios requires a FedPRISM ID/OOD/Mix dataset: {self.dataset}'
+            )
+        if self.multi_scenario_eval:
+            exp_dir = getattr(args, 'exp_dir', None)
+            if exp_dir:
+                for scenario in self.eval_scenarios:
+                    label = f'eval_{scenario}'
+                    log_dir = os.path.join(exp_dir, label)
+                    os.makedirs(log_dir, exist_ok=True)
+                    self.eval_scenario_log_paths[scenario] = os.path.join(
+                        log_dir, 'acc.csv'
+                    )
+            print(
+                '[ID/OOD/Mix Eval] One training run will evaluate: '
+                + ', '.join(self.eval_scenarios)
+            )
+
+    @staticmethod
+    def _parse_eval_scenarios(value):
+        if value is None:
+            return []
+        scenarios = []
+        for token in re.split(r'[\s,]+', str(value).strip().lower()):
+            if not token or token in scenarios:
+                continue
+            if token not in FEDPRISM_SCENARIOS:
+                raise ValueError(
+                    f'Unknown evaluation scenario {token!r}; '
+                    f'choose from {FEDPRISM_SCENARIOS}'
+                )
+            scenarios.append(token)
+        return scenarios
 
     @staticmethod
     def _parse_eval_rhos(value):
@@ -234,6 +283,14 @@ class Server(DynamicClientExperimentMixin, object):
         eval_by_client = self._fedprism_eval_data_by_client(dataset)
         for client in self.clients:
             client.set_eval_test_data(eval_by_client.get(int(client.id), []))
+
+    def _assign_fedprism_scenario_data(self, scenario):
+        if not is_fedprism_scenario_dataset(self.dataset):
+            raise ValueError(f'Not a FedPRISM ID/OOD/Mix dataset: {self.dataset}')
+        for client in self.clients:
+            client.set_eval_test_data(
+                read_fedprism_scenario_data(self.dataset, int(client.id), scenario)
+            )
 
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
@@ -626,6 +683,7 @@ class Server(DynamicClientExperimentMixin, object):
 
         self.log_usage(local_test_acc, train_loss, global_test_acc, split_metrics=split_metrics)
         if acc is None:
+            self.log_multi_scenario_eval(train_loss=train_loss)
             self.log_multi_rho_eval(train_loss=train_loss)
 
     def log_usage(self, local_test_acc, train_loss, global_test_acc=None, split_metrics=None):
@@ -682,6 +740,25 @@ class Server(DynamicClientExperimentMixin, object):
             )
         self._maybe_log_dynamic_client_metrics()
 
+    def _evaluate_local_acc_on_scenario(self, scenario):
+        original_eval_data = [client.eval_test_data for client in self.clients]
+        original_test_samples = [client.test_samples for client in self.clients]
+        try:
+            self._assign_fedprism_scenario_data(scenario)
+            stats = self.test_metrics()
+            total_test_samples = sum(stats[1])
+            if total_test_samples <= 0:
+                return 0.0
+            return sum(stats[2]) * 1.0 / total_test_samples
+        finally:
+            for client, eval_data, test_samples in zip(
+                self.clients,
+                original_eval_data,
+                original_test_samples,
+            ):
+                client.eval_test_data = eval_data
+                client.test_samples = test_samples
+
     def _evaluate_local_metrics_on_dataset(self, dataset):
         original_dataset = self.dataset
         original_client_datasets = [client.dataset for client in self.clients]
@@ -715,6 +792,29 @@ class Server(DynamicClientExperimentMixin, object):
     def _evaluate_local_acc_on_dataset(self, dataset):
         local_acc, _ = self._evaluate_local_metrics_on_dataset(dataset)
         return local_acc
+
+    def log_multi_scenario_eval(self, train_loss=0.0):
+        if not self.multi_scenario_eval:
+            return
+        round_num = len(self.rs_test_acc)
+        round_uplink, round_downlink = self._last_eval_round_comm
+        for scenario in self.eval_scenarios:
+            acc = self._evaluate_local_acc_on_scenario(scenario)
+            print(
+                f'[ID/OOD/Mix Eval] scenario={scenario} '
+                f'Local Test Accuracy: {acc:.4f}'
+            )
+            file_path = self.eval_scenario_log_paths.get(scenario)
+            if file_path:
+                self._write_usage_row(
+                    file_path,
+                    round_num,
+                    acc,
+                    train_loss,
+                    None,
+                    round_uplink,
+                    round_downlink,
+                )
 
     def log_multi_rho_eval(self, train_loss=0.0):
         if not self.multi_rho_eval:
