@@ -7,6 +7,7 @@ import copy
 from flcore.clients.clientbase import Client
 from torch.autograd import grad
 from torch.nn.utils import clip_grad_norm_
+from utils.model_state import copy_module_state
 
 
 
@@ -214,8 +215,7 @@ class clientAS(Client):
                 alignment_optimizer.step()
 
         # Substitute the parameters of the base, enabling personalization
-        for new_param, old_param in zip(model.base.parameters(), self.model.base.parameters()):
-            old_param.data = new_param.data.clone()
+        copy_module_state(model.base, self.model.base)
 
         self.model.cpu()
         model.cpu()

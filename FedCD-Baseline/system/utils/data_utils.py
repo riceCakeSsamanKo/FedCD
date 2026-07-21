@@ -64,6 +64,16 @@ def read_client_data(dataset, idx, is_train=True, few_shot=0):
         data_list = data_list_new
     return data_list
 
+
+def has_reserved_data(dataset, name='fext_train'):
+    fl_data_root = _get_fl_data_root(dataset)
+    path = os.path.join(fl_data_root, dataset, 'reserved', f'{name}.npz')
+    if not os.path.isfile(path):
+        return False
+    with open(path, 'rb') as file_obj:
+        data = np.load(file_obj, allow_pickle=True)['data'].tolist()
+    return len(data.get('y', [])) > 0
+
 def process_image(data):
     X = torch.Tensor(data['x']).type(torch.float32)
     y = torch.Tensor(data['y']).type(torch.int64)

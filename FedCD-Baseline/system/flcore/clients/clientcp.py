@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
 from flcore.clients.clientbase import Client
+from utils.model_state import copy_module_state
 
 
 class clientCP(Client):
@@ -29,11 +30,8 @@ class clientCP(Client):
         self.pm_test = []
             
     def set_parameters(self, base):
-        for new_param, old_param in zip(base.parameters(), self.model.model.base.parameters()):
-            old_param.data = new_param.data.clone()
-            
-        for new_param, old_param in zip(base.parameters(), self.model.base.parameters()):
-            old_param.data = new_param.data.clone()
+        copy_module_state(base, self.model.model.base)
+        copy_module_state(base, self.model.base)
 
 
     def set_head_g(self, head):
@@ -47,12 +45,10 @@ class clientCP(Client):
         headw_p.detach_()
         self.context = torch.sum(headw_p, dim=0, keepdim=True).to(self.device)
         
-        for new_param, old_param in zip(head.parameters(), self.model.head_g.parameters()):
-            old_param.data = new_param.data.clone()
+        copy_module_state(head, self.model.head_g)
 
     def set_cs(self, cs):
-        for new_param, old_param in zip(cs.parameters(), self.model.gate.cs.parameters()):
-            old_param.data = new_param.data.clone()
+        copy_module_state(cs, self.model.gate.cs)
 
     def save_con_items(self, items, tag='', item_path=None):
         self.save_item(self.pm_train, 'pm_train' + '_' + tag, item_path)

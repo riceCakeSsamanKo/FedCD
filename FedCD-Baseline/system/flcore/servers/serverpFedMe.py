@@ -7,6 +7,7 @@ import torch
 from flcore.clients.clientpFedMe import clientpFedMe
 from flcore.servers.serverbase import Server
 from threading import Thread
+from utils.model_state import blend_module_states
 
 
 class pFedMe(Server):
@@ -56,7 +57,7 @@ class pFedMe(Server):
             # [t.start() for t in threads]
             # [t.join() for t in threads]
 
-            self.previous_global_model = copy.deepcopy(list(self.global_model.parameters()))
+            self.previous_global_model = copy.deepcopy(self.global_model)
             self.receive_models()
             if self.dlg_eval and i%self.dlg_gap == 0:
                 self.call_dlg(i)
@@ -180,8 +181,11 @@ class pFedMe(Server):
 
     def beta_aggregate_parameters(self):
         # aggregate avergage model with previous model using parameter beta
-        for pre_param, param in zip(self.previous_global_model, self.global_model.parameters()):
-            param.data = (1 - self.beta)*pre_param.data + self.beta*param.data
+        self.global_model = blend_module_states(
+            self.previous_global_model,
+            self.global_model,
+            self.beta,
+        )
 
     def test_metrics_personalized(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -260,10 +264,13 @@ class pFedMe(Server):
     def _evaluate_personalized_local_metrics_on_dataset(self, dataset):
         original_dataset = self.dataset
         original_client_datasets = [client.dataset for client in self.clients]
+        original_eval_data = [client.eval_test_data for client in self.clients]
+        original_test_samples = [client.test_samples for client in self.clients]
         try:
             self.dataset = dataset
             for client in self.clients:
                 client.dataset = dataset
+            self._assign_fedprism_eval_data(dataset)
             stats = self.test_metrics_personalized()
             total_test_samples = sum(stats[1])
             if total_test_samples <= 0:
@@ -274,8 +281,15 @@ class pFedMe(Server):
             return local_acc, split_metrics
         finally:
             self.dataset = original_dataset
-            for client, client_dataset in zip(self.clients, original_client_datasets):
+            for client, client_dataset, eval_data, test_samples in zip(
+                self.clients,
+                original_client_datasets,
+                original_eval_data,
+                original_test_samples,
+            ):
                 client.dataset = client_dataset
+                client.eval_test_data = eval_data
+                client.test_samples = test_samples
 
     def _write_combined_usage_row(
         self,

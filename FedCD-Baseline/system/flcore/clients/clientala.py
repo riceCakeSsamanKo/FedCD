@@ -3,6 +3,7 @@ import time
 from flcore.clients.clientbase import Client
 from utils.data_utils import read_client_data
 from utils.ALA import ALA
+from utils.model_state import copy_module_buffers
 
 
 class clientALA(Client):
@@ -55,6 +56,7 @@ class clientALA(Client):
     def local_initialization(self, received_global_model):
         self.model.to(self.device)
         received_global_model.to(self.device)
+        copy_module_buffers(received_global_model, self.model)
         self.ALA.adaptive_local_aggregation(received_global_model, self.model)
         received_global_model.to("cpu")
         self.model.cpu()

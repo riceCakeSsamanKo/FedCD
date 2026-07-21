@@ -243,6 +243,9 @@ launch_job() {
       --seed "$SEED" \
       -eg "$EVAL_GAP" \
       --common_eval_batch_size "$COMMON_EVAL_BATCH_SIZE" \
+      --fedprism_eval_match True \
+      --fedprism_eval_reserved_fraction 0.2 \
+      --fedprism_eval_reserved_seed 0 \
       -go "$goal" \
       -dev "$DEVICE" \
       -did "$DEVICE_ID" \

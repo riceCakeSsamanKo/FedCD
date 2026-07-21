@@ -6,6 +6,7 @@ from flcore.servers.serverbase import Server
 from flcore.trainmodel.models import *
 from flcore.clients.clientcross import clientCross
 import torch.nn.functional as F
+from utils.model_state import average_module_states, copy_module_state
 
 class FedCross(Server):
     def __init__(self, args, times):
@@ -96,8 +97,7 @@ class FedCross(Server):
             else:
                 updated_models = models_for_cross
                 for local_model in updated_models:
-                    for param, global_param in zip(local_model.parameters(), self.global_model.parameters()):
-                        param.data = global_param.data.clone()
+                    copy_module_state(self.global_model, local_model)
 
             if self.dynamic_client_enabled:
                 for client, local_model in zip(self.selected_clients, updated_models):
@@ -237,13 +237,5 @@ class FedCross(Server):
             models = self.uploaded_models
             weights = self.uploaded_weights
             
-        aggregated_model = copy.deepcopy(models[0])
-        for param in aggregated_model.parameters():
-            param.data.zero_()
-            
-        total_count = sum(weights)
-        for w, client_model in zip(weights, models):
-            for aggregated_model_param, client_param in zip(aggregated_model.parameters(), client_model.parameters()):
-                aggregated_model_param.data += client_param.data.clone() * w / total_count
-            
+        aggregated_model = average_module_states(models, weights)
         return aggregated_model

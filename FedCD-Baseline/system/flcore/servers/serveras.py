@@ -4,6 +4,7 @@ import numpy as np
 # from flcore.clients.clientavg import clientAVG
 from flcore.clients.clientas import clientAS
 from flcore.servers.serverbase import Server
+from utils.model_state import average_module_states
 
 
 class FedAS(Server):
@@ -48,10 +49,6 @@ class FedAS(Server):
     def aggregate_wrt_fisher(self):
         assert (len(self.uploaded_models) > 0)
 
-        self.global_model = copy.deepcopy(self.uploaded_models[0])
-        for param in self.global_model.parameters():
-            param.data.zero_()
-
         # calculate the aggregrate weight with respect to the FIM value of model
         FIM_weight_list = []
         for id in self.uploaded_ids:
@@ -59,8 +56,10 @@ class FedAS(Server):
         # normalization to obtain weight
         FIM_weight_list = [FIM_value/sum(FIM_weight_list) for FIM_value in FIM_weight_list]
 
-        for w, client_model in zip(FIM_weight_list, self.uploaded_models):
-            self.add_parameters(w, client_model)
+        self.global_model = average_module_states(
+            self.uploaded_models,
+            FIM_weight_list,
+        )
 
     def train(self):
         for i in range(self.global_rounds+1):

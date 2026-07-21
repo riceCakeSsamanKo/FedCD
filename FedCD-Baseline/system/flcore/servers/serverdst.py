@@ -172,6 +172,22 @@ class FedDST(Server):
                     avg += weight * state[name].float().cpu()
                 new_state[name] = avg.to(dtype=old_state[name].dtype)
 
+        parameter_names = set(dict(self.global_model.named_parameters()))
+        for name, reference in old_state.items():
+            if name in parameter_names:
+                continue
+            if torch.is_floating_point(reference) or torch.is_complex(reference):
+                averaged = torch.zeros_like(reference.detach().cpu())
+            else:
+                averaged = torch.zeros_like(reference.detach().cpu(), dtype=torch.float64)
+            for client_id, state in zip(self.uploaded_ids, self.uploaded_states):
+                weight = float(train_sample_weights.get(client_id, 0)) / total_samples
+                value = state[name].detach().cpu().to(dtype=averaged.dtype)
+                averaged.add_(value, alpha=weight)
+            if not (torch.is_floating_point(reference) or torch.is_complex(reference)):
+                averaged = averaged.round().to(dtype=reference.dtype)
+            new_state[name] = averaged
+
         self.global_model.load_state_dict(new_state, strict=True)
         self.masks = new_masks
         apply_masks(self.global_model, self.masks)

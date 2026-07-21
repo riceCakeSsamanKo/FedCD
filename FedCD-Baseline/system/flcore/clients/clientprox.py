@@ -6,6 +6,7 @@ import torch.nn as nn
 from flcore.optimizers.fedoptimizer import PerturbedGradientDescent
 from flcore.clients.clientbase import Client
 from torch.nn.utils import clip_grad_norm_
+from utils.model_state import copy_module_state
 
 
 class clientProx(Client):
@@ -82,9 +83,9 @@ class clientProx(Client):
 
 
     def set_parameters(self, model):
-        for new_param, global_param, param in zip(model.parameters(), self.global_params, self.model.parameters()):
+        copy_module_state(model, self.model)
+        for new_param, global_param in zip(model.parameters(), self.global_params):
             global_param.data = new_param.data.clone()
-            param.data = new_param.data.clone()
 
     def train_metrics(self):
         trainloader = self.load_train_data()

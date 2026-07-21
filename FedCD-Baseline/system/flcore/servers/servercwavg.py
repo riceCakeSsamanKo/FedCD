@@ -8,6 +8,7 @@ import torch
 
 from flcore.clients.clientcwavg import cwclientAVG
 from flcore.servers.serverbase import Server
+from utils.model_state import average_module_states, copy_module_buffers
 
 
 def _module_size_mb(module):
@@ -241,6 +242,24 @@ class cwFedAvg(Server):
         )
         marginal_weight_np[marginal_weight_np == 0] = 1.0
         normalized_weight = np.divide(uploaded_weight_np, marginal_weight_np).tolist()
+
+        for class_idx in range(len(self.cw_global_model)):
+            class_weights = [weights[class_idx] for weights in normalized_weight]
+            if sum(class_weights) <= 0:
+                continue
+            if self.args.partial_layer_train:
+                for name, module in self.cw_global_model[class_idx].items():
+                    averaged = average_module_states(
+                        [local_model[name] for local_model in self.uploaded_models_head],
+                        class_weights,
+                    )
+                    copy_module_buffers(averaged, module)
+            elif self.args.decision_layer_only:
+                averaged = average_module_states(self.uploaded_models_head, class_weights)
+                copy_module_buffers(averaged, self.cw_global_model[class_idx])
+            else:
+                averaged = average_module_states(self.uploaded_models, class_weights)
+                copy_module_buffers(averaged, self.cw_global_model[class_idx])
 
         for idx, class_weights in enumerate(normalized_weight):
             if self.args.partial_layer_train:

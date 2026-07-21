@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from flcore.clients.clientcp import *
 from flcore.servers.serverbase import Server
 from utils.data_utils import read_client_data
+from utils.model_state import average_module_states
 
 
 class FedCP(Server):
@@ -33,6 +34,9 @@ class FedCP(Server):
                             send_slow=send_slow,
                             ConditionalSelection=cs)
             self.clients.append(client)
+
+        self._ensure_dynamic_client_groups()
+        self._assign_fedprism_eval_data(self.dataset)
 
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print(
@@ -76,28 +80,13 @@ class FedCP(Server):
     def aggregate_parameters(self):
         assert (len(self.uploaded_models) > 0)
 
-        self.global_modules = copy.deepcopy(self.uploaded_models[0])
-        for param in self.global_modules.parameters():
-            param.data = torch.zeros_like(param.data)
-
-        for w, client_model in zip(self.uploaded_weights, self.uploaded_models):
-            self.add_parameters(w, client_model)
+        self.global_modules = average_module_states(
+            self.uploaded_models,
+            self.uploaded_weights,
+        )
 
     def evaluate(self, acc=None):
-        stats = self.test_metrics()
-
-        test_acc = sum(stats[2])*1.0 / sum(stats[1])
-        test_auc = sum(stats[3])*1.0 / sum(stats[1])
-
-        if acc == None:
-            self.rs_test_acc.append(test_acc)
-            self.log_usage(test_acc, 0.0, None)
-            self.log_multi_rho_eval(train_loss=0.0)
-        else:
-            acc.append(test_acc)
-
-        print("Averaged Test Accuracy: {:.4f}".format(test_acc))
-        print("Averaged Test AUC: {:.4f}".format(test_auc))
+        return super().evaluate(acc=acc)
 
     def train(self):
         for i in range(self.global_rounds+1):
@@ -155,12 +144,10 @@ class FedCP(Server):
             self.uploaded_model_gs.append(client.model.head_g)
         self.uplink_MB += len(self.selected_clients) * self.head_size_MB
 
-        self.head = copy.deepcopy(self.uploaded_model_gs[0])
-        for param in self.head.parameters():
-            param.data = torch.zeros_like(param.data)
-
-        for w, client_model in zip(self.uploaded_weights, self.uploaded_model_gs):
-            self.add_head(w, client_model)
+        self.head = average_module_states(
+            self.uploaded_model_gs,
+            self.uploaded_weights,
+        )
 
         for client in self.selected_clients:
             client.set_head_g(self.head)
@@ -176,12 +163,10 @@ class FedCP(Server):
             self.uploaded_model_gs.append(client.model.gate.cs)
         self.uplink_MB += len(self.selected_clients) * self.cs_size_MB
 
-        self.cs = copy.deepcopy(self.uploaded_model_gs[0])
-        for param in self.cs.parameters():
-            param.data = torch.zeros_like(param.data)
-
-        for w, client_model in zip(self.uploaded_weights, self.uploaded_model_gs):
-            self.add_cs(w, client_model)
+        self.cs = average_module_states(
+            self.uploaded_model_gs,
+            self.uploaded_weights,
+        )
 
         for client in self.selected_clients:
             client.set_cs(self.cs)

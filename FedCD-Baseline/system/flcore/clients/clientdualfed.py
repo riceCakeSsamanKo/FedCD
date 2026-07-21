@@ -8,6 +8,7 @@ from sklearn import metrics
 from sklearn.preprocessing import label_binarize
 
 from flcore.clients.clientbase import Client
+from utils.model_state import copy_module_state
 
 
 class clientDualFed(Client):
@@ -62,10 +63,8 @@ class clientDualFed(Client):
         return -mean_log_prob_pos[valid_anchor].mean()
 
     def set_shared_parameters(self, base, global_head):
-        for new_param, old_param in zip(base.parameters(), self.model.base.parameters()):
-            old_param.data = new_param.data.clone()
-        for new_param, old_param in zip(global_head.parameters(), self.global_head.parameters()):
-            old_param.data = new_param.data.clone()
+        copy_module_state(base, self.model.base)
+        copy_module_state(global_head, self.global_head)
 
     def train(self):
         trainloader = self.load_train_data()

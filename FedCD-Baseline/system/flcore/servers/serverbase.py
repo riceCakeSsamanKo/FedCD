@@ -7,9 +7,10 @@ import time
 import random
 import re
 from tqdm import tqdm
-from utils.data_utils import read_client_data
+from utils.data_utils import has_reserved_data, read_client_data
 from utils.dlg import DLG
 from utils.dynamic_clients import DynamicClientExperimentMixin
+from utils.model_state import average_module_states
 
 
 class Server(DynamicClientExperimentMixin, object):
@@ -70,6 +71,15 @@ class Server(DynamicClientExperimentMixin, object):
         self.model_size_MB = sum(p.numel() for p in self.global_model.parameters()) * 4 / (1024 * 1024)
         self.uplink_MB = 0
         self.downlink_MB = 0
+        self.fedprism_eval_match = bool(getattr(args, 'fedprism_eval_match', True))
+        self.fedprism_eval_reserved_fraction = float(
+            getattr(args, 'fedprism_eval_reserved_fraction', 0.2)
+        )
+        self.fedprism_eval_reserved_seed = int(
+            getattr(args, 'fedprism_eval_reserved_seed', 0)
+        )
+        self._fedprism_eval_positions = None
+        self._fedprism_eval_data_cache = {}
         # Track last logged cumulative values so CSV records per-eval communication
         # (FedCD-style) instead of lifetime cumulative totals.
         self._last_logged_uplink_MB = 0.0
@@ -155,6 +165,76 @@ class Server(DynamicClientExperimentMixin, object):
             for rho in rhos
         ]
 
+    def _build_fedprism_eval_positions(self):
+        positions = []
+        for client_id in range(self.num_clients):
+            client_data = read_client_data(
+                self.dataset,
+                client_id,
+                is_train=False,
+                few_shot=self.few_shot,
+            )
+            positions.extend((client_id, local_idx) for local_idx in range(len(client_data)))
+
+        if not positions:
+            self._fedprism_eval_positions = []
+            return
+
+        eval_positions = list(positions)
+        reserved_count = 0
+        if not has_reserved_data(self.dataset):
+            fraction = min(max(self.fedprism_eval_reserved_fraction, 0.0), 0.95)
+            shuffled = list(range(len(positions)))
+            rng = random.Random(self.fedprism_eval_reserved_seed)
+            rng.shuffle(shuffled)
+            reserved_count = int(round(len(shuffled) * fraction))
+            if fraction > 0.0 and reserved_count <= 0:
+                reserved_count = 1
+            if reserved_count >= len(shuffled):
+                reserved_count = max(0, len(shuffled) - 1)
+            reserved_indices = set(shuffled[:reserved_count])
+            eval_positions = [position for idx, position in enumerate(positions) if idx not in reserved_indices]
+
+        if 0 < self.global_test_samples < len(eval_positions):
+            rng = random.Random(self.fedprism_eval_reserved_seed + 1)
+            eval_positions = rng.sample(eval_positions, self.global_test_samples)
+
+        self._fedprism_eval_positions = eval_positions
+        print(
+            f'[FedPRISM Eval Match] total={len(positions)}, '
+            f'excluded={reserved_count}, evaluated={len(eval_positions)}'
+        )
+
+    def _fedprism_eval_data_by_client(self, dataset):
+        dataset = str(dataset)
+        if dataset in self._fedprism_eval_data_cache:
+            return self._fedprism_eval_data_cache[dataset]
+        if self._fedprism_eval_positions is None:
+            self._build_fedprism_eval_positions()
+
+        by_client = {client_id: [] for client_id in range(self.num_clients)}
+        client_cache = {}
+        for client_id, local_idx in self._fedprism_eval_positions:
+            if client_id not in client_cache:
+                client_cache[client_id] = read_client_data(
+                    dataset,
+                    client_id,
+                    is_train=False,
+                    few_shot=self.few_shot,
+                )
+            client_data = client_cache[client_id]
+            if 0 <= local_idx < len(client_data):
+                by_client[client_id].append(client_data[local_idx])
+        self._fedprism_eval_data_cache[dataset] = by_client
+        return by_client
+
+    def _assign_fedprism_eval_data(self, dataset):
+        if not self.fedprism_eval_match or not self._is_splitgp_rho_dataset(dataset):
+            return
+        eval_by_client = self._fedprism_eval_data_by_client(dataset)
+        for client in self.clients:
+            client.set_eval_test_data(eval_by_client.get(int(client.id), []))
+
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
             train_data = read_client_data(self.dataset, i, is_train=True, few_shot=self.few_shot)
@@ -167,6 +247,7 @@ class Server(DynamicClientExperimentMixin, object):
                             send_slow=send_slow)
             self.clients.append(client)
         self._ensure_dynamic_client_groups()
+        self._assign_fedprism_eval_data(self.dataset)
 
     # random select slow clients
     def select_slow_clients(self, slow_rate):
@@ -250,12 +331,10 @@ class Server(DynamicClientExperimentMixin, object):
     def aggregate_parameters(self):
         assert (len(self.uploaded_models) > 0)
 
-        self.global_model = copy.deepcopy(self.uploaded_models[0])
-        for param in self.global_model.parameters():
-            param.data.zero_()
-            
-        for w, client_model in zip(self.uploaded_weights, tqdm(self.uploaded_models, desc="Aggregating models", leave=False)):
-            self.add_parameters(w, client_model)
+        self.global_model = average_module_states(
+            self.uploaded_models,
+            self.uploaded_weights,
+        )
 
     def add_parameters(self, w, client_model):
         for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
@@ -369,7 +448,7 @@ class Server(DynamicClientExperimentMixin, object):
         ood_accs = []
         id_total = 0
         ood_total = 0
-        for client in tqdm(self.clients, desc="Testing ID/OOD clients", leave=False):
+        for client in tqdm(self._evaluation_clients(), desc='Testing ID/OOD clients', leave=False):
             metrics_fn = getattr(client, metric_method, None)
             if metrics_fn is None:
                 continue
@@ -606,10 +685,13 @@ class Server(DynamicClientExperimentMixin, object):
     def _evaluate_local_metrics_on_dataset(self, dataset):
         original_dataset = self.dataset
         original_client_datasets = [client.dataset for client in self.clients]
+        original_eval_data = [client.eval_test_data for client in self.clients]
+        original_test_samples = [client.test_samples for client in self.clients]
         try:
             self.dataset = dataset
             for client in self.clients:
                 client.dataset = dataset
+            self._assign_fedprism_eval_data(dataset)
             stats = self.test_metrics()
             total_test_samples = sum(stats[1])
             if total_test_samples <= 0:
@@ -620,8 +702,15 @@ class Server(DynamicClientExperimentMixin, object):
             return local_acc, split_metrics
         finally:
             self.dataset = original_dataset
-            for client, client_dataset in zip(self.clients, original_client_datasets):
+            for client, client_dataset, eval_data, test_samples in zip(
+                self.clients,
+                original_client_datasets,
+                original_eval_data,
+                original_test_samples,
+            ):
                 client.dataset = client_dataset
+                client.eval_test_data = eval_data
+                client.test_samples = test_samples
 
     def _evaluate_local_acc_on_dataset(self, dataset):
         local_acc, _ = self._evaluate_local_metrics_on_dataset(dataset)

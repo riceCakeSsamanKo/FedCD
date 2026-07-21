@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 from flcore.clients.clientdualfed import clientDualFed
 from flcore.servers.serverbase import Server
+from utils.model_state import average_module_states
 
 
 class DualFed(Server):
@@ -112,13 +113,14 @@ class DualFed(Server):
     def aggregate_parameters(self):
         if not self.uploaded_weights:
             return
-        self._zero_module(self.global_model)
-        self._zero_module(self.global_head)
-        for weight, base, head in zip(
-            self.uploaded_weights, self.uploaded_bases, self.uploaded_heads
-        ):
-            self._add_module_parameters(self.global_model, base, weight)
-            self._add_module_parameters(self.global_head, head, weight)
+        self.global_model = average_module_states(
+            self.uploaded_bases,
+            self.uploaded_weights,
+        )
+        self.global_head = average_module_states(
+            self.uploaded_heads,
+            self.uploaded_weights,
+        )
 
     def train(self):
         for round_idx in tqdm(range(self.global_rounds + 1), desc="Global Rounds"):

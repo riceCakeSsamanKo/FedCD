@@ -492,6 +492,12 @@ if __name__ == "__main__":
                         help="Number of samples for shared global test evaluation (0 = full union).")
     parser.add_argument('--eval_rhos', '--eval-rhos', type=str, default='',
                         help='Comma/space-separated SplitGP rho test sets to evaluate in one training run.')
+    parser.add_argument('--fedprism_eval_match', type=str2bool, default=True,
+                        help='Apply the FedPRISM held-out test protocol to SplitGP evaluation.')
+    parser.add_argument('--fedprism_eval_reserved_fraction', type=float, default=0.2,
+                        help='Test fraction excluded when no dataset-level FExt reserved set exists.')
+    parser.add_argument('--fedprism_eval_reserved_seed', type=int, default=0,
+                        help='Seed used to reproduce the FedPRISM held-out test indices.')
     parser.add_argument('--dynamic_client_enabled', type=str2bool, default=False,
                         help='Enable the two-phase dynamic client-arrival experiment.')
     parser.add_argument('--dynamic_client_join_round', type=int, default=51,

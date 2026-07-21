@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
 from utils.data_utils import read_client_data
+from utils.model_state import copy_module_state
 
 
 class Client(object):
@@ -51,6 +52,7 @@ class Client(object):
         )
         self.learning_rate_decay = args.learning_rate_decay
         self.eval_class_filter = None
+        self.eval_test_data = None
 
 
     def load_train_data(self, batch_size=None):
@@ -62,9 +64,17 @@ class Client(object):
     def load_test_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
-        test_data = read_client_data(self.dataset, self.id, is_train=False, few_shot=self.few_shot)
+        if self.eval_test_data is None:
+            test_data = read_client_data(self.dataset, self.id, is_train=False, few_shot=self.few_shot)
+        else:
+            test_data = self.eval_test_data
         test_data = self.filter_eval_data(test_data)
         return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
+
+    def set_eval_test_data(self, eval_test_data):
+        self.eval_test_data = None if eval_test_data is None else list(eval_test_data)
+        if self.eval_test_data is not None:
+            self.test_samples = len(self.eval_test_data)
 
     def set_eval_class_filter(self, class_indices=None):
         if class_indices is None:
@@ -161,13 +171,10 @@ class Client(object):
         }
         
     def set_parameters(self, model):
-        for new_param, old_param in zip(model.parameters(), self.model.parameters()):
-            old_param.data = new_param.data.clone()
+        copy_module_state(model, self.model)
 
     def clone_model(self, model, target):
-        for param, target_param in zip(model.parameters(), target.parameters()):
-            target_param.data = param.data.clone()
-            # target_param.grad = param.grad.clone()
+        copy_module_state(model, target)
 
     def update_parameters(self, model, new_params):
         for param, new_param in zip(model.parameters(), new_params):

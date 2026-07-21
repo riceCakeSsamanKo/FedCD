@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from flcore.clients.clientbase import Client
+from utils.model_state import average_module_states, copy_module_buffers, copy_module_state
 
 
 def _last_linear(module):
@@ -200,12 +201,22 @@ class cwclientAVG(Client):
                 for param in module.parameters():
                     param.data = torch.zeros_like(param.data)
 
+                if sum(weight_list) > 0:
+                    averaged = average_module_states(
+                        [cw_model[key] for cw_model in received_cw_global_models],
+                        weight_list,
+                    )
+                    copy_module_buffers(averaged, module)
+
             for w, cw_g_model in zip(weight_list, received_cw_global_models):
                 for name, module in cw_g_model.items():
                     for agg_param, global_param in zip(self.aggregate_global[name].parameters(), module.parameters()):
                         agg_param.data += global_param.data.clone() * w
         else:
-            self.aggregate_global = copy.deepcopy(received_cw_global_models[0])
+            self.aggregate_global = average_module_states(
+                received_cw_global_models,
+                weight_list,
+            )
             for param in self.aggregate_global.parameters():
                 param.data = torch.zeros_like(param.data)
 
@@ -214,23 +225,18 @@ class cwclientAVG(Client):
                     agg_param.data += global_param.data.clone() * w
 
         if self.args.decision_layer_only:
-            for new_param, old_param in zip(global_model.base.parameters(), self.model.base.parameters()):
-                old_param.data = new_param.data.clone()
-            for new_param, old_param in zip(self.aggregate_global.parameters(), self.model.head.parameters()):
-                old_param.data = new_param.data.clone()
+            copy_module_state(global_model.base, self.model.base)
+            copy_module_state(self.aggregate_global, self.model.head)
         elif self.args.partial_layer_train:
             for name, module in self.model.named_children():
                 if name in self.layer_groups["cw"]:
-                    for new_param, old_param in zip(self.aggregate_global[name].parameters(), module.parameters()):
-                        old_param.data = new_param.data.clone()
+                    copy_module_state(self.aggregate_global[name], module)
                 else:
                     for g_name, g_module in global_model.named_children():
                         if g_name in name:
-                            for new_param, old_param in zip(g_module.parameters(), module.parameters()):
-                                old_param.data = new_param.data.clone()
+                            copy_module_state(g_module, module)
         else:
-            for new_param, old_param in zip(self.aggregate_global.parameters(), self.model.parameters()):
-                old_param.data = new_param.data.clone()
+            copy_module_state(self.aggregate_global, self.model)
 
     def set_protos(self, global_protos):
         self.global_protos = copy.deepcopy(global_protos)

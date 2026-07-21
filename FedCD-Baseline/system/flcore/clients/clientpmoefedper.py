@@ -9,6 +9,7 @@ from sklearn.preprocessing import label_binarize
 
 from flcore.clients.clientbase import Client
 from flcore.trainmodel.moe.gate import Gating
+from utils.model_state import copy_module_state
 
 
 class PersonalHeadMoE(nn.Module):
@@ -91,8 +92,7 @@ class clientPMOEFedPer(Client):
 
     def set_parameters(self, model):
         source = model.base if hasattr(model, "base") else model
-        for new_param, old_param in zip(source.parameters(), self.model.base.parameters()):
-            old_param.data = new_param.data.clone()
+        copy_module_state(source, self.model.base)
 
     def set_moe_experts(self, personal_heads):
         self.trained_experts = copy.deepcopy(personal_heads)

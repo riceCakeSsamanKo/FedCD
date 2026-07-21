@@ -4,6 +4,7 @@ import copy
 import torch
 from flcore.optimizers.fedoptimizer import pFedMeOptimizer
 from flcore.clients.clientbase import Client
+from utils.model_state import copy_module_state
 
 
 class clientpFedMe(Client):
@@ -81,8 +82,7 @@ class clientpFedMe(Client):
 
 
     def set_parameters(self, model):
-        for new_param, old_param in zip(model.parameters(), self.model.parameters()):
-            old_param.data = new_param.data.clone()
+        copy_module_state(model, self.model)
         self.local_params = self._clone_param_list(model.parameters())
 
     def test_label_split_metrics_personalized(self):
